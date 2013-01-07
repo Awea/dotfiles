@@ -1,14 +1,18 @@
 # Path to your oh-my-zsh configuration.
 ZSH=$HOME/.oh-my-zsh
+
 # Set name of the theme to load.
 # Look in ~/.oh-my-zsh/themes/
 # Optionally, if you set this to "random", it'll load a random theme each
 # time that oh-my-zsh is loaded.
 ZSH_THEME="david"
-alias rake='noglob rake'
+
+autoload zmv
+
 # Example aliases
 # alias zshconfig="mate ~/.zshrc"
 # alias ohmyzsh="mate ~/.oh-my-zsh"
+alias rake='noglob rake'
 
 # Set to this to use case-sensitive completion
 # CASE_SENSITIVE="true"
@@ -31,9 +35,8 @@ alias rake='noglob rake'
 plugins=(git)
 
 source $ZSH/oh-my-zsh.sh
-source ~/.bash_profile
 
 # Customize to your needs...
-export PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/usr/X11/bin:/usr/local/git/bin:/Users/aweaoftheworld/.rvm/bin
-#export PATH=/Applications/MAMP/bin/php5/bin:/Users/aweaoftheworld/.rvm/gems/ruby-1.9.2-p290/bin:/Users/aweaoftheworld/.rvm/gems/ruby-1.9.2-p290@global/bin:/Users/aweaoftheworld/.rvm/rubies/ruby-1.9.2-p290/bin:/Users/aweaoftheworld/.rvm/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/usr/X11/bin:/usr/local/git/bin
-# -s "$HOME/.rvm/scripts/rvm" ]] && . "$HOME/.rvm/scripts/rvm"
+export PATH=/Users/aweaoftheworld/.rvm/gems/ruby-1.9.3-p194/bin:/Users/aweaoftheworld/.rvm/gems/ruby-1.9.3-p194@global/bin:/Users/aweaoftheworld/.rvm/rubies/ruby-1.9.3-p194/bin:/Users/aweaoftheworld/.rvm/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/usr/X11/bin:/usr/local/git/bin:/Users/aweaoftheworld/.rvm/bin
+export EDITOR=choc
+PATH=$PATH:/usr/local/sbin
