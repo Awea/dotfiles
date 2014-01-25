@@ -10,11 +10,11 @@ ZSH_THEME="david"
 # Aliases
 alias zshconf="subl ~/.zshrc"
 alias ohmyzsh="subl ~/.oh-my-zsh"
-alias rake='noglob rake'
-alias blitz='noglob blitz'
-alias cutest='nocorrect cutest'
-alias rspec='nocorrect rspec'
-alias pass='nocorrect pass'
+alias rake="noglob rake"
+alias blitz="noglob blitz"
+alias cutest="nocorrect cutest"
+alias rspec="nocorrect rspec"
+alias pass="nocorrect pass"
 
 # Osx related
 alias chrome_ext='cd ~/Library/Application\ Support/Google/Chrome/Default'
