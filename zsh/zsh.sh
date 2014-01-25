@@ -1,0 +1,1 @@
+cp -R ~/.zshrc zsh/source.zshrc
