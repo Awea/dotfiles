@@ -15,8 +15,11 @@ alias blitz='noglob blitz'
 alias cutest='nocorrect cutest'
 alias rspec='nocorrect rspec'
 alias pass='nocorrect pass'
+
+# Osx related
 alias chrome_ext='cd ~/Library/Application\ Support/Google/Chrome/Default'
 alias osx_apache='sudo apachectl'
+alias flushme='sudo purge'
 
 # Osx 10.7.5
 alias dock_crash='killall -KILL Dock'
