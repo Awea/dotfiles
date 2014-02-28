@@ -8,8 +8,6 @@ ZSH=$HOME/.oh-my-zsh
 ZSH_THEME="david"
 
 # Aliases
-alias zshconf="subl ~/.zshrc"
-alias ohmyzsh="subl ~/.oh-my-zsh"
 alias rake="noglob rake"
 alias blitz="noglob blitz"
 alias cutest="nocorrect cutest"
@@ -20,6 +18,7 @@ alias pass="nocorrect pass"
 alias chrome_ext='cd ~/Library/Application\ Support/Google/Chrome/Default'
 alias osx_apache='sudo apachectl'
 alias flushme='sudo purge'
+alias py='python'
 
 # Osx 10.7.5
 alias dock_crash='killall -KILL Dock'
@@ -32,6 +31,7 @@ alias rbr="rbenv rehash"
 alias vdf="vagrant destroy -f"
 alias vup="vagrant up"
 alias vre="vdf && vup"
+alias vba="vagrant package --base"
 
 # Set to this to use case-sensitive completion
 # CASE_SENSITIVE="true"
