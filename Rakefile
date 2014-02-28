@@ -12,6 +12,7 @@ namespace :push do
     system %{
       git add zsh/source.zshrc zsh/README.md david.zsh-theme
       git commit -m 'update zsh - #{time}'
+      git push
     }
     p 'zsh pushed'
   end
