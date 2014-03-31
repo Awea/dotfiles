@@ -9,5 +9,6 @@ This is my local OSX related configuration for working on web stuffs.
 __related rake task__
 
 ```shell
-
+	rake get:zsh
+	rake push:zsh
 ```
