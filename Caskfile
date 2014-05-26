@@ -1,0 +1,9 @@
+cask install sublime-text
+cask install google-chrome
+cask install limechat
+cask install openoffice
+cask install firefox
+cask install virtualbox
+cask install yorufukurou
+cask install dropbox
+cask install filezilla
