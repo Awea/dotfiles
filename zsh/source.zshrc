@@ -33,6 +33,9 @@ alias vup="vagrant up"
 alias vre="vdf && vup"
 alias vba="vagrant package --base"
 
+# Git
+alias git=hub
+
 # Uncomment the following line to use case-sensitive completion.
 # CASE_SENSITIVE="true"
 
@@ -70,7 +73,7 @@ alias vba="vagrant package --base"
 # Which plugins would you like to load? (plugins can be found in ~/.oh-my-zsh/plugins/*)
 # Custom plugins may be added to ~/.oh-my-zsh/custom/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
-plugins=(git)
+plugins=(git z)
 
 source $ZSH/oh-my-zsh.sh
 
@@ -96,4 +99,9 @@ export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/usr/lo
 # export SSH_KEY_PATH="~/.ssh/dsa_id"
 
 # Editor
-export EDITOR=subl
+export EDITOR=sublw
+export PATH="$HOME/.rbenv/bin:$PATH"
+eval "$(rbenv init -)"
+
+### Added by the Heroku Toolbelt
+export PATH="/usr/local/heroku/bin:$PATH"
