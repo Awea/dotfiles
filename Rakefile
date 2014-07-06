@@ -1,7 +1,13 @@
 namespace :get do
   task :zsh  do
-    system 'sh zsh/zsh.sh'
+    system 'cp ~/.zshrc $PWD/zsh/source.zshrc'
     p 'zsh getted'
+  end
+end
+namespace :install do
+  task :zsh do
+    system 'cp $PWD/zsh/source.zshrc ~/.zshrc'
+    p 'zsh installed'
   end
 end
 namespace :push do
@@ -10,7 +16,7 @@ namespace :push do
 
   task :zsh do
     system %{
-      git add zsh/source.zshrc zsh/README.md david.zsh-theme
+      git add zsh/source.zshrc zsh/README.md zsh/david.zsh-theme
       git commit -m 'update zsh - #{time}'
       git push
     }
