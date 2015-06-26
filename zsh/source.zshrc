@@ -33,8 +33,24 @@ alias vup="vagrant up"
 alias vre="vdf && vup"
 alias vba="vagrant package --base"
 
+# Ansible export
+export ANSIBLE_HOSTS=~/ansible_hosts
+
+# Electron caca
+alias electron="/opt/homebrew-cask/Caskroom/electron/0.25.3/Electron.app/Contents/MacOS/Electron"
+
+# Thefuck
+alias fuck='eval $(thefuck $(fc -ln -1)); history -r'
+
 # Git
 alias git=hub
+
+# Go
+export GOPATH=$HOME/.go
+export PATH=$PATH:$GOPATH/bin
+
+# Firefox
+alias speedfox="find /Users/awea/Library/Application\ Support/Firefox/Profiles/p9yqrvld.default -name '*.sqlite' -print0 | xargs -0 -I{} sqlite3 {} vacuum"
 
 # Uncomment the following line to use case-sensitive completion.
 # CASE_SENSITIVE="true"
@@ -105,3 +121,13 @@ eval "$(rbenv init -)"
 
 ### Added by the Heroku Toolbelt
 export PATH="/usr/local/heroku/bin:$PATH"
+
+twister() {
+  local origin
+  origin=($(pwd))
+  cd ~/.in-progress/twister-core
+  ./twisterd -daemon
+  cd $origin
+}
+
+export PATH="$PATH:/Users/awea/bin"
