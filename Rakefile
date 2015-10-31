@@ -3,11 +3,22 @@ namespace :get do
     system 'cp ~/.zshrc $PWD/zsh/source.zshrc'
     p 'zsh getted'
   end
+
+  task :sublimetext do
+    system 'cp ~/.config/sublime-text-3/Packages/User/Preferences.sublime-settings $PWD/sublimetext/'
+    system 'cp ~/.config/sublime-text-3/Packages/User/Package\ Control.sublime-settings $PWD/sublimetext/'
+    p 'sublimetext getted'
+  end
 end
 namespace :install do
   task :zsh do
     system 'cp $PWD/zsh/source.zshrc ~/.zshrc'
     p 'zsh installed'
+  end
+
+  task :sublimetext do
+    system 'cp $PWD/sublimetext/*.sublime-settings ~/.config/sublime-text-3/Packages/User/'
+    p 'sublimetext installed'
   end
 end
 namespace :push do
@@ -21,5 +32,14 @@ namespace :push do
       git push
     }
     p 'zsh pushed'
+  end
+
+  task :sublimetext do
+    system %{
+      git add sublimetext/*.sublime-settings sublimetext/README.md 
+      git commit -m 'update sublimetext - #{time}'
+      git push
+    }
+    p 'sublimetext pushed'
   end
 end
