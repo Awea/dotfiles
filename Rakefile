@@ -7,6 +7,7 @@ namespace :get do
   task :sublimetext do
     system 'cp ~/.config/sublime-text-3/Packages/User/Preferences.sublime-settings $PWD/sublimetext/'
     system 'cp ~/.config/sublime-text-3/Packages/User/Package\ Control.sublime-settings $PWD/sublimetext/'
+    system 'cp ~/.config/sublime-text-3/Packages/User/Default\ \(Linux\).sublime-keymap $PWD/sublimetext/'
     p 'sublimetext getted'
   end
 end
@@ -18,6 +19,7 @@ namespace :install do
 
   task :sublimetext do
     system 'cp $PWD/sublimetext/*.sublime-settings ~/.config/sublime-text-3/Packages/User/'
+    system 'cp $PWD/sublimetext/Default\ \(Linux\).sublime-keymap ~/.config/sublime-text-3/Packages/User/'
     p 'sublimetext installed'
   end
 end
@@ -36,7 +38,7 @@ namespace :push do
 
   task :sublimetext do
     system %{
-      git add sublimetext/*.sublime-settings sublimetext/README.md 
+      git add sublimetext/*.sublime-settings sublimetext/*.sublime-keymap sublimetext/README.md 
       git commit -m 'update sublimetext - #{time}'
       git push
     }
