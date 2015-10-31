@@ -1,0 +1,20 @@
+{
+	"caret_extra_width": 2,
+	"color_scheme": "Packages/Dracula Color Scheme/Dracula.tmTheme",
+	"font_face": "Monoid",
+	"font_size": 12,
+	"ignored_packages":
+	[
+		"Vintage"
+	],
+	"indent_guide_options":
+	[
+		"draw_normal",
+		"draw_active"
+	],
+	"tab_size": 2,
+	"tab_small": true,
+	"theme": "preap.sublime-theme",
+	"translate_tabs_to_spaces": true,
+	"word_wrap": true
+}

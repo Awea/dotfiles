@@ -1,0 +1,19 @@
+{
+	"bootstrapped": true,
+	"in_process_packages":
+	[
+	],
+	"installed_packages":
+	[
+		"Alignment",
+		"Better CoffeeScript",
+		"BracketHighlighter",
+		"DocBlockr",
+		"Dracula Color Scheme",
+		"Jade",
+		"Jade Build",
+		"Package Control",
+		"Preap",
+		"SideBarEnhancements"
+	]
+}
