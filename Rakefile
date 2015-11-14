@@ -15,6 +15,11 @@ namespace :get do
     system 'cp ~/.config/terminator/config $PWD/terminator/'
     p 'terminator getted'
   end 
+
+  task :prezto do 
+    system 'cp ~/.zpreztorc $PWD/prezto/source.zpreztorc'
+    p 'prezto getted'
+  end
 end
 
 namespace :install do
@@ -33,6 +38,11 @@ namespace :install do
     system 'cp $PWD/terminator/config ~/.config/terminator/'
     p 'terminator installed'
   end 
+
+  task :prezto do 
+    system 'cp $PWD/prezto/source.zpreztorc ~/.zpreztorc'
+    p 'prezto installed'
+  end
 end
 
 namespace :push do
@@ -64,5 +74,14 @@ namespace :push do
       git push
     }
     p 'terminator pushed'
+  end
+
+  task :prezto do 
+    system %{
+      git add prezto/source.zpreztorc prezto/README.md 
+      git commit -m 'update prezto - #{time}'
+      git push
+    }
+    p 'prezto pushed'
   end
 end
