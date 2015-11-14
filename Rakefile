@@ -10,7 +10,13 @@ namespace :get do
     system 'cp ~/.config/sublime-text-3/Packages/User/Default\ \(Linux\).sublime-keymap $PWD/sublimetext/'
     p 'sublimetext getted'
   end
+
+  task :terminator do
+    system 'cp ~/.config/terminator/config $PWD/terminator/'
+    p 'terminator getted'
+  end 
 end
+
 namespace :install do
   task :zsh do
     system 'cp $PWD/zsh/source.zshrc ~/.zshrc'
@@ -22,7 +28,13 @@ namespace :install do
     system 'cp $PWD/sublimetext/Default\ \(Linux\).sublime-keymap ~/.config/sublime-text-3/Packages/User/'
     p 'sublimetext installed'
   end
+
+  task :terminator do
+    system 'cp $PWD/terminator/config ~/.config/terminator/'
+    p 'terminator installed'
+  end 
 end
+
 namespace :push do
   time_o = Time.new
   time = time_o.strftime('%Y-%m-%d %H-%M')
@@ -43,5 +55,14 @@ namespace :push do
       git push
     }
     p 'sublimetext pushed'
+  end
+
+  task :terminator do
+    system %{
+      git add terminator/config
+      git commit -m 'update terminator - #{time}'
+      git push
+    }
+    p 'terminator pushed'
   end
 end
