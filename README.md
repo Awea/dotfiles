@@ -25,3 +25,7 @@ __example :__
 * [Ruby environment](https://github.com/sstephenson/rbenv)
   * [Compile and install Ruby](https://github.com/sstephenson/ruby-build)
 * [Node version manager](https://github.com/creationix/nvm)
+
+## Other
+
+* [Monoid font](https://github.com/larsenwork/monoid)
