@@ -34,3 +34,6 @@ alias vba="vagrant package --base"
 
 # Firefox
 # alias speedfox="find /Users/awea/Library/Application\ Support/Firefox/Profiles/p9yqrvld.default -name '*.sqlite' -print0 | xargs -0 -I{} sqlite3 {} vacuum"
+
+# Fuck
+eval "$(thefuck --alias)"
