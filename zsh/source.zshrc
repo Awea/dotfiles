@@ -37,3 +37,6 @@ alias vba="vagrant package --base"
 
 # Fuck
 eval "$(thefuck --alias)"
+
+# adminer
+alias adminer="sudo php -S localhost:666 ~/.apps/adminer/adminer-4.2.3.php"
