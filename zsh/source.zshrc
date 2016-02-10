@@ -22,6 +22,9 @@ export PATH=${PATH}:/home/awea/.android-sdk/platform-tools
 
 export ANDROID_HOME="/home/awea/.android-sdk/"
 
+# Local bin
+export PATH="$HOME/.local/bin:$PATH"
+
 alias npm-exec='PATH=$(npm bin):$PATH'
 alias streamaudio='pulseaudio-dlna'
 alias localtunnel='ngrok'
