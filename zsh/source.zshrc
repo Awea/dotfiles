@@ -43,3 +43,7 @@ eval "$(thefuck --alias)"
 
 # adminer
 alias adminer="sudo php -S localhost:666 ~/.apps/adminer/adminer-4.2.3.php"
+
+# Chrome apps
+alias signal="chromium-browser --app-id=bikioccmkafdpakkkcpdbppfkghcmihk"
+alias postman="chromium-browser --app-id=fhbjgbiflinjbdggehcddcbncdddomop"
