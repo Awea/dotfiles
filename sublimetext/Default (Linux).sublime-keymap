@@ -18,5 +18,9 @@
       "rows": [0.0, 1.0],
       "cells": [[0, 0, 1, 1], [1, 0, 2, 1]]
     }
+  },
+  {
+    "keys": ["ctrl+shift+a"],
+    "command": "delete_trailing_spaces"
   }
 ]

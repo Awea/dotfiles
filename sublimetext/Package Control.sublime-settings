@@ -8,12 +8,21 @@
 		"Alignment",
 		"Better CoffeeScript",
 		"BracketHighlighter",
-		"DocBlockr",
+		"Charcoal",
 		"Dracula Color Scheme",
+		"Elixir",
+		"Entheogen Color Scheme",
+		"Handlebars",
 		"Jade",
-		"Jade Build",
+		"JavaScriptNext - ES6 Syntax",
+		"JSON Reindent",
 		"Package Control",
 		"Preap",
-		"SideBarEnhancements"
+		"Ruby Slim",
+		"Sass",
+		"Shader Syntax (GLSL HLSL Cg)",
+		"SideBarEnhancements",
+		"TrailingSpaces",
+		"Vue Syntax Highlight"
 	]
 }
