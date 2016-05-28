@@ -17,8 +17,14 @@ eval "$(rbenv init -)"
 export NVM_DIR="/home/awea/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"  # This loads nvm
 
-export PATH=${PATH}:/home/awea/.android-sdk/tools
-export PATH=${PATH}:/home/awea/.android-sdk/platform-tools
+# Android SDK:
+# install java 8
+# $ sudo add-apt-repository ppa:webupd8team/java
+# $ sudo apt-get update
+# $ sudo apt-get install oracle-java8-installer
+# Then download and uncompress the android sdk, http://developer.android.com/sdk/index.html#downloads, here: 
+export PATH=${PATH}:/home/awea/.android-sdk-linux/tools
+export PATH=${PATH}:/home/awea/.android-sdk-linux/platform-tools
 
 export ANDROID_HOME="/home/awea/.android-sdk/"
 
@@ -39,11 +45,11 @@ alias vba="vagrant package --base"
 # alias speedfox="find /Users/awea/Library/Application\ Support/Firefox/Profiles/p9yqrvld.default -name '*.sqlite' -print0 | xargs -0 -I{} sqlite3 {} vacuum"
 
 # Fuck
-eval "$(thefuck --alias)"
+# eval "$(thefuck --alias)"
 
 # adminer
 alias adminer="sudo php -S localhost:666 ~/.apps/adminer/adminer-4.2.3.php"
 
 # Chrome apps
-alias signal="chromium-browser --app-id=bikioccmkafdpakkkcpdbppfkghcmihk"
-alias postman="chromium-browser --app-id=fhbjgbiflinjbdggehcddcbncdddomop"
+alias signal="nohup chromium-browser --app-id=bikioccmkafdpakkkcpdbppfkghcmihk >! /tmp/nohup_signal.out"
+alias postman="nohup chromium-browser --app-id=fhbjgbiflinjbdggehcddcbncdddomop >! /tmp/nohup_postman.out"
