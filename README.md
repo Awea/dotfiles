@@ -33,4 +33,4 @@ __example :__
 
 ## Other
 
-* [Monoid font](https://github.com/larsenwork/monoid)
+* [Mononoki font](http://madmalik.github.io/mononoki)
