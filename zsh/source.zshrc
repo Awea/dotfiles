@@ -51,5 +51,5 @@ alias vba="vagrant package --base"
 alias adminer="sudo php -S localhost:666 ~/.apps/adminer/adminer-4.2.3.php"
 
 # Chrome apps
-alias signal="nohup chromium-browser --app-id=bikioccmkafdpakkkcpdbppfkghcmihk >! /tmp/nohup_signal.out"
-alias postman="nohup chromium-browser --app-id=fhbjgbiflinjbdggehcddcbncdddomop >! /tmp/nohup_postman.out"
+alias signal="nohup chromium-browser --app-id=bikioccmkafdpakkkcpdbppfkghcmihk >/dev/null 2>&1 &"
+alias postman="nohup chromium-browser --app-id=fhbjgbiflinjbdggehcddcbncdddomop >/dev/null 2>&1 &"
