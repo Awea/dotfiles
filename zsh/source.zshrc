@@ -22,7 +22,7 @@ export NVM_DIR="/home/awea/.nvm"
 # $ sudo add-apt-repository ppa:webupd8team/java
 # $ sudo apt-get update
 # $ sudo apt-get install oracle-java8-installer
-# Then download and uncompress the android sdk, http://developer.android.com/sdk/index.html#downloads, here: 
+# Then download and uncompress the android sdk, http://developer.android.com/sdk/index.html#downloads, here:
 export PATH=${PATH}:/home/awea/.android-sdk-linux/tools
 export PATH=${PATH}:/home/awea/.android-sdk-linux/platform-tools
 
@@ -53,3 +53,20 @@ alias adminer="sudo php -S localhost:666 ~/.apps/adminer/adminer-4.2.3.php"
 # Chrome apps
 alias signal="nohup chromium-browser --app-id=bikioccmkafdpakkkcpdbppfkghcmihk >/dev/null 2>&1 &"
 alias postman="nohup chromium-browser --app-id=fhbjgbiflinjbdggehcddcbncdddomop >/dev/null 2>&1 &"
+
+function mp4towebm {
+  file=$(basename $1 .mp4)
+
+  ffmpeg -i $file.mp4 -c:v libvpx -b:v 1M -c:a libvorbis -preset veryfast $file.webm
+}
+
+function killp {
+  kill -9 $( lsof -i:$1 -t ) 
+}
+
+# Kiex
+export PATH=${PATH}:/home/awea/.kiex/bin
+
+# Git webui
+alias gui="git webui --no-browser"
+
