@@ -6,22 +6,28 @@
 	"installed_packages":
 	[
 		"Alignment",
+		"Babel",
 		"Better CoffeeScript",
 		"BracketHighlighter",
 		"Charcoal",
 		"Dracula Color Scheme",
 		"Elixir",
+		"Elm Language Support",
 		"Entheogen Color Scheme",
 		"Handlebars",
 		"Jade",
 		"JavaScriptNext - ES6 Syntax",
 		"JSON Reindent",
+		"LinkOpener",
 		"Package Control",
+		"PHP-Twig",
 		"Preap",
+		"Pug",
 		"Ruby Slim",
 		"Sass",
 		"Shader Syntax (GLSL HLSL Cg)",
 		"SideBarEnhancements",
+		"StringEncode",
 		"TrailingSpaces",
 		"Vue Syntax Highlight"
 	]

@@ -1,8 +1,8 @@
 {
 	"caret_extra_width": 2,
-	"color_scheme": "Packages/Dracula Color Scheme/visual-studio-code/theme-dracula/themes/Dracula.tmTheme",
-	"font_face": "Mononoki",
-	"font_size": 14,
+	"color_scheme": "Packages/Dracula Color Scheme/Dracula.tmTheme",
+	"font_face": "FiraCodeMedium",
+	"font_size": 13,
 	"ignored_packages":
 	[
 		"Vintage"
