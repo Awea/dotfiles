@@ -34,3 +34,4 @@ __example :__
 ## Other
 
 * [Mononoki font](http://madmalik.github.io/mononoki)
+* [FiraCode Font](https://github.com/tonsky/FiraCode)
