@@ -70,3 +70,6 @@ export PATH=${PATH}:/home/awea/.kiex/bin
 # Git webui
 alias gui="git webui --no-browser"
 
+# XAMPP
+alias xampp="sudo /opt/lampp/manager-linux-x64.run"
+
