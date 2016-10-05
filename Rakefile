@@ -5,8 +5,7 @@ namespace :get do
   end
 
   task :sublimetext do
-    system 'cp ~/.config/sublime-text-3/Packages/User/Preferences.sublime-settings $PWD/sublimetext/'
-    system 'cp ~/.config/sublime-text-3/Packages/User/Package\ Control.sublime-settings $PWD/sublimetext/'
+    system 'cp ~/.config/sublime-text-3/Packages/User/*.sublime-settings $PWD/sublimetext/'
     system 'cp ~/.config/sublime-text-3/Packages/User/Default\ \(Linux\).sublime-keymap $PWD/sublimetext/'
     p 'sublimetext getted'
   end
