@@ -6,6 +6,7 @@
 	"installed_packages":
 	[
 		"Alignment",
+		"ayu",
 		"Babel",
 		"Better CoffeeScript",
 		"BracketHighlighter",

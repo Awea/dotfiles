@@ -14,7 +14,8 @@
 	],
 	"tab_size": 2,
 	"tab_small": true,
-	"theme": "preap.sublime-theme",
+	"theme": "ayu.sublime-theme",
 	"translate_tabs_to_spaces": true,
+	"ui_separator": true,
 	"word_wrap": true
 }
