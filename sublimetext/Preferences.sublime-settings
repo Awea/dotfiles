@@ -1,10 +1,10 @@
 {
 	"caret_extra_width": 2,
-	"color_scheme": "Packages/Dracula Color Scheme/Dracula.tmTheme",
 	"font_face": "FiraCodeMedium",
-	"font_size": 13,
+	"font_size": 14,
 	"ignored_packages":
 	[
+		"Preap",
 		"Vintage"
 	],
 	"indent_guide_options":
@@ -14,8 +14,12 @@
 	],
 	"tab_size": 2,
 	"tab_small": true,
-	"theme": "ayu.sublime-theme",
+	"theme": "ayu-mirage.sublime-theme",
+  "color_scheme": "Packages/Dracula Color Scheme/Dracula.tmTheme",
 	"translate_tabs_to_spaces": true,
-	"ui_separator": true,
+	"ui_separator":       true, // separators between panels
+	"ui_font_size_small": true, // smaller UI font size(sidebar, statusbar etc)
+	"ui_big_tabs":        true, // increased tab height
+	"ui_fix_tab_labels":  true,  // to fix tab labels if they look not right
 	"word_wrap": true
 }
