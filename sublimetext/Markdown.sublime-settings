@@ -2,6 +2,8 @@
 	"extensions":
 	[
 		"md",
-		".todo"
+		".todo",
+		"md.erb",
+		".idea"
 	]
 }
