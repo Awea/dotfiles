@@ -66,6 +66,7 @@ function killp {
 
 # Kiex
 export PATH=${PATH}:/home/awea/.kiex/bin
+[[ -s "$HOME/.kiex/scripts/kiex" ]] && source "$HOME/.kiex/scripts/kiex"
 
 # Git webui
 alias gui="git webui --no-browser"
@@ -73,3 +74,16 @@ alias gui="git webui --no-browser"
 # XAMPP
 alias xampp="sudo /opt/lampp/manager-linux-x64.run"
 
+
+# The next line updates PATH for the Google Cloud SDK.
+if [ -f /home/awea/.google-cloud-sdk/path.zsh.inc ]; then
+  source '/home/awea/.google-cloud-sdk/path.zsh.inc'
+fi
+
+# The next line enables shell command completion for gcloud.
+if [ -f /home/awea/.google-cloud-sdk/completion.zsh.inc ]; then
+  source '/home/awea/.google-cloud-sdk/completion.zsh.inc'
+fi
+
+# Ubuntu
+alias reload-audio="sudo alsa force-reload"
