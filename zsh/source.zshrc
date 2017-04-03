@@ -64,9 +64,12 @@ function killp {
   kill -9 $( lsof -i:$1 -t ) 
 }
 
-# Kiex
-export PATH=${PATH}:/home/awea/.kiex/bin
-[[ -s "$HOME/.kiex/scripts/kiex" ]] && source "$HOME/.kiex/scripts/kiex"
+# ASDF - https://github.com/asdf-vm/asdf
+source $HOME/.asdf/asdf.sh
+source $HOME/.asdf/completions/asdf.bash
+
+# z - https://github.com/rupa/z
+source $HOME/.apps/z.sh
 
 # Git webui
 alias gui="git webui --no-browser"
@@ -87,3 +90,8 @@ fi
 
 # Ubuntu
 alias reload-audio="sudo alsa force-reload"
+
+# Rust / Cargo
+# Used:
+# * https://github.com/frewsxcv/alert-after
+export PATH="$HOME/.cargo/bin:$PATH"
