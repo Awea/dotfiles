@@ -1,8 +1,8 @@
 {
 	"caret_extra_width": 2,
-	"color_scheme": "Packages/ayu/ayu-dark.tmTheme",
+	"color_scheme": "Packages/gruvbox/gruvbox (Light) (Hard) NDC.tmTheme",
 	"font_face": "FiraCodeMedium",
-	"font_size": 13,
+	"font_size": 12,
 	"ignored_packages":
 	[
 		"Vintage"
@@ -14,7 +14,7 @@
 	],
 	"tab_size": 2,
 	"tab_small": true,
-	"theme": "ayu-mirage.sublime-theme",
+	"theme": "ayu-light.sublime-theme",
 	"translate_tabs_to_spaces": true,
 	"ui_big_tabs": true,
 	"ui_fix_tab_labels": true,
