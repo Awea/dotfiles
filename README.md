@@ -16,22 +16,23 @@ __example :__
 	rake push:prezto
 ```
 
-## Softwares without configuration file
+# In use
+
+## Softwares
 
 * Zeal
 * Git
   * [web-ui](https://github.com/alberthier/git-webui)
 * Transmission
-* [Ruby environment](https://github.com/sstephenson/rbenv)
-  * [Compile and install Ruby](https://github.com/sstephenson/ruby-build)
-* [Node version manager](https://github.com/creationix/nvm)
+* [asdf - extendable version manager](https://github.com/asdf-vm/asdf)
 * MySQL
   * `mysql-server mysql-client libmysqlclient-dev`
 * [Adminer](https://www.adminer.org/en/)
-  * `php5 php5-mysql`
+  * `php php-mysql`
+  * [Material Design for Adminer](https://github.com/arcs-/Adminer-Material-Theme)
 * [Ngrok](https://ngrok.com/)
 
-## Other
+## Fonts
 
-* [Mononoki font](http://madmalik.github.io/mononoki)
 * [FiraCode Font](https://github.com/tonsky/FiraCode)
+* [Hasklig](https://github.com/i-tu/Hasklig)
