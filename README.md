@@ -31,6 +31,8 @@ __example :__
   * `php php-mysql`
   * [Material Design for Adminer](https://github.com/arcs-/Adminer-Material-Theme)
 * [Ngrok](https://ngrok.com/)
+* [z](https://github.com/rupa/z)
+* [Albert](https://github.com/albertlauncher/albert)
 
 ## Fonts
 
