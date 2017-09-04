@@ -17,7 +17,7 @@ fi
 export PATH="$HOME/.cargo/bin:$PATH"
 
 # mix auto-completion (Elixir) - https://github.com/dalexj/mix_autocomplete
-. $HOME/.apps/mix_autocomplete/mix_autocomplete.zsh
+# . $HOME/.apps/mix_autocomplete/mix_autocomplete.zsh
 
 # Aliases
 
@@ -37,3 +37,6 @@ alias adminer="php -S localhost:4666 -t ~/.apps/adminer/"
 
 ## Git webui - https://github.com/alberthier/git-webui
 alias gui="ASDF_PYTHON_VERSION=2.7.12 git webui --no-browser"
+
+# exa - https://github.com/ogham/exa
+alias la="exa -abghl --git --color=automatic"
