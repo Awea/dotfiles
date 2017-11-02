@@ -1,6 +1,7 @@
 {
 	"extensions":
 	[
-    ".json.erb"
+		".json.erb",
+		"erb"
 	]
 }
