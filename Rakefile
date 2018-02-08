@@ -1,86 +1,73 @@
-namespace :get do
-  task :zsh  do
-    system 'cp ~/.zshrc $PWD/zsh/source.zshrc'
-    p 'zsh getted'
+def time
+  time_o = Time.new
+  time_o.strftime('%Y-%m-%d %H-%M')
+end
+
+namespace :prezto do
+  desc "install prezto configuration files"
+  task :install do
+    system 'cp $PWD/prezto/source.zpreztorc ~/.zpreztorc'
+    p 'prezto installed'
   end
 
-  task :sublimetext do
-    system 'cp ~/.config/sublime-text-3/Packages/User/*.sublime-settings $PWD/sublimetext/'
-    system 'cp ~/.config/sublime-text-3/Packages/User/Default\ \(Linux\).sublime-keymap $PWD/sublimetext/'
-    p 'sublimetext getted'
-  end
-
-  task :terminator do
-    system 'cp ~/.config/terminator/config $PWD/terminator/'
-    p 'terminator getted'
-  end 
-
-  task :prezto do 
-    system 'cp ~/.zpreztorc $PWD/prezto/source.zpreztorc'
-    p 'prezto getted'
+  desc "save prezto configuration files"
+  task :save do
+    system %{
+      cp ~/.zpreztorc $PWD/prezto/source.zpreztorc
+      git add prezto/source.zpreztorc prezto/README.md 
+      git commit -m 'update prezto - #{time()}'
+      git push
+    }
+    p 'prezto saved'
   end
 end
 
-namespace :install do
-  task :zsh do
-    system 'cp $PWD/zsh/source.zshrc ~/.zshrc'
-    p 'zsh installed'
-  end
-
-  task :sublimetext do
+namespace :sublimetext do
+  desc "install sublimetext configuration files"
+  task :install do
     system 'cp $PWD/sublimetext/*.sublime-settings ~/.config/sublime-text-3/Packages/User/'
     system 'cp $PWD/sublimetext/Default\ \(Linux\).sublime-keymap ~/.config/sublime-text-3/Packages/User/'
     p 'sublimetext installed'
   end
 
-  task :terminator do
-    system 'cp $PWD/terminator/config ~/.config/terminator/'
-    p 'terminator installed'
-  end 
+  desc "save sublimetext configuration files"
+  task :save do
+    # system using %{} doesn't support escape characters (\).
+    system 'cp ~/.config/sublime-text-3/Packages/User/Default\ \(Linux\).sublime-keymap $PWD/sublimetext/'
+    system %{
+      cp ~/.config/sublime-text-3/Packages/User/*.sublime-settings $PWD/sublimetext/
+      git add sublimetext/*.sublime-settings sublimetext/*.sublime-keymap sublimetext/README.md 
+      git commit -m 'update sublimetext - #{time()}'
+      git push 
+    }
 
-  task :prezto do 
-    system 'cp $PWD/prezto/source.zpreztorc ~/.zpreztorc'
-    p 'prezto installed'
+    p 'sublimetext saved'
   end
 end
 
-namespace :push do
-  time_o = Time.new
-  time = time_o.strftime('%Y-%m-%d %H-%M')
+namespace :zsh do
+  desc "install zsh configuration files"
+  task :install do
+    system 'cp $PWD/zsh/source.zshrc ~/.zshrc'
+    p 'zsh installed'
+  end
 
-  task :zsh do
+  desc "save zsh configuration files"
+  task :save do
     system %{
+      cp ~/.zshrc $PWD/zsh/source.zshrc
       git add zsh/source.zshrc zsh/README.md zsh/david.zsh-theme
-      git commit -m 'update zsh - #{time}'
+      git commit -m 'update zsh - #{time()}'
       git push
     }
-    p 'zsh pushed'
+    p 'zsh saved'
   end
+end
 
-  task :sublimetext do
-    system %{
-      git add sublimetext/*.sublime-settings sublimetext/*.sublime-keymap sublimetext/README.md 
-      git commit -m 'update sublimetext - #{time}'
-      git push
-    }
-    p 'sublimetext pushed'
-  end
+namespace :all do
+  desc "install all configuration files"
+  multitask install: ["prezto:install", "sublimetext:install", "zsh:install"]
 
-  task :terminator do
-    system %{
-      git add terminator/config
-      git commit -m 'update terminator - #{time}'
-      git push
-    }
-    p 'terminator pushed'
-  end
-
-  task :prezto do 
-    system %{
-      git add prezto/source.zpreztorc prezto/README.md 
-      git commit -m 'update prezto - #{time}'
-      git push
-    }
-    p 'prezto pushed'
-  end
+  desc "save all configuration files"
+  task save: ["prezto:save", "sublimetext:save", "zsh:save"]
 end

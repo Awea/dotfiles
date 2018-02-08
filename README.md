@@ -1,22 +1,11 @@
 # My dotfiles
 
-## Read first
-
-This is my local configuration for working on web stuffs.
+## Prerequisites
+* Ruby >= 2.0.0
 
 ## Rake tasks
 
-__concerned softwares : [prezto|sublimetext|zsh]__
-
-__example :__
-
-```shell
-	rake get:prezto
-  rake install:prezto
-	rake push:prezto
-```
-
-# In use
+For the list of available Rake tasks type: `rake -T`
 
 ## Softwares
 
