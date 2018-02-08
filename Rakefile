@@ -22,6 +22,29 @@ namespace :prezto do
   end
 end
 
+namespace :tmux do
+  desc "install tmux configuration files"
+  task :install do
+    system %{
+      cp tmux/tmux.conf ~/.tmux.conf
+      cp tmux/tmux.conf.local ~/.tmux.conf.local
+    }
+    p 'tmux installed'
+  end
+
+  desc "save tmux configuration files"
+  task :save do
+    system %{
+      cp ~/.tmux.conf tmux/tmux.conf 
+      cp ~/.tmux.conf.local tmux/tmux.conf.local
+      git add tmux/*
+      git commit -m 'update tmux - #{time()}'
+      git push 
+    }
+    p 'tmux saved'
+  end
+end
+
 namespace :sublimetext do
   desc "install sublimetext configuration files"
   task :install do
