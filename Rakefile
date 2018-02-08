@@ -89,8 +89,8 @@ end
 
 namespace :all do
   desc "install all configuration files"
-  multitask install: ["prezto:install", "sublimetext:install", "zsh:install"]
+  multitask install: ["prezto:install", "tmux:install", "sublimetext:install", "zsh:install"]
 
   desc "save all configuration files"
-  task save: ["prezto:save", "sublimetext:save", "zsh:save"]
+  task save: ["prezto:save", "tmux:save", "sublimetext:save", "zsh:save"]
 end
