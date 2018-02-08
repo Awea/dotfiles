@@ -16,16 +16,23 @@ fi
 ## Rust > Cargo
 export PATH="$HOME/.cargo/bin:$PATH"
 
-# mix auto-completion (Elixir) - https://github.com/dalexj/mix_autocomplete
-# . $HOME/.apps/mix_autocomplete/mix_autocomplete.zsh
+## PHP > Composer
+export PATH="$HOME/.config/composer/vendor/bin:$PATH"
 
 # Aliases
+
+## Docker aliases
+### WP-CLI
+alias dcwp='docker-compose exec --user www-data phpfpm wp'
 
 ## Vagrant aliases
 alias vdf="vagrant destroy -f"
 alias vup="vagrant up"
 alias vre="vdf && vup"
 alias vba="vagrant package --base"
+
+## Yarn
+alias yarn-exec="PATH=$(yarn bin):$PATH"
 
 ## Kill a processus by it's port
 function killp {
@@ -40,3 +47,9 @@ alias gui="ASDF_PYTHON_VERSION=2.7.12 git webui --no-browser"
 
 # exa - https://github.com/ogham/exa
 alias la="exa -abghl --git --color=automatic"
+
+# vim colorizatio
+source "$HOME/.vim/bundle/gruvbox/gruvbox_256palette.sh"
+
+# Restart audio
+alias restart-audio="pulseaudio -k && sudo alsa force-reload"
