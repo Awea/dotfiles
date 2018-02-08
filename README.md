@@ -6,7 +6,7 @@ This is my local configuration for working on web stuffs.
 
 ## Rake tasks
 
-__concerned softwares : [prezto|sublimetext|terminator|zsh]__
+__concerned softwares : [prezto|sublimetext|zsh]__
 
 __example :__
 
