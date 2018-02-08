@@ -6,13 +6,16 @@
 	"installed_packages":
 	[
 		"Alignment",
+		"ASCII Comment Snippets",
 		"ayu",
 		"Color Highlighter",
 		"Elixir",
-		"glslViewer",
 		"gruvbox",
 		"Handlebars",
+		"HTML-CSS-JS Prettify",
 		"Jade",
+		"JavaScript Completions",
+		"LESS",
 		"OpenGL Shading Language (GLSL)",
 		"Package Control",
 		"PHP-Twig",
