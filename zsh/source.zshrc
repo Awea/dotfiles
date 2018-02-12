@@ -19,6 +19,9 @@ export PATH="$HOME/.cargo/bin:$PATH"
 ## PHP > Composer
 export PATH="$HOME/.config/composer/vendor/bin:$PATH"
 
+## local/sbin 
+export PATH="/usr/local/sbin:$PATH"
+
 # Aliases
 
 ## Docker aliases
