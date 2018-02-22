@@ -16,6 +16,9 @@ fi
 ## Rust > Cargo
 export PATH="$HOME/.cargo/bin:$PATH"
 
+## Go
+export PATH="$HOME/go/bin:$PATH"
+
 ## PHP > Composer
 export PATH="$HOME/.config/composer/vendor/bin:$PATH"
 
