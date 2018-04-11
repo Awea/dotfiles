@@ -1,11 +1,10 @@
 # My dotfiles
-
 ## Prerequisites
-* Ruby >= 2.0.0
+* Make
 
-## Rake tasks
+## Make recipes
 
-For the list of available Rake tasks type: `rake -T`
+For the list of available Make recipes type: `make`
 
 ## Softwares
 
