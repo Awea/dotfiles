@@ -1,0 +1,175 @@
+# Vars
+APP_DIR=$HOME/.apps
+WORKSPACE_DIR=$HOME/.workspace
+
+# Setup
+## Directories
+ok directory $APP_DIR
+ok directory $WORKSPACE_DIR
+
+## Package Cloud: https://packagecloud.io/
+ok download /tmp/script.deb.sh https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh 
+
+if did_update; then
+  sudo bash /tmp/script.deb.sh
+fi
+
+## Dotfiles: https://github.com/awea/dotfiles
+ok github $WORKSPACE_DIR/dotfiles awea/dotfiles
+
+if did_update; then
+  cd $WORKSPACE_DIR/dotfiles && make all_install
+fi
+
+# ZSH
+ok apt zsh
+
+if did_install; then
+  chsh -s /bin/zsh
+fi
+
+# Prezto: https://github.com/sorin-ionescu/prezto/
+ok github $HOME/.zprezto sorin-ionescu/prezto --recursive
+
+# Wont work: for rcfile not working
+# if did_install; then
+#   zsh
+#   setopt EXTENDED_GLOB
+#   for rcfile in "${ZDOTDIR:-$HOME}"/.zprezto/runcoms/^README.md(.N); do
+#     ln -s "$rcfile" "${ZDOTDIR:-$HOME}/.${rcfile:t}"
+#   done 
+# fi
+
+# SublimeText: https://www.sublimetext.com/
+ok download /tmp/sublimehq-pub.gpg https://download.sublimetext.com/sublimehq-pub.gpg
+
+if did_install; then
+  sudo apt-key add /tmp/sublimehq-pub.gpg
+  echo "deb https://download.sublimetext.com/ apt/stable/" | sudo tee /etc/apt/sources.list.d/sublime-text.list
+  sudo apt update
+fi
+
+ok apt apt-transport-https
+ok apt sublime-text
+
+# Pass
+ok apt pass
+ok download $HOME/.zsh/completion/_pass https://raw.githubusercontent.com/zx2c4/password-store/master/src/completion/pass.zsh-completion
+
+# Z
+ok download $APP_DIR/z.sh https://raw.githubusercontent.com/rupa/z/master/z.sh 
+
+# Git 
+## LFS: https://git-lfs.github.com/
+ok apt git-lfs
+
+# WebUI
+ok download /tmp/git-webui/installer.sh https://raw.githubusercontent.com/alberthier/git-webui/master/install/installer.sh
+
+if did_install; then
+  bash /tmp/git-webui/installer.sh
+fi
+
+# Dropbox
+
+# Wont work: .deb package not valid
+# ok download /tmp/dropbox_2015.10.28_amd64.deb https://www.dropbox.com/download?dl=packages/ubuntu/dropbox_2015.10.28_amd64.deb
+
+# if did_update; then
+#   sudo dpkg -i /tmp/dropbox_2015.10.28_amd64.deb 
+# fi
+
+# Chrome
+ok download /tmp/chrome-key.pub https://dl-ssl.google.com/linux/linux_signing_key.pub
+
+if did_update; then
+  sudo apt-key add /tmp/chrome-key.pub
+  echo 'deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main' | sudo tee /etc/apt/sources.list.d/google-chrome.list
+  sudo apt update
+fi
+
+ok apt google-chrome-stable
+
+# ASDF: https://github.com/asdf-vm/asdf
+ok github ~/.asdf https://github.com/asdf-vm/asdf.git --branch v0.4.3
+ok apt automake
+ok apt autoconf 
+ok apt libreadline-dev 
+ok apt libncurses-dev
+ok apt libssl-dev 
+ok apt libyaml-dev 
+ok apt libxslt-dev 
+ok apt libffi-dev 
+ok apt libtool 
+ok apt unixodbc-dev
+
+## Ruby
+check asdf plugin-add ruby https://github.com/asdf-vm/asdf-ruby.git
+
+## Nodejs
+check asdf plugin-add nodejs https://github.com/asdf-vm/asdf-nodejs.git
+check bash ~/.asdf/plugins/nodejs/bin/import-release-team-keyring
+
+## Elixir
+check asdf plugin-add elixir https://github.com/asdf-vm/asdf-elixir.git
+
+## Rust
+check asdf plugin-add rust https://github.com/code-lever/asdf-rust.git
+
+# Yarn
+ok download /tmp/asdf-key.gpg https://dl.yarnpkg.com/debian/pubkey.gpg
+
+if did_update; then
+  sudo apt-key add /tmp/asdf-key.gpg
+  echo "deb https://dl.yarnpkg.com/debian/ stable main" | sudo tee /etc/apt/sources.list.d/yarn.list
+  sudo apt update 
+fi
+
+ok apt yarn
+
+# Docker
+ok apt apt-transport-https 
+ok apt ca-certificates 
+ok apt curl 
+ok apt software-properties-common
+ok download /tmp/docker-key.gpg https://download.docker.com/linux/ubuntu/gpg
+
+if did_update; then
+  sudo apt-key add /tmp/docker-key.gpg
+  sudo add-apt-repository \
+     "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
+     $(lsb_release -cs) \
+     stable"
+  sudo apt update
+fi
+
+ok apt docker-ce
+ok group docker
+check sudo usermod -aG docker awea
+
+## Compose
+DOCKER_COMPOSE_VERSION=docker-compose-`uname -s`-`uname -m`
+
+ok download /usr/local/bin/docker-compose https://github.com/docker/compose/releases/download/1.20.1/$DOCKER_COMPOSE_VERSION
+check sudo chmod +x /usr/local/bin/docker-compose
+ok download ~/.zsh/completion/_docker-compose https://raw.githubusercontent.com/docker/compose/1.20.1/contrib/completion/zsh/_docker-compose
+
+# Skype
+ok download /tmp/skypeforlinux-64.deb https://go.skype.com/skypeforlinux-64.deb
+
+if did_update; then
+  sudo dpkg -i /tmp/skypeforlinux-64.deb
+fi
+
+# Virtualbox
+ok apt virtualbox
+
+# Ansible
+ok apt python-setuptools 
+ok apt python-dev
+check sudo easy_install pip
+ok pip ansible 
+
+# Tools
+ok apt tmux
+ok apt apache2-utils
