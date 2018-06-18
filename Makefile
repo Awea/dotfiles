@@ -51,6 +51,17 @@ zsh_save: ## save zsh configuration files
 	@git push
 	@echo 'zsh saved'
 
+git_install: ## install git configuration
+	@cp git/config ~/.gitconfig
+	@echo "git installed"
+
+git_save: ## save git configuration
+	@cp ~/.gitconfig git/config
+	@git add git/config
+	@git commit -m 'update zsh - #{time()}'
+	@git push
+	@echo "git saved"
+
 all_install: prezto_install tmux_install sublimetext_install zsh_install ## install all configuration files
 
 all_save: prezto_save tmux_save sublimetext_save zsh_save ## save all configuration files
