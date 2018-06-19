@@ -19,7 +19,7 @@
   dc = diff --cached
 
 [push]
-	default = simple
+	default = current
 
 # for $deity's sake, check that anything we're getting is complete and sane on a regular basis
 [transfer]
