@@ -13,6 +13,9 @@ fi
 . $HOME/.asdf/asdf.sh
 . $HOME/.asdf/completions/asdf.bash
 
+## Elixir
+export ERL_AFLAGS="-kernel shell_history enabled"
+
 ## Rust > Cargo
 export PATH="$HOME/.cargo/bin:$PATH"
 
