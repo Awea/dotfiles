@@ -1,17 +1,12 @@
+[user]
+	name = Awea
+	email = aweaoftheworld@gmail.com
+
 [webui]
 	autoupdate = true
 
 [alias]
 	webui = !/home/awea/.git-webui/release/libexec/git-core/git-webui
-        lg1 = log --graph --abbrev-commit --decorate --format=format:'%C(bold blue)%h%C(reset) - %C(bold green)(%ar)%C(reset) %C(white)%s%C(reset) %C(dim white)- %an%C(reset)%C(bold yellow)%d%C(reset)' --all
-	lg2 = log --graph --abbrev-commit --decorate --format=format:'%C(bold blue)%h%C(reset) - %C(bold cyan)%aD%C(reset) %C(bold green)(%ar)%C(reset)%C(bold yellow)%d%C(reset)%n''          %C(white)%s%C(reset) %C(dim white)- %an%C(reset)' --all
-	lg = !"git lg1"
-
-[user]
-	email = aweaoftheworld@gmail.com
-	name = Awea
-
-[alias]
   s = status
   co = checkout
   a = add
@@ -19,12 +14,4 @@
   dc = diff --cached
 
 [push]
-	default = current
-
-# for $deity's sake, check that anything we're getting is complete and sane on a regular basis
-[transfer]
-  fsckobjects = true
-[fetch]
-  fsckobjects = true
-[receive]
-  fsckObjects = true
+  default = current
