@@ -10,11 +10,24 @@ import urllib.request,os,hashlib; h = '2915d1851351e5ee549c20394736b442' + '8bc5
 
 #### Packages
 
-* alignment
-* better coffescript
-* bracket highlighter
-* dockblokr
-* dracula color scheme
-* jade
-* preap
-* sidebarenhancement
+* Alignment
+* ASCII Comment Snippets
+* ayu
+* babel-sublime
+* Color Highlighter
+* Dockerfile Syntax Highlighting
+* Elixir
+* gruvbox
+* Handlebars
+* HTML-CSS-JS Prettify
+* Jade
+* JavaScript Completions
+* LESS
+* OpenGL Shading Language (GLSL)
+* Package Control
+* PHP-Twig
+* Pug
+* Sass
+* SideBarEnhancements
+* Slime
+* Vue Syntax Highligh
