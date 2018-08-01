@@ -8,7 +8,9 @@
 		"Alignment",
 		"ASCII Comment Snippets",
 		"ayu",
+		"babel-sublime",
 		"Color Highlighter",
+		"Dockerfile Syntax Highlighting",
 		"Elixir",
 		"gruvbox",
 		"Handlebars",
@@ -22,6 +24,11 @@
 		"Pug",
 		"Sass",
 		"SideBarEnhancements",
+		"Slime",
 		"Vue Syntax Highlight"
+	],
+	"repositories":
+	[
+		"https://github.com/babel/babel-sublime"
 	]
 }
