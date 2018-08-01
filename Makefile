@@ -47,7 +47,7 @@ zsh_install: ## install zsh configuration files
 zsh_save: ## save zsh configuration files
 	@cp ~/.zshrc zsh/source.zshrc
 	@git add zsh/source.zshrc zsh/README.md zsh/david.zsh-theme
-	@git commit -m 'update zsh - #{time()}'
+	@git commit -m 'update zsh - $(DATE)'
 	@git push
 	@echo 'zsh saved'
 
@@ -58,7 +58,7 @@ git_install: ## install git configuration
 git_save: ## save git configuration
 	@cp ~/.gitconfig git/config
 	@git add git/config
-	@git commit -m 'update zsh - #{time()}'
+	@git commit -m 'update zsh - $(DATE)'
 	@git push
 	@echo "git saved"
 
