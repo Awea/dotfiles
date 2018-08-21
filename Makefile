@@ -7,7 +7,7 @@ prezto_install: ## Install Prezto configuration files
 
 prezto_save: ## Save Prezto configuration files
 	@cp ~/.zpreztorc prezto/source.zpreztorc
-	@git add prezto/source.zpreztorc prezto/README.md
+	@git add prezto
 	@git commit -m '🔧 Update Prezto'
 	@git push
 	@echo '💾 Prezto saved
@@ -33,7 +33,7 @@ subl_install: ## Install Sublime Text configuration files
 subl_save: ## Save Sublime Text configuration files
 	@cp ~/.config/sublime-text-3/Packages/User/Default\ \(Linux\).sublime-keymap sublimetext/
 	@cp ~/.config/sublime-text-3/Packages/User/*.sublime-settings sublimetext/
-	@git add sublimetext/*.sublime-settings sublimetext/*.sublime-keymap sublimetext/README.md
+	@git add sublimetext
 	@git commit -m '🔧 Update Sublime Text'
 	@git push 
 	@echo '💾 Sublime Text saved'
@@ -44,7 +44,7 @@ zsh_install: ## Install Zsh configuration files
 
 zsh_save: ## Save Zsh configuration files
 	@cp ~/.zshrc zsh/source.zshrc
-	@git add zsh/source.zshrc zsh/README.md
+	@git add zsh
 	@git commit -m '🔧 Update Zsh'
 	@git push
 	@echo '💾 Zsh saved'
