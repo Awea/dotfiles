@@ -1,28 +1,26 @@
-# My dotfiles
+# David Authier's dotfiles
+
 ## Prerequisites
-* Make
+- [Prezto](https://github.com/sorin-ionescu/prezto)
+- [Git WebUI](https://github.com/alberthier/git-webui)
+- [asdf - extendable version manager](https://github.com/asdf-vm/asdf)
+- [z](https://github.com/rupa/z)
 
 ## Make recipes
+`make`: List all available Make recipes
 
-For the list of available Make recipes type: `make`
-
-## Softwares
-
-* Zeal
-* Git
-  * [web-ui](https://github.com/alberthier/git-webui)
-* Transmission
-* [asdf - extendable version manager](https://github.com/asdf-vm/asdf)
-* MySQL
-  * `mysql-server mysql-client libmysqlclient-dev`
-* [Adminer](https://www.adminer.org/en/)
-  * `php php-mysql`
-  * [Material Design for Adminer](https://github.com/arcs-/Adminer-Material-Theme)
-* [Ngrok](https://ngrok.com/)
-* [z](https://github.com/rupa/z)
-* [Albert](https://github.com/albertlauncher/albert)
-
+## Software configuration
 ## Fonts
+The [FiraCode Font](https://github.com/tonsky/FiraCode) I use for both Sublime Text and Konsole.
 
-* [FiraCode Font](https://github.com/tonsky/FiraCode)
-* [Hasklig](https://github.com/i-tu/Hasklig)
+#### Sublime Text
+Install [**Package Control**](https://packagecontrol.io/installation)
+
+#### Browsing
+* Log in **Firefox**, disable cache while inspector is open and set Firefox as default browser
+* Disable **Chrome** cache while DevTools is open
+
+#### Thunderbird
+Log in **Thunderbird** then set a [mail signature](https://github.com/wearemd/wearemd_mail_signatures) for each account
+
+Yay, you're done! 👏🏻 👏🏻
