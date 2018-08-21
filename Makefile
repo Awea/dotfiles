@@ -44,7 +44,7 @@ zsh_install: ## Install Zsh configuration files
 
 zsh_save: ## Save Zsh configuration files
 	@cp ~/.zshrc zsh/source.zshrc
-	@git add zsh/source.zshrc zsh/README.md zsh/david.zsh-theme
+	@git add zsh/source.zshrc zsh/README.md
 	@git commit -m '🔧 Update Zsh'
 	@git push
 	@echo '💾 Zsh saved'
