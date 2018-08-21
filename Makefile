@@ -1,70 +1,68 @@
-.PHONY: prezto_install prezto_save tmux_install tmux_save sublimetext_install sublimetext_save zsh_install zsh_save help
+.PHONY: prezto_install prezto_save tmux_install tmux_save subl_install subl_save zsh_install zsh_save git_install git_save all_install all_save help
 .DEFAULT_GOAL := help
 
-DATE := $(shell date +'%F %H:%M')
-
-prezto_install: ## install prezto configuration files
+prezto_install: ## Install Prezto configuration files
 	@cp prezto/source.zpreztorc ~/.zpreztorc
-	@echo "prezto installed"
+	@echo "👍 Prezto installed"
 
-prezto_save: ## save prezto configuration files
+prezto_save: ## Save Prezto configuration files
 	@cp ~/.zpreztorc prezto/source.zpreztorc
 	@git add prezto/source.zpreztorc prezto/README.md
-	@git commit -m 'update tmux - $(DATE)'
+	@git commit -m '🔧 Update Prezto'
 	@git push
-	@echo 'prezto saved'
+	@echo '💾 Prezto saved
 
-tmux_install: ## install tmux configuration files
+tmux_install: ## Install Tmux configuration files
 	@cp tmux/tmux.conf ~/.tmux.conf
 	@cp tmux/tmux.conf.local ~/.tmux.conf.local
-	@echo 'tmux installed'
+	@echo '👍 Tmux installed'
 
-tmux_save: ## save tmux configuration files
+tmux_save: ## Save Tmux configuration files
 	@cp ~/.tmux.conf tmux/tmux.conf 
 	@cp ~/.tmux.conf.local tmux/tmux.conf.local
 	@git add tmux/*
-	@git commit -m 'update tmux - $(DATE)'
+	@git commit -m '🔧 Update Tmux'
 	@git push 
-	@echo 'tmux saved'
+	@echo '💾 Tmux saved'
 
-sublimetext_install: ## install sublimetext configuration files
+subl_install: ## Install Sublime Text configuration files
 	@cp sublimetext/*.sublime-settings ~/.config/sublime-text-3/Packages/User/
 	@cp sublimetext/Default\ \(Linux\).sublime-keymap ~/.config/sublime-text-3/Packages/User/
-	@echo 'sublimetext installed'
+	@echo '👍 Sublime Text installed'
 
-sublimetext_save: ## save sublimetext configuration files
+subl_save: ## Save Sublime Text configuration files
 	@cp ~/.config/sublime-text-3/Packages/User/Default\ \(Linux\).sublime-keymap sublimetext/
 	@cp ~/.config/sublime-text-3/Packages/User/*.sublime-settings sublimetext/
 	@git add sublimetext/*.sublime-settings sublimetext/*.sublime-keymap sublimetext/README.md
-	@git commit -m 'update sublimetext - $(DATE)'
+	@git commit -m '🔧 Update Sublime Text'
 	@git push 
-	@echo 'sublimetext saved'
+	@echo '💾 Sublime Text saved'
 
-zsh_install: ## install zsh configuration files
+zsh_install: ## Install Zsh configuration files
 	@cp zsh/source.zshrc ~/.zshrc
-	@echo 'zsh installed'
+	@echo '👍 Zsh installed'
 
-zsh_save: ## save zsh configuration files
+zsh_save: ## Save Zsh configuration files
 	@cp ~/.zshrc zsh/source.zshrc
 	@git add zsh/source.zshrc zsh/README.md zsh/david.zsh-theme
-	@git commit -m 'update zsh - $(DATE)'
+	@git commit -m '🔧 Update Zsh'
 	@git push
-	@echo 'zsh saved'
+	@echo '💾 Zsh saved'
 
-git_install: ## install git configuration
+git_install: ## Install Git configuration
 	@cp git/config ~/.gitconfig
-	@echo "git installed"
+	@echo "👍 Git installed"
 
-git_save: ## save git configuration
+git_save: ## Save Git configuration
 	@cp ~/.gitconfig git/config
 	@git add git/config
-	@git commit -m 'update zsh - $(DATE)'
+	@git commit -m '🔧 Update Git'
 	@git push
-	@echo "git saved"
+	@echo "💾 Git saved"
 
-all_install: prezto_install tmux_install sublimetext_install zsh_install ## install all configuration files
+all_install: prezto_install tmux_install subl_install zsh_install git_install ## Install all configuration files
 
-all_save: prezto_save tmux_save sublimetext_save zsh_save ## save all configuration files
+all_save: prezto_save tmux_save subl_save zsh_save git_save ## Save all configuration files
 
 help: ## Print this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
