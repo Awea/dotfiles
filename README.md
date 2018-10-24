@@ -2,6 +2,7 @@
 
 ## Prerequisites
 - [Prezto](https://github.com/sorin-ionescu/prezto)
+  - [spaceship-prompt](https://github.com/denysdovhan/spaceship-prompt)
 - [Git WebUI](https://github.com/alberthier/git-webui)
 - [asdf - extendable version manager](https://github.com/asdf-vm/asdf)
 - [z](https://github.com/rupa/z)
