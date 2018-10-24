@@ -34,6 +34,7 @@ zstyle ':prezto:load' pmodule \
   'directory' \
   'spectrum' \
   'utility' \
+  'git' \
   'completion' \
   'contrib-prompt' \
   'prompt'
