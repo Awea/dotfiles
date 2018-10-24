@@ -3,14 +3,14 @@
 
 prezto_install: ## Install Prezto configuration files
 	@cp prezto/source.zpreztorc ~/.zpreztorc
-	@echo "👍 Prezto installed"
+	@echo '👍 Prezto installed'
 
 prezto_save: ## Save Prezto configuration files
 	@cp ~/.zpreztorc prezto/source.zpreztorc
 	@git add prezto
 	@git commit -m '🔧 Update Prezto'
 	@git push
-	@echo '💾 Prezto saved
+	@echo '💾 Prezto saved'
 
 tmux_install: ## Install Tmux configuration files
 	@cp tmux/tmux.conf ~/.tmux.conf
@@ -51,14 +51,14 @@ zsh_save: ## Save Zsh configuration files
 
 git_install: ## Install Git configuration
 	@cp git/config ~/.gitconfig
-	@echo "👍 Git installed"
+	@echo '👍 Git installed'
 
 git_save: ## Save Git configuration
 	@cp ~/.gitconfig git/config
 	@git add git/config
 	@git commit -m '🔧 Update Git'
 	@git push
-	@echo "💾 Git saved"
+	@echo '💾 Git saved'
 
 all_install: prezto_install tmux_install subl_install zsh_install git_install ## Install all configuration files
 
