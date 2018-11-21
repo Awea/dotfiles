@@ -14,13 +14,11 @@ prezto_save: ## Save Prezto configuration files
 
 tmux_install: ## Install Tmux configuration files
 	@cp tmux/tmux.conf ~/.tmux.conf
-	@cp tmux/tmux.conf.local ~/.tmux.conf.local
 	@echo '👍 Tmux installed'
 
 tmux_save: ## Save Tmux configuration files
-	@cp ~/.tmux.conf tmux/tmux.conf 
-	@cp ~/.tmux.conf.local tmux/tmux.conf.local
-	@git add tmux/*
+	@cp ~/.tmux.conf tmux/tmux.conf
+	@git add tmux
 	@git commit -m '🔧 Update Tmux'
 	@git push 
 	@echo '💾 Tmux saved'
