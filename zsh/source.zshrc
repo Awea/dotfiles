@@ -3,18 +3,25 @@ if [[ -s "${ZDOTDIR:-$HOME}/.zprezto/init.zsh" ]]; then
 fi
 
 # Misc
-
 ## z - https://github.com/rupa/z
 . $HOME/.apps/z.sh
 
-# Dev 
+## Completion
+fpath=(~/.zsh/completion $fpath)
+autoload -Uz compinit && compinit -i
+
+# Dev
+## Android - https://developer.android.com/studio/#downloads
+export ANDROID_HOME="$HOME/.android"
+export PATH="$ANDROID_HOME/tools:$PATH"
+export PATH="$ANDROID_HOME/platform-tools:$PATH" 
+
+## SDKMAN! - https://sdkman.io/
+. $HOME/.sdkman/bin/sdkman-init.sh
 
 ## Asdf - https://github.com/asdf-vm/asdf
 . $HOME/.asdf/asdf.sh
 . $HOME/.asdf/completions/asdf.bash
-
-## Elixir
-export ERL_AFLAGS="-kernel shell_history enabled"
 
 ## Rust > Cargo
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -57,8 +64,8 @@ alias gui="ASDF_PYTHON_VERSION=2.7.12 git webui --no-browser"
 # exa - https://github.com/ogham/exa
 alias la="exa -abghl --git --color=automatic"
 
-# vim colorizatio
-source "$HOME/.vim/bundle/gruvbox/gruvbox_256palette.sh"
-
 # Restart audio
 alias restart-audio="pulseaudio -k && sudo alsa force-reload"
+#THIS MUST BE AT THE END OF THE FILE FOR SDKMAN TO WORK!!!
+export SDKMAN_DIR="/home/awea/.sdkman"
+[[ -s "/home/awea/.sdkman/bin/sdkman-init.sh" ]] && source "/home/awea/.sdkman/bin/sdkman-init.sh"
