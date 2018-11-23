@@ -16,9 +16,6 @@ export ANDROID_HOME="$HOME/.android"
 export PATH="$ANDROID_HOME/tools:$PATH"
 export PATH="$ANDROID_HOME/platform-tools:$PATH" 
 
-## SDKMAN! - https://sdkman.io/
-. $HOME/.sdkman/bin/sdkman-init.sh
-
 ## Asdf - https://github.com/asdf-vm/asdf
 . $HOME/.asdf/asdf.sh
 . $HOME/.asdf/completions/asdf.bash
@@ -66,6 +63,3 @@ alias la="exa -abghl --git --color=automatic"
 
 # Restart audio
 alias restart-audio="pulseaudio -k && sudo alsa force-reload"
-#THIS MUST BE AT THE END OF THE FILE FOR SDKMAN TO WORK!!!
-export SDKMAN_DIR="/home/awea/.sdkman"
-[[ -s "/home/awea/.sdkman/bin/sdkman-init.sh" ]] && source "/home/awea/.sdkman/bin/sdkman-init.sh"
