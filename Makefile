@@ -58,7 +58,13 @@ git_save: ## Save Git configuration
 	@git push
 	@echo '💾 Git saved'
 
-all_install: prezto_install tmux_install subl_install zsh_install git_install ## Install all configuration files
+.PHONY: bin
+bin: $(HOME)/bin
+
+$(HOME)/bin:
+	@ln -s $(PWD)/bin $@
+
+all_install: prezto_install tmux_install subl_install zsh_install git_install bin ## Install all configuration files
 
 all_save: prezto_save tmux_save subl_save zsh_save git_save ## Save all configuration files
 

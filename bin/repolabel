@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+
+usage(){
+  echo "Replace default issue labels from GitHub repository with ours."
+  echo "  Usage: repolabel user repo"
+  exit 1
+}
+
+shift
+case $@ in
+  "-h") usage;;
+  *) ;;
+esac
+
+if test -z "$1" && test -z "$2"; then
+  usage
+fi
+
+USER=$1
+PASS=$(pass wearemd/github/tokens/repolabel)
+REPO=$2
+
+# Default labels to remove from repository
+labelsToDelete=(
+  bug 
+  duplicate 
+  enhancement 
+  'good%20first%20issue' 
+  'help%20wanted' 
+  invalid 
+  question 
+  wontfix
+)
+
+echo "Delete labels"
+parallel --bar "curl -s --user '$USER:$PASS' --request DELETE 'https://api.github.com/repos/$USER/$REPO/labels/{}' > /dev/null" ::: ${labelsToDelete[@]}
+
+# Labels to add to repository
+labelsToCreate=(
+  '{"name":"chat","color":"5319e7"}' 
+  '{"name":"high","color":"b60205"}' 
+  '{"name":"medium","color":"d93f0b"}'
+  '{"name":"low","color":"fbca04"}' 
+  '{"name":"trivial","color":"0e8a16"}' 
+  '{"name":"standby","color":"cccccc"}' 
+  '{"name":"to-test-in-staging","color":"f9d0c4"}' 
+)
+
+echo "Create labels"
+parallel --bar "curl -s --user '$USER:$PASS' --request POST --data {} 'https://api.github.com/repos/$USER/$REPO/labels' > /dev/null" ::: ${labelsToCreate[@]}
