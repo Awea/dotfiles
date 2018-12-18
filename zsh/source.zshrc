@@ -32,6 +32,9 @@ export PATH="$HOME/.config/composer/vendor/bin:$PATH"
 ## local/sbin 
 export PATH="/usr/local/sbin:$PATH"
 
+## $HOME/bin
+export PATH="$HOME/bin:$PATH"
+
 # Aliases
 
 ## Docker aliases
