@@ -12,7 +12,7 @@ autoload -Uz compinit && compinit -i
 
 # Dev
 ## Android - https://developer.android.com/studio/#downloads
-export ANDROID_HOME="$HOME/.android"
+export ANDROID_HOME="$HOME/Android/Sdk"
 export PATH="$ANDROID_HOME/tools:$PATH"
 export PATH="$ANDROID_HOME/platform-tools:$PATH" 
 
