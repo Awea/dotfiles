@@ -1,3 +1,4 @@
+# Configure https://github.com/denysdovhan/spaceship-prompt
 SPACESHIP_PROMPT_ORDER=(
   user          # Username section
   dir           # Current directory section
