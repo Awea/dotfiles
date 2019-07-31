@@ -1,0 +1,9 @@
+{
+    "config":[
+        {
+            "scope": "text.html.vue",
+            "startMarker":"<style lang=\"sass\">",
+            "endMarker":"</style>"
+        }
+    ]
+}

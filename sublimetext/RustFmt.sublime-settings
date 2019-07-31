@@ -1,0 +1,5 @@
+// RustFmt Settings - User
+{
+  "executable": "/home/awea/.asdf/shims/rustfmt",
+  "error_messages": false
+}

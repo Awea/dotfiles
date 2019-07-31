@@ -1,0 +1,5 @@
+// Settings in here override those in "Elm Language Support/Settings/Elm Language Support.sublime-settings",
+
+{
+  "debug": true
+}
