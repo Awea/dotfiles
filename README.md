@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="images/export/header.gif">
+</p>
+
 # David Authier's dotfiles
 
 ## Prerequisites
