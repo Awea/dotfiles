@@ -2,8 +2,6 @@
   <img src="images/export/header.gif">
 </p>
 
-# David Authier's dotfiles
-
 ## Prerequisites
 - [Prezto](https://github.com/sorin-ionescu/prezto)
   - [spaceship-prompt](https://github.com/denysdovhan/spaceship-prompt)
