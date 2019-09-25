@@ -35,6 +35,10 @@ export PATH="$ANDROID_HOME/platform-tools:$PATH"
 ## Rust > Cargo
 export PATH="$HOME/.cargo/bin:$PATH"
 
+### Add sccache (a compilation caching service) to Rust compiler
+### Source: https://vfoley.xyz/rust-compile-speed-tips/
+export RUSTC_WRAPPER=sccache
+
 ## Go
 export PATH="$HOME/go/bin:$PATH"
 
