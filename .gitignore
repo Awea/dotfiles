@@ -1,1 +1,8 @@
 .DS_Store
+.todo
+
+# Sublime Text files 
+sublime-text-3/Package\ Control.cache
+*.last-run
+*.merged-ca-bundle
+*.user-ca-bundle
