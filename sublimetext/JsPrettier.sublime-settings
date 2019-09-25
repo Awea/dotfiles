@@ -9,6 +9,7 @@
   //   "--eslint-config-path": "./.eslintrc.js"
   // },
   "prettier_options": {
+    "semi": false,
     "vueIndentScriptAndStyle": true
   }
 }
