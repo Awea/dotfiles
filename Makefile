@@ -5,14 +5,15 @@ symlinks := $(patsubst %.symlink, %, $(shell basename -a $(files_to_symlink)))
 # Generate the complete list of symlink target we need
 symlink_paths := $(addprefix $(HOME)/., $(symlinks))
 
-# All directory to search for *.symlink files/folder
-dir := $(shell find . -type d -not -path '*/\.*')
 # VPATH tell make to search this list of folder when using the % pattern
-VPATH = $(dir)
+# Documentation: https://www.gnu.org/software/make/manual/html_node/General-Search.html
+VPATH = $(shell dirname $(files_to_symlink))
 
-install: $(symlink_paths) $(HOME)/.config/sublime-text-3/Packages/User ## Install all configuration files
+.PHONY: links
+links: $(symlink_paths) $(HOME)/.config/sublime-text-3/Packages/User ## Create symbolic link for files and folders with a `.symlink` suffix
 
 # Create all symlink
+# Documentation: https://www.gnu.org/software/make/manual/html_node/Automatic-Variables.html#Automatic-Variables
 $(HOME)/.%: %.symlink
 	ln -s $(abspath $<) $@
 
