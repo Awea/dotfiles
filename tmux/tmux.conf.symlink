@@ -8,3 +8,20 @@ bind % split-window -h -c "#{pane_current_path}"
 # Start windows and panes at 1, not 0
 set -g base-index 1
 setw -g pane-base-index 1
+
+# List of plugins
+set -g @plugin 'tmux-plugins/tmux-resurrect'
+set -g @plugin 'tmux-plugins/tmux-continuum'
+
+# Plugins configuration
+# Last saved environment is automatically restored when tmux is started
+set -g @continuum-restore 'on'
+
+# Initialize TMUX plugin manager (keep this line at the very bottom of tmux.conf)
+# Installing plugins
+# - Add new plugin to ~/.tmux.conf with set -g @plugin '...'
+# - Press prefix + I to fetch the plugin.
+# Uninstalling plugins
+# - Remove plugin from the list.
+# - Press prefix + alt + u to remove the plugin.
+run -b '~/.tmux/plugins/tpm/tpm'
