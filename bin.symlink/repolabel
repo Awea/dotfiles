@@ -6,7 +6,6 @@ usage(){
   exit 1
 }
 
-shift
 case $@ in
   "-h") usage;;
   *) ;;
