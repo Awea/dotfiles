@@ -21,7 +21,8 @@ REPO=$2
 
 # Default labels to remove from repository
 labelsToDelete=(
-  bug 
+  bug
+  documentation 
   duplicate 
   enhancement 
   'good%20first%20issue' 
