@@ -2,28 +2,37 @@
   <img src="images/export/header.gif">
 </p>
 
-## Prerequisites
+## ⚙️ Prerequisites
+- [asdf](https://github.com/asdf-vm/asdf)
 - [Prezto](https://github.com/sorin-ionescu/prezto)
-  - [spaceship-prompt](https://github.com/denysdovhan/spaceship-prompt)
-- [Git WebUI](https://github.com/alberthier/git-webui)
-- [asdf - extendable version manager](https://github.com/asdf-vm/asdf)
-- [z](https://github.com/rupa/z)
 
-## Make recipes
-`make`: List all available Make recipes
+## ⌨️ Commands
+### Install
+```Makefile
+# Create symbolic link for files and folders with a `.symlink` suffix
 
-## Software configuration
-## Fonts
-The [FiraCode Font](https://github.com/tonsky/FiraCode) I use for both Sublime Text and Konsole.
+make links
+```
 
-#### Sublime Text
+### Help
+```Makefile
+# Display a list of available commands.
+
+make help
+```
+
+## 🔧 Software manual configuration
+### Fonts
+The mono typeface I use for both Sublime Text and iTerm is [FiraCode Font](https://github.com/tonsky/FiraCode).
+
+### Sublime Text
 Install [**Package Control**](https://packagecontrol.io/installation)
 
-#### Browsing
+### Browsing
 * Log in **Firefox**, disable cache while inspector is open and set Firefox as default browser
 * Disable **Chrome** cache while DevTools is open
 
-#### Thunderbird
+### Thunderbird
 Log in **Thunderbird** then set a [mail signature](https://github.com/wearemd/wearemd_mail_signatures) for each account
 
 Yay, you're done! 👏🏻 👏🏻
