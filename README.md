@@ -14,6 +14,8 @@
 make links
 ```
 
+💡 Symbolic links are created between `$PWD/[file-or-folder].symlink` and `$HOME/.[file-or-folder]`.
+
 ### Help
 ```Makefile
 # Display a list of available commands.
