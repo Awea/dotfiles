@@ -35,4 +35,5 @@ Install [**Package Control**](https://packagecontrol.io/installation)
 ### Thunderbird
 Log in **Thunderbird** then set a [mail signature](https://github.com/wearemd/wearemd_mail_signatures) for each account
 
-Yay, you're done! 👏🏻 👏🏻
+## 📄 License
+Static site starter is licensed under the [GNU General Public License v3.0](LICENSE).
