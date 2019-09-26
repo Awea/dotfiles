@@ -3,8 +3,8 @@
 </p>
 
 ## ⚙️ Prerequisites
-- [asdf](https://github.com/asdf-vm/asdf)
-- [Prezto](https://github.com/sorin-ionescu/prezto)
+- [**asdf**](https://github.com/asdf-vm/asdf)
+- [**Prezto**](https://github.com/sorin-ionescu/prezto)
 
 ## ⌨️ Commands
 ### Install
@@ -23,7 +23,7 @@ make help
 
 ## 🔧 Software manual configuration
 ### Fonts
-The mono typeface I use for both Sublime Text and iTerm is [FiraCode Font](https://github.com/tonsky/FiraCode).
+The mono typeface I use for both Sublime Text and iTerm is [**FiraCode Font**](https://github.com/tonsky/FiraCode).
 
 ### Sublime Text
 Install [**Package Control**](https://packagecontrol.io/installation)
