@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+
+usage(){
+  echo "Create a new Makefile with a fancy help recipe."
+  echo "  Usage: newmake [optional dest, default to current dir]"
+  exit 1
+}
+
+case $@ in
+  "-h") usage;;
+  *) ;;
+esac
+
+if test -z "$1"; then
+  DEST=$PWD
+else
+  DEST=$1
+fi
+
+if test -f "$DEST/Makefile"; then
+  echo "A Makefile already exist in $DEST";
+  exit 0
+fi
+
+cp $HOME/.templates/Makefile $DEST
