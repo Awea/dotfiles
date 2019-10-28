@@ -5,34 +5,18 @@
 	],
 	"installed_packages":
 	[
-		"Alignment",
-		"ASCII Comment Snippets",
 		"ayu",
-		"babel-sublime",
 		"Base Encoder",
-		"Dockerfile Syntax Highlighting",
 		"Elixir",
 		"gruvbox",
-		"Handlebars",
-		"HTML-CSS-JS Prettify",
-		"Jade",
-		"JavaScript Completions",
 		"JsPrettier",
-		"LESS",
-		"OpenGL Shading Language (GLSL)",
 		"Package Control",
-		"PHP-Twig",
 		"Pug",
 		"Rust Enhanced",
 		"RustFmt",
-		"Sass",
 		"SideBarEnhancements",
 		"Slime",
 		"TOML",
 		"Vue Syntax Highlight"
-	],
-	"repositories":
-	[
-		"https://github.com/babel/babel-sublime"
 	]
 }
