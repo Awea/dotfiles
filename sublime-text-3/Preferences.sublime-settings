@@ -23,6 +23,7 @@
 	"tab_small": true,
 	"theme": "ayu-light.sublime-theme",
 	"translate_tabs_to_spaces": true,
+	"trim_trailing_white_space_on_save": true,
 	"ui_big_tabs": true,
 	"ui_fix_tab_labels": true,
 	"ui_font_size_small": true,
