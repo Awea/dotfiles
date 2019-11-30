@@ -1,5 +1,4 @@
 .PHONY: deps
-## Install dependencies
 deps: node_modules $(THEME_DIR)/vendor
 
 node_modules: package.json yarn.lock
@@ -18,7 +17,7 @@ endef
 ## List available commands
 .PHONY: help
 help:
-	@printf "$(call primary,spa-starter)\n"
+	@printf "$(call primary,my-project)\n"
 	@printf "Project description using Make\n\n"
 	@printf "$(call title,USAGE)"
 	@printf "    make <SUBCOMMAND>\n\n"
@@ -35,8 +34,15 @@ help:
 			} \
 		}\
 		\
-		if ($$0 ~ /^.PHONY: [a-zA-Z\-\_0-9]+$$/) { \
+		if ($$0 ~ /^.PHONY: [a-zA-Z0-9]+$$/) { \
 			helpCommand = substr($$0, index($$0, ":") + 2); \
+			if (helpMessage) { \
+				printf "    $(call primary,%-8s)%s\n", \
+					helpCommand, helpMessage; \
+				helpMessage = ""; \
+			} \
+		} else if ($$0 ~ /^[a-zA-Z\-\_0-9.]+:/) { \
+			helpCommand = substr($$0, 0, index($$0, ":")); \
 			if (helpMessage) { \
 				printf "    $(call primary,%-8s)%s\n", \
 					helpCommand, helpMessage; \
