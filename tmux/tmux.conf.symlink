@@ -12,6 +12,7 @@ setw -g pane-base-index 1
 # List of plugins
 set -g @plugin 'tmux-plugins/tmux-resurrect'
 set -g @plugin 'tmux-plugins/tmux-continuum'
+set -g @plugin 'tmux-plugins/tmux-yank'
 
 # Plugins configuration
 # Last saved environment is automatically restored when tmux is started
