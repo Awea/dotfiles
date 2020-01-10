@@ -26,5 +26,6 @@
 	"ui_fix_tab_labels": true,
 	"ui_font_size_small": true,
 	"ui_separator": true,
-	"word_wrap": true
+	"word_wrap": true,
+	"show_encoding": true
 }
