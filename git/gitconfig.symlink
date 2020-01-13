@@ -2,11 +2,7 @@
 	name = Awea
 	email = aweaoftheworld@gmail.com
 
-[webui]
-	autoupdate = true
-
 [alias]
-	webui = !/home/awea/.git-webui/release/libexec/git-core/git-webui
   s = status
   co = checkout
   a = add
