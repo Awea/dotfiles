@@ -20,3 +20,11 @@
 	smudge = git-lfs smudge -- %f
 	process = git-lfs filter-process
 	required = true
+
+# Force git to check commit hash
+[transfer]
+   fsckobjects = true
+[fetch]
+   fsckobjects = true
+[receive]
+   fsckObjects = true
