@@ -7,16 +7,22 @@
 	[
 		"ayu",
 		"Base Encoder",
+		"Dockerfile Syntax Highlighting",
 		"Elixir",
 		"gruvbox",
+		"JavaScript Completions",
+		"Jinja2",
 		"JsPrettier",
 		"Package Control",
 		"PHP-Twig",
 		"Pug",
 		"Rust Enhanced",
 		"RustFmt",
+		"Sass",
+		"Shader Syntax (GLSL HLSL Cg)",
 		"SideBarEnhancements",
 		"Slime",
+		"Terraform",
 		"TOML",
 		"Vue Syntax Highlight"
 	]
