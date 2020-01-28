@@ -17,6 +17,7 @@
 	],
 	"line_padding_bottom": 1,
 	"line_padding_top": 1,
+	"show_encoding": true,
 	"tab_size": 2,
 	"tab_small": true,
 	"theme": "ayu-light.sublime-theme",
@@ -26,6 +27,5 @@
 	"ui_fix_tab_labels": true,
 	"ui_font_size_small": true,
 	"ui_separator": true,
-	"word_wrap": true,
-	"show_encoding": true
+	"word_wrap": true
 }
