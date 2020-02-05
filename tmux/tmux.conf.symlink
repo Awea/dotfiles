@@ -5,6 +5,9 @@ set-option -g mouse on
 bind '"' split-window -c "#{pane_current_path}"
 bind % split-window -h -c "#{pane_current_path}"
 
+# Automatically reorder windows when one is deleted
+set-option -g renumber-windows on
+
 # Start windows and panes at 1, not 0
 set -g base-index 1
 setw -g pane-base-index 1

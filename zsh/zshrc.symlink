@@ -26,7 +26,7 @@ autoload -Uz compinit && compinit -i
 ## Android - https://developer.android.com/studio/#downloads
 export ANDROID_HOME="$HOME/Android/Sdk"
 export PATH="$ANDROID_HOME/tools:$PATH"
-export PATH="$ANDROID_HOME/platform-tools:$PATH" 
+export PATH="$ANDROID_HOME/platform-tools:$PATH"
 
 ## Asdf - https://github.com/asdf-vm/asdf
 . $HOME/.asdf/asdf.sh
@@ -41,7 +41,7 @@ export PATH="$HOME/go/bin:$PATH"
 ## PHP > Composer
 export PATH="$HOME/.config/composer/vendor/bin:$PATH"
 
-## local/sbin 
+## local/sbin
 export PATH="/usr/local/sbin:$PATH"
 
 ## $HOME/bin
@@ -64,7 +64,7 @@ alias yarn-exec="PATH=$(yarn bin):$PATH"
 
 ## Kill a processus by it's port
 function killp {
-  kill -9 $( lsof -i:$1 -t ) 
+  kill -9 $( lsof -i:$1 -t )
 }
 
 ## Adminer - https://www.adminer.org/

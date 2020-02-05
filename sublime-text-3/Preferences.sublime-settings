@@ -18,6 +18,7 @@
 	"line_padding_bottom": 1,
 	"line_padding_top": 1,
 	"show_encoding": true,
+	"show_definitions": false,
 	"tab_size": 2,
 	"tab_small": true,
 	"theme": "ayu-light.sublime-theme",
