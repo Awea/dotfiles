@@ -56,8 +56,8 @@ Install [**Package Control**](https://packagecontrol.io/installation)
 
 <a name="firefox"></a>
 ### Firefox
-- Disable HTTP Cache when toolbox is open
-- Set Firefox as default browser
+1. Disable HTTP Cache when toolbox is open
+2. Set Firefox as default browser
 
 <a name="google-chrome"></a>
 ### Google Chrome
