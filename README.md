@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="images/export/header.gif">
+  <img src="documentation-images/README-header.gif" alt="">
 </p>
 
 ## ⚙️ Prerequisites
