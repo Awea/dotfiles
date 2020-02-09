@@ -1,15 +1,35 @@
 <p align="center">
   <img src="documentation-images/README-header.gif" alt="">
 </p>
+<p align="center">
+  This is <strong>my local configuration</strong>.
+</p>
 
+- - -
+
+## 📝 Table of contents
+- [**Prerequisites**](#prerequisites)
+- [**Commands**](#commands)
+- [**Software manual configuration**](#software-manual-configuration)
+  - [**Fonts**](#fonts)
+  - [**Sublime Text**](#sublime-text)
+  - [**Firefox**](#firefox)
+  - [**Google Chrome**](#google-chrome)
+  - [**Thunderbird**](#thunderbird)
+- [**License**](#license)
+
+- - -
+
+<a name="prerequisites"></a>
 ## ⚙️ Prerequisites
 - [**asdf**](https://github.com/asdf-vm/asdf)
 - [**Prezto**](https://github.com/sorin-ionescu/prezto)
 
+<a name="commands"></a>
 ## ⌨️ Commands
 ### Install
-```Makefile
-# Create symbolic link for files and folders with a `.symlink` suffix
+```makefile
+## Create symbolic links for files/folders with a .symlink suffix
 
 make links
 ```
@@ -17,25 +37,36 @@ make links
 💡 Symbolic links are created between `$PWD/[file-or-folder].symlink` and `$HOME/.[file-or-folder]`.
 
 ### Help
-```Makefile
-# Display a list of available commands.
+```makefile
+## List available commands
 
 make help
 ```
 
+<a name="software-manual-configuration"></a>
 ## 🔧 Software manual configuration
+
+<a name="fonts"></a>
 ### Fonts
-The mono typeface I use for both Sublime Text and iTerm is [**FiraCode Font**](https://github.com/tonsky/FiraCode).
+The monospace font I use for coding is [**Fira Code**](https://github.com/tonsky/FiraCode).
 
+<a name="sublime-text"></a>
 ### Sublime Text
-Install [**Package Control**](https://packagecontrol.io/installation).
+Install [**Package Control**](https://packagecontrol.io/installation)
 
-### Browsing
-* Log in **Firefox**, disable cache while inspector is open and set Firefox as default browser
-* Disable **Chrome** cache while DevTools is open
+<a name="firefox"></a>
+### Firefox
+- Disable HTTP Cache when toolbox is open
+- Set Firefox as default browser
 
+<a name="google-chrome"></a>
+### Google Chrome
+Disable Chrome cache while DevTools is open
+
+<a name="thunderbird"></a>
 ### Thunderbird
-Log in **Thunderbird** then set a [mail signature](https://github.com/wearemd/wearemd_mail_signatures) for each account.
+Set a [mail signature](https://github.com/wearemd/wearemd_mail_signatures) for each account
 
+<a name="license"></a>
 ## 📄 License
-Static site starter is licensed under the [GNU General Public License v3.0](LICENSE).
+**My dotfiles** are licensed under the [GNU General Public License v3.0](LICENSE).
