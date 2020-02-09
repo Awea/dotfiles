@@ -1,15 +1,15 @@
-# Find all the file/folder ending with .symlink
+# Find all the files/folders ending with .symlink
 files_to_symlink := $(shell find . -name '*.symlink')
 # Extract just the name.symlink from the previous list
 symlinks := $(patsubst %.symlink, %, $(shell basename -a $(files_to_symlink)))
 # Generate the complete list of symlink target we need
 symlink_paths := $(addprefix $(HOME)/., $(symlinks))
 
-# VPATH tell make to search this list of folder when using the % pattern
+# VPATH tells Make to search this list of folders when using the % pattern
 # Documentation: https://www.gnu.org/software/make/manual/html_node/General-Search.html
 VPATH = $(shell dirname $(files_to_symlink))
 
-## Create symbolic link for files and folders with a `.symlink` suffix
+## Create symbolic links for files/folders with a .symlink suffix
 .PHONY: links
 links: $(symlink_paths) $(HOME)/.config/sublime-text-3/Packages/User
 
@@ -34,7 +34,7 @@ endef
 .PHONY: help
 help:
 	@printf "$(call green-bold,dotfiles)\n"
-	@printf "David's dotfiles\n\n"
+	@printf "My local configuration\n\n"
 	@printf "$(call orange,USAGE)"
 	@printf "    make <SUBCOMMAND>\n\n"
 	@printf "$(call orange,SUBCOMMANDS)"
