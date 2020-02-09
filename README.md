@@ -48,7 +48,7 @@ make help
 
 <a name="fonts"></a>
 ### Fonts
-The monospace font I use for coding is [**Fira Code**](https://github.com/tonsky/FiraCode).
+The monospace font I use for coding is [**Cascadia Code**](https://github.com/microsoft/cascadia-code).
 
 <a name="sublime-text"></a>
 ### Sublime Text
