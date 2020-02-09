@@ -21,11 +21,11 @@ $(HOME)/.%: %.symlink
 $(HOME)/.config/sublime-text-3/Packages/User:
 	ln -s $(PWD)/sublime-text-3 $@
 
-define green-bold
+define primary
 \033[38;2;166;204;112;1m$(1)\033[0m
 endef
 
-define orange
+define title
 \033[38;2;255;204;102m$(1)\033[0m\n
 endef
 
@@ -33,16 +33,34 @@ endef
 ## List available commands
 .PHONY: help
 help:
-	@printf "$(call green-bold,dotfiles)\n"
+	@printf "$(call primary,dotfiles)\n"
 	@printf "My local configuration\n\n"
-	@printf "$(call orange,USAGE)"
+	@printf "$(call title,USAGE)"
 	@printf "    make <SUBCOMMAND>\n\n"
-	@printf "$(call orange,SUBCOMMANDS)"
+	@printf "$(call title,SUBCOMMANDS)"
 	@awk '{ \
-		if ($$0 ~ /^.PHONY: [a-zA-Z\-\_0-9]+$$/) { \
+		line = $$0; \
+		while((n = index(line, "http")) > 0) { \
+			if (match(line, "https?://[^ ]+")) { \
+			  url = substr(line, RSTART, RLENGTH); \
+			  sub(url, "\033[38;2;119;168;217m"url"\033[0m", $$0);  \
+			  line = substr(line, n + RLENGTH); \
+			} else {\
+				break; \
+			} \
+		}\
+		\
+		if ($$0 ~ /^.PHONY: [a-zA-Z0-9]+$$/) { \
 			helpCommand = substr($$0, index($$0, ":") + 2); \
 			if (helpMessage) { \
-				printf "    $(call green-bold,%-8s)%s\n", \
+				printf "    $(call primary,%-8s)%s\n", \
+					helpCommand, helpMessage; \
+				helpMessage = ""; \
+			} \
+		} else if ($$0 ~ /^[a-zA-Z\-\_0-9.]+:/) { \
+			helpCommand = substr($$0, 0, index($$0, ":")); \
+			if (helpMessage) { \
+				printf "    $(call primary,%-8s)%s\n", \
 					helpCommand, helpMessage; \
 				helpMessage = ""; \
 			} \
