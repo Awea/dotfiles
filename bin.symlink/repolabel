@@ -2,7 +2,7 @@
 
 usage(){
   echo "Replace default issue labels from GitHub repository with ours."
-  echo "  Usage: repolabel user repo"
+  echo "  Usage: repolabel user/repo"
   exit 1
 }
 
@@ -11,13 +11,13 @@ case $@ in
   *) ;;
 esac
 
-if test -z "$1" && test -z "$2"; then
+if test -z "$1"; then
   usage
 fi
 
-USER=$1
+USER=$(echo $1 | cut -d "/" -f 1)
+USER_AND_REPO=$1
 PASS=$(pass wearemd/github/tokens/repolabel)
-REPO=$2
 
 # Default labels to remove from repository
 labelsToDelete=(
@@ -33,7 +33,7 @@ labelsToDelete=(
 )
 
 echo "Delete labels"
-parallel --bar "curl -s --user '$USER:$PASS' --request DELETE 'https://api.github.com/repos/$USER/$REPO/labels/{}' > /dev/null" ::: ${labelsToDelete[@]}
+parallel --bar "curl -s --user '$USER:$PASS' --request DELETE 'https://api.github.com/repos/$USER_AND_REPO/labels/{}' > /dev/null" ::: ${labelsToDelete[@]}
 
 # Labels to add to repository
 labelsToCreate=(
@@ -47,4 +47,4 @@ labelsToCreate=(
 )
 
 echo "Create labels"
-parallel --bar "curl -s --user '$USER:$PASS' --request POST --data {} 'https://api.github.com/repos/$USER/$REPO/labels' > /dev/null" ::: ${labelsToCreate[@]}
+parallel --bar "curl -s --user '$USER:$PASS' --request POST --data {} 'https://api.github.com/repos/$USER_AND_REPO/labels' > /dev/null" ::: ${labelsToCreate[@]}
