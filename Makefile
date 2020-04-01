@@ -11,12 +11,15 @@ VPATH = $(shell dirname $(files_to_symlink))
 
 ## Create symbolic links for files/folders with a .symlink suffix
 .PHONY: links
-links: $(symlink_paths) $(HOME)/.config/sublime-text-3/Packages/User
+links: $(symlink_paths) $(HOME)/.config/sublime-merge/Packages/User $(HOME)/.config/sublime-text-3/Packages/User
 
 # Create all symlink
 # Documentation: https://www.gnu.org/software/make/manual/html_node/Automatic-Variables.html#Automatic-Variables
 $(HOME)/.%: %.symlink
 	ln -s $(abspath $<) $@
+
+$(HOME)/.config/sublime-merge/Packages/User:
+	ln -s $(PWD)/sublime-merge $@
 
 $(HOME)/.config/sublime-text-3/Packages/User:
 	ln -s $(PWD)/sublime-text-3 $@
