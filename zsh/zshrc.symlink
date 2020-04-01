@@ -30,7 +30,7 @@ export PATH="$ANDROID_HOME/platform-tools:$PATH"
 
 ## Asdf - https://github.com/asdf-vm/asdf
 . $HOME/.asdf/asdf.sh
-. $HOME/.asdf/completions/asdf.bash
+# . $HOME/.asdf/completions/asdf.bash
 
 ## Rust > Cargo
 export PATH="$HOME/.cargo/bin:$PATH"

@@ -1,15 +1,10 @@
 {
   "auto_format_on_save": true,
   "disable_prettier_cursor_offset": false,
-  "auto_format_on_save_excludes": ["*.md", "*.html", "*.json"],
+  "auto_format_on_save_excludes": ["*.md", "*.html", "*.json", "*.yml"],
   "node_path": "$HOME/.asdf/shims/node",
-  // "prettier_cli_path": "./node_modules/.bin/prettier-eslint",
   "prettier_cli_path": "./node_modules/.bin/prettier",
-  // "additional_cli_args": {
-  //   "--eslint-config-path": "./.eslintrc.js"
-  // },
-  "prettier_options": {
-    "semi": false,
-    "vueIndentScriptAndStyle": true
+  "additional_cli_args": {
+    "--config": "${folder}/.prettierrc",
   }
 }

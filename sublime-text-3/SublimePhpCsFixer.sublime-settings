@@ -1,0 +1,6 @@
+{
+  "config": [
+    "${folder}/.php_cs"
+  ],
+  "on_save": true
+}
