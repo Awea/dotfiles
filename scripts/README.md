@@ -1,0 +1,2 @@
+- Inspiration: https://github.com/victoriadrake/dotfiles
+  - https://medium.com/better-programming/how-to-set-up-a-fresh-ubuntu-desktop-using-only-dotfiles-and-bash-scripts-159fd8a038b8

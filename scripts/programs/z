@@ -1,0 +1,6 @@
+#!/bin/bash
+
+# Z
+# https://github.com/rupa/z
+mkdir -p ~/.apps
+curl -L https://raw.githubusercontent.com/rupa/z/master/z.sh > ~/.apps/z.sh

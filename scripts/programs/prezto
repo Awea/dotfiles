@@ -1,0 +1,26 @@
+#!/bin/zsh
+
+# Prezto
+# https://github.com/sorin-ionescu/prezto
+if [ ! -d "$HOME/.zprezto" ]; then
+	git clone --recursive https://github.com/sorin-ionescu/prezto.git "${ZDOTDIR:-$HOME}/.zprezto"
+fi
+
+setopt EXTENDED_GLOB
+for rcfile in "${ZDOTDIR:-$HOME}"/.zprezto/runcoms/^README.md(.N); do
+	if [ ! -L "${ZDOTDIR:-$HOME}/.${rcfile:t}" ]; then
+  	ln -s "$rcfile" "${ZDOTDIR:-$HOME}/.${rcfile:t}"
+  fi
+done
+
+# Change commande line interpreter to zsh
+chsh -s /bin/zsh
+
+# Prezto contrib
+# https://github.com/belak/prezto-contrib
+cd $HOME/.zprezto
+if [ ! -d "$HOME/.zprezto/contrib" ]; then
+	git clone --recurse-submodules git@github.com:belak/prezto-contrib.git contrib
+fi 
+cd contrib
+git pull

@@ -1,0 +1,9 @@
+#!/bin/bash
+
+# Pass
+# https://www.passwordstore.org/
+sudo apt install pass -y
+
+# Completion
+mkdir -p ~/.zsh/completion
+curl -L https://raw.githubusercontent.com/zx2c4/password-store/master/src/completion/pass.zsh-completion > ~/.zsh/completion/_pass
