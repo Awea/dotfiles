@@ -1,0 +1,9 @@
+// Settings in here override those in "LSP-elixir/LSP-elixir.sublime-settings",
+
+{
+  "settings": {
+    "elixirLS": {
+      "dialyzerEnabled": false,
+    }
+  }
+}

@@ -1,6 +1,5 @@
 {
-  "mix_format_on_save": true,
-  "reload_after_mix_format": true,
+  "lsp_format_on_save": true,
   // "use_root_dir": true,
 	"extensions":
 	[
