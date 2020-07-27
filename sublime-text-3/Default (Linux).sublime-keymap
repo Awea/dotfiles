@@ -24,5 +24,7 @@
     "command": "delete_trailing_spaces"
   },
   { "keys": ["ctrl+k"], "command": "toggle_side_bar" },
-  { "keys": ["ctrl+:"], "command": "toggle_comment"}
+  { "keys": ["ctrl+:"], "command": "toggle_comment"},
+  { "keys": ["f12"], "command": "goto_definition" },
+  { "keys": ["f12"], "command": "lsp_symbol_definition" }
 ]

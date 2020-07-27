@@ -1,0 +1,12 @@
+// Settings in here override those in "LSP/LSP.sublime-settings"
+{
+  "clients": {
+    "elixir-ls": {
+      "command": ["/home/awea/.workspace/elixir-ls/release/language_server.sh"],
+      "enabled": true,
+      "languageId": "elixir",
+      "scopes": ["source.elixir"],
+      "syntaxes": ["Packages/Elixir/Syntaxes/Elixir.tmLanguage"]
+    }
+  }
+}
