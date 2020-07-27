@@ -5,16 +5,16 @@
 	],
 	"installed_packages":
 	[
+		"A File Icon",
 		"ayu",
 		"Base Encoder",
 		"DocBlockr",
 		"Dockerfile Syntax Highlighting",
 		"Elixir",
 		"gruvbox",
+		"Ignore Unable to Open File Error",
 		"JavaScript Completions",
 		"Jinja2",
-		"DocBlockr",
-		"Ignore Unable to Open File Error",
 		"JSON Reindent",
 		"JsPrettier",
 		"Package Control",
