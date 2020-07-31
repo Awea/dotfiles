@@ -1,5 +1,6 @@
 // Settings in here override those in "LSP/LSP.sublime-settings"
 {
+  "auto_show_diagnostics_panel": "never",
   "clients": {
     "elixir-ls": {
       "command": ["/home/awea/.workspace/elixir-ls/release/language_server.sh"],
