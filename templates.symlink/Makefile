@@ -1,3 +1,7 @@
+# Here we ensure that every command this Makefile run will run in a bash shell,
+# instead of the default 'sh'. This is actually just a variable assignement.
+SHELL := /usr/bin/env bash
+
 .PHONY: deps
 deps: node_modules $(THEME_DIR)/vendor
 
