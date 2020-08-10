@@ -1,0 +1,5 @@
+#!/bin/zsh
+
+# Antibody
+# https://getantibody.github.io/
+curl -sfL git.io/antibody | sudo sh -s - -b /usr/local/bin

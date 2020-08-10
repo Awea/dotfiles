@@ -1,8 +1,11 @@
 .DS_Store
 .todo
 
-# Sublime Text files 
+# Sublime Text files
 sublime-text-3/Package\ Control.cache
 *.last-run
 *.merged-ca-bundle
 *.user-ca-bundle
+
+# Antibody
+antibody/zsh_plugins.sh

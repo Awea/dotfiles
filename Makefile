@@ -11,7 +11,7 @@ VPATH = $(shell dirname $(files_to_symlink))
 
 ## Create symbolic links for files/folders with a .symlink suffix
 .PHONY: links
-links: $(symlink_paths) $(HOME)/.config/sublime-merge/Packages/User $(HOME)/.config/sublime-text-3/Packages/User
+links: $(symlink_paths) $(HOME)/.config/sublime-merge/Packages/User $(HOME)/.config/sublime-text-3/Packages/User antibody/zsh_plugins.sh
 
 # Create all symlink
 # Documentation: https://www.gnu.org/software/make/manual/html_node/Automatic-Variables.html#Automatic-Variables
@@ -23,6 +23,9 @@ $(HOME)/.config/sublime-merge/Packages/User:
 
 $(HOME)/.config/sublime-text-3/Packages/User:
 	ln -s $(PWD)/sublime-text-3 $@
+
+antibody/zsh_plugins.sh: antibody/zsh_plugins.txt
+	antibody bundle < $< > $@
 
 define primary
 \033[38;2;166;204;112;1m$(1)\033[0m

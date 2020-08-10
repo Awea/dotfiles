@@ -23,7 +23,7 @@
 <a name="prerequisites"></a>
 ## ⚙️ Prerequisites
 - [**asdf**](https://github.com/asdf-vm/asdf)
-- [**Prezto**](https://github.com/sorin-ionescu/prezto)
+- [**Antibody**](https://getantibody.github.io/)
 
 <a name="commands"></a>
 ## ⌨️ Commands
