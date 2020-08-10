@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/zsh
 
 # asdf
 # https://asdf-vm.com/
@@ -25,10 +25,12 @@ bash ~/.asdf/plugins/nodejs/bin/import-release-team-keyring
 # Erlang
 # https://github.com/asdf-vm/asdf-erlang
 bash ~/.asdf/bin/asdf plugin-add erlang
+sudo apt-get install -y build-essential autoconf m4 libncurses5-dev libwxgtk3.0-gtk3-dev libgl1-mesa-dev libglu1-mesa-dev libpng-dev libssh-dev unixodbc-dev xsltproc fop libxml2-utils libncurses-dev openjdk-11-jdk
 
 # Elixir
 # https://github.com/asdf-vm/asdf-elixir
 bash ~/.asdf/bin/asdf plugin-add elixir
+sudo apt-get install -y unzip
 
 # Rust
 # https://github.com/code-lever/asdf-rust
