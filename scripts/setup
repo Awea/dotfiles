@@ -15,19 +15,19 @@ function install {
 }
 
 # Install basic dependencies
-# install apache2-utils
+install apache2-utils
 install apt-transport-https
-# install borgbackup
-# install ffmpeg 
-# install imagemagick 
-# install inotify-tools 
-# install libnotify-bin
+install borgbackup
+install ffmpeg 
+install imagemagick 
+install inotify-tools 
+install libnotify-bin
 install nautilus-dropbox 
-# install network-manager-openvpn-gnome
-# install parallel 
-# install tmux
-# install ubuntu-restricted-extras
-# install zsh
+install network-manager-openvpn-gnome
+install parallel 
+install tmux
+install ubuntu-restricted-extras
+install zsh
 
 # Run all programs/ install scripts
 for f in scripts/programs/*; do ./$f; done
