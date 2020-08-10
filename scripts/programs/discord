@@ -1,0 +1,5 @@
+#!/bin/zsh
+
+# Discord
+# https://discord.com
+sudo apt install -y discord

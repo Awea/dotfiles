@@ -1,0 +1,5 @@
+#!/bin/zsh
+
+# Mattermost desktop
+# https://mattermost.com
+sudo apt install -y mattermost-desktop
