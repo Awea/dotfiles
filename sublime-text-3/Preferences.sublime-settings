@@ -35,7 +35,8 @@
 		".git",
 		".hg",
 		"CVS",
-		"node_modules"
+		"node_modules",
+		".elixir_ls"
 	],
 	"font_face": "Cascadia Code",
 	"font_size": 18,
