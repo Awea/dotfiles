@@ -1,0 +1,5 @@
+#!/bin/zsh
+
+# Mobile shell that supports roaming and intelligent local echo
+# https://mosh.org/
+sudo apt install -y mosh

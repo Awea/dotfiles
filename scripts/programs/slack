@@ -1,0 +1,5 @@
+#!/bin/zsh
+
+# Slack
+# https://slack.com
+sudo apt install -y slack-desktop
