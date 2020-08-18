@@ -65,7 +65,7 @@ Disable Chrome cache while DevTools is open
 
 <a name="thunderbird"></a>
 ### Thunderbird
-Set a [mail signature](https://github.com/wearemd/wearemd_mail_signatures) for each account
+Set a [mail signature](https://github.com/wearemd/mail-signatures) for each account
 
 <a name="license"></a>
 ## 📄 License
