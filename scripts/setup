@@ -27,6 +27,7 @@ install network-manager-openvpn-gnome
 install parallel
 install ubuntu-restricted-extras
 install zsh
+install software-properties-common
 
 # Run all programs/ install scripts
 for f in scripts/programs/*; do ./$f; done
