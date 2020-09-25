@@ -19,8 +19,21 @@ SPACESHIP_PROMPT_ORDER=(
 # Automatic cd
 setopt auto_cd
 
+# shortcut to this dotfiles path is $DOTFILES
+export DOTFILES="$HOME/.workspace/dotfiles"
+
+# all of our zsh files
+typeset -U config_files
+config_files=($DOTFILES/*/*.zsh)
+
+# load the aliases files
+# Inspiration: https://github.com/Mayeu/dots
+for file in ${(M)config_files:#*/aliases.zsh}; do
+  source "$file"
+done
+
 # Static loading of Antibody https://getantibody.github.io/
-source $HOME/.workspace/dotfiles/antibody/zsh_plugins.sh
+source $DOTFILES/antibody/zsh_plugins.sh
 
 ## Asdf - https://github.com/asdf-vm/asdf
 . $HOME/.asdf/asdf.sh
