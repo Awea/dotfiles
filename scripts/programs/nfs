@@ -1,0 +1,18 @@
+#!/bin/zsh
+
+# Network File System
+# https://fr.wikipedia.org/wiki/Network_File_System
+sudo apt install -y nfs-kernel-server
+
+# Configure NFS server to share /home/awea/Téléchargements to Kodi
+# Source: https://www.digitalocean.com/community/tutorials/how-to-set-up-an-nfs-mount-on-ubuntu-18-04
+#
+# - rw: This option gives the client computer both read and write access to the volume.
+# - sync: This option forces NFS to write changes to disk before replying. This results in a more stable and consistent environment since the reply reflects the actual state of the remote volume. However, it also reduces the speed of file operations.
+# no_subtree_check: This option prevents subtree checking, which is a process where the host must check whether the file is actually still available in the exported tree for every request. This can cause many problems when a file is renamed while the client has it opened. In almost all cases, it is better to disable subtree checking.
+# no_root_squash: By default, NFS translates requests from a root user remotely into a non-privileged user on the server. This was intended as security feature to prevent a root account on the client from using the file system of the host as root. no_root_squash disables this behavior for certain shares.
+computer_to_kodi='/home/awea/Téléchargements 192.168.0.18(rw,sync,no_root_squash,no_subtree_check)'
+sudo grep -qxF $computer_to_kodi /etc/exports || sudo sh -c "echo '$computer_to_kodi' >> /etc/exports"
+
+# Restart NFS
+sudo systemctl restart nfs-kernel-server
