@@ -28,6 +28,8 @@ install parallel
 install ubuntu-restricted-extras
 install zsh
 install software-properties-common
+install transmission
+install flameshot
 
 # Run all programs/ install scripts
 for f in scripts/programs/*; do ./$f; done
