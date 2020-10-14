@@ -1,0 +1,7 @@
+#!/bin/zsh
+
+# VirtualBox
+# https://www.virtualbox.org/
+# Vagrant
+# https://www.vagrantup.com/
+sudo apt install -y virtualbox vagrant 

@@ -1,0 +1,9 @@
+#!/bin/zsh
+
+# Composer 
+# https://getcomposer.org/
+sudo apt install -y composer php-xml
+
+# PHP-CS-Fixer
+# https://github.com/FriendsOfPHP/PHP-CS-Fixer
+composer global require friendsofphp/php-cs-fixer
