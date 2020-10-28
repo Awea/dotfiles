@@ -94,6 +94,11 @@ function killp {
   kill -9 $( lsof -i:$1 -t )
 }
 
+## Generate a password
+function g_password {
+  date +%s | sha256sum | base64 | head -c 32 ; echo
+}
+
 # exa - https://github.com/ogham/exa
 alias la="exa -abghl --git --color=automatic"
 
