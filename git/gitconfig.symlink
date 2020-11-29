@@ -11,11 +11,6 @@
 
 [push]
   default = current
-[filter "lfs"]
-	clean = git-lfs clean -- %f
-	smudge = git-lfs smudge -- %f
-	process = git-lfs filter-process
-	required = true
 
 # Force git to check commit hash
 [transfer]
