@@ -11,7 +11,7 @@ node_modules: package.json yarn.lock
 	@touch $@
 
 bin/pretty-make:
-	@bash <(curl -Ls https://raw.githubusercontent.com/awea/pretty-make/master/scripts/install.sh)
+	@curl -Ls https://raw.githubusercontent.com/awea/pretty-make/master/scripts/install.sh | bash -s
 
 .PHONY: help
 ## List available commands
