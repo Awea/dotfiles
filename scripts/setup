@@ -30,6 +30,7 @@ install zsh
 install software-properties-common
 install transmission
 install flameshot
+install xsel
 
 # Run all programs/ install scripts
 for f in scripts/programs/*; do ./$f; done

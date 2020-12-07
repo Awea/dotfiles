@@ -94,6 +94,8 @@ function killp {
   kill -9 $( lsof -i:$1 -t )
 }
 
+## Copy to clipboard (pbcopy because I member it from OS X times)
+alias pbcopy="xsel -ib"
 ## Generate a password
 function g_password {
   date +%s | sha256sum | base64 | head -c 32 ; echo
