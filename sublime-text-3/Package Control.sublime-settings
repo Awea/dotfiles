@@ -21,6 +21,7 @@
 		"Language - French - Français",
 		"LSP",
 		"LSP-elixir",
+		"MarkdownEditing",
 		"Package Control",
 		"PHP-Twig",
 		"Pug",
@@ -32,6 +33,7 @@
 		"Slime",
 		"Terraform",
 		"TOML",
+		"TypeScript Syntax",
 		"Vue Syntax Highlight"
 	]
 }
