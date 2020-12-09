@@ -7,3 +7,7 @@ sudo apt install pass -y
 # Completion
 mkdir -p ~/.zsh/completion
 curl -L https://raw.githubusercontent.com/zx2c4/password-store/master/src/completion/pass.zsh-completion > ~/.zsh/completion/_pass
+
+# Host application to establish communication between FF and system
+# See related documentation: https://github.com/passff/passff#installation
+curl -sSL github.com/passff/passff-host/releases/latest/download/install_host_app.sh | bash -s -- firefox
