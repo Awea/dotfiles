@@ -94,6 +94,12 @@ alias vup="vagrant up"
 alias vre="vdf && vup"
 alias vba="vagrant package --base"
 
+## Open Sublime Text using best match from z
+## Repository: https://github.com/rupa/z
+function zubl {
+  subl $(z -e $1)
+}
+
 ## Kill a processus by it's port
 function killp {
   kill -9 $( lsof -i:$1 -t )
