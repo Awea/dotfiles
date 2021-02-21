@@ -1,16 +1,16 @@
 # Activate mouse control
-set-option -g mouse on
+set -g mouse on
 
 # Keep same directory on split-window
 bind '"' split-window -c "#{pane_current_path}"
 bind % split-window -h -c "#{pane_current_path}"
 
 # Automatically reorder windows when one is deleted
-set-option -g renumber-windows on
+set -g renumber-windows on
 
 # Set longer history (default value is 2000)
 # How to increase scrollback buffer size in tmux? https://stackoverflow.com/questions/18760281/how-to-increase-scrollback-buffer-size-in-tmux
-set-option -g history-limit 3000
+set -g history-limit 3000
 
 # Start windows and panes at 1, not 0
 set -g base-index 1
