@@ -13,6 +13,7 @@ node_modules: package.json yarn.lock
 bin/pretty-make:
 	@curl -Ls https://raw.githubusercontent.com/awea/pretty-make/master/scripts/install.sh | bash -s
 
+.DEFAULT_GOAL := help
 .PHONY: help
 ## List available commands
 help: bin/pretty-make
