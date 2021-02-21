@@ -11,3 +11,10 @@ curl -L https://raw.githubusercontent.com/zx2c4/password-store/master/src/comple
 # Host application to establish communication between FF and system
 # See related documentation: https://github.com/passff/passff#installation
 curl -sSL github.com/passff/passff-host/releases/latest/download/install_host_app.sh | bash -s -- firefox
+
+# Pass extension that provides an easy flow for updating passwords
+# https://github.com/roddhjav/pass-update
+wget -qO - https://pkg.pujol.io/debian/gpgkey | sudo apt-key add -
+echo 'deb https://pkg.pujol.io/debian/repo all main' | sudo tee /etc/apt/sources.list.d/pkg.pujol.io.list
+sudo apt-get update
+sudo apt-get install -y pass-extension-update
