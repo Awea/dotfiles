@@ -1,6 +1,9 @@
-# Here we ensure that every command this Makefile run will run in a bash shell,
-# instead of the default 'sh'. This is actually just a variable assignement.
-# Source: https://tech.davis-hansson.com/p/make/
+#@name Project name
+#@description Project description.
+
+# Here we ensure that every command this Makefile run will run in a bash shell
+# instead of the default sh
+# See https://tech.davis-hansson.com/p/make
 SHELL := /usr/bin/env bash
 
 .PHONY: deps
