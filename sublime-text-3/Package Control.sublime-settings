@@ -9,6 +9,7 @@
 		"ayu",
 		"Base Encoder",
 		"Better CoffeeScript",
+		"Dart",
 		"DocBlockr",
 		"Dockerfile Syntax Highlighting",
 		"Elixir",
@@ -25,15 +26,22 @@
 		"Package Control",
 		"PHP-Twig",
 		"Pug",
+		"Rubyfmt",
 		"Rust Enhanced",
 		"RustFmt",
 		"Sass",
 		"Shader Syntax (GLSL HLSL Cg)",
 		"SideBarEnhancements",
 		"Slime",
+		"sublack",
+		"SublimePhpCsFixer",
 		"Terraform",
 		"TOML",
 		"TypeScript Syntax",
 		"Vue Syntax Highlight"
+	],
+	"repositories":
+	[
+		"https://github.com/Awea/SublimePhpCsFixer"
 	]
 }

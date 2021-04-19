@@ -1,8 +1,8 @@
 {
-  "lsp_format_on_save": true,
-  // "use_root_dir": true,
 	"extensions":
 	[
-		"exs", "ex"
-	]
+		"ex",
+		"exs"
+	],
+	"lsp_format_on_save": true
 }
