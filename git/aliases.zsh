@@ -1,4 +1,5 @@
 # Git
+# Source: https://github.com/sorin-ionescu/prezto/blob/master/modules/git/alias.zsh
 alias g='git'
 
 # Commit (c)
