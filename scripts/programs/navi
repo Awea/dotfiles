@@ -1,0 +1,9 @@
+#!/bin/bash
+
+# Navi require fzf to works
+# https://github.com/junegunn/fzf
+sudo apt install -y fzf
+
+# Navi
+# https://github.com/denisidoro/navi
+curl -sL https://raw.githubusercontent.com/denisidoro/navi/master/scripts/install | sudo bash -s

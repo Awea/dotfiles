@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+# See: https://kvz.io/bash-best-practices.html
+set -o errexit
+set -o nounset
+set -o pipefail
+
+M_DIR=$HOME/.m
+
+if [ ! -d "$M_DIR" ]; then
+  git clone git@gitlab.com:Mayeu/m.git $M_DIR
+fi
+
+ln -s $M_DIR/m $HOME/.bin/m

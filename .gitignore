@@ -9,3 +9,7 @@ sublime-text-3/Package\ Control.cache
 
 # Antibody
 antibody/zsh_plugins.sh
+
+# m
+# See: https://gitlab.com/Mayeu/m
+bin.symlink/m
