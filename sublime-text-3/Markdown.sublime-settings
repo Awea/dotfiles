@@ -6,5 +6,7 @@
 		".todo",
 		"md.erb",
 		".idea"
-	]
+	],
+  "word_wrap": true,
+  "wrap_width": 100
 }
