@@ -1,0 +1,6 @@
+#!/usr/bin/env zsh
+
+## Kill a processus by it's port
+killp() {
+  kill -9 $( lsof -i:$1 -t )
+}

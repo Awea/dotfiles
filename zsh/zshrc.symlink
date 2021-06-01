@@ -1,28 +1,12 @@
 #!/bin/zsh
 
+# Inspired by:
+# - https://github.com/Mayeu/dots
+# Which was inspired by:
+# - https://github.com/caarlos0/dotfiles
+
 # Uncomment for profiling
 # zmodload zsh/zprof
-
-# Configure https://github.com/denysdovhan/spaceship-prompt
-SPACESHIP_PROMPT_ORDER=(
-  user          # Username section
-  dir           # Current directory section
-  host          # Hostname section
-  git           # Git section (git_branch + git_status)
-  exec_time     # Execution time
-  exit_code     # Exit code section
-  line_sep      # Line break
-  char          # Prompt character
-)
-
-# Configure default editor to Sublime Text
-# -n = in a new window
-# -w = tell command line to wait until document is saved and closed
-export EDITOR="/usr/bin/subl -n -w"
-
-# Zsh
-# Automatic cd
-setopt auto_cd
 
 # shortcut to this dotfiles path is $DOTFILES
 export DOTFILES="$HOME/.workspace/dotfiles"
@@ -30,6 +14,16 @@ export DOTFILES="$HOME/.workspace/dotfiles"
 # all of our zsh files
 typeset -U config_files
 config_files=($DOTFILES/*/*.zsh)
+
+# load the path files
+for file in ${(M)config_files:#*/path.zsh}; do
+  source "$file"
+done
+
+# load everything but the path and completion files
+for file in ${${config_files:#*/path.zsh}:#*/completion.zsh}; do
+  source "$file"
+done
 
 # load the aliases files
 # Inspiration: https://github.com/Mayeu/dots
@@ -59,64 +53,3 @@ for dump in ~/.zcompdump(N.mh+24); do
 done
 
 compinit -C
-
-# Dev
-## Android - https://developer.android.com/studio/#downloads
-export ANDROID_HOME="$HOME/Android/Sdk"
-export PATH="$ANDROID_HOME/tools:$PATH"
-export PATH="$ANDROID_HOME/platform-tools:$PATH"
-
-## Rust > Cargo
-export PATH="$HOME/.cargo/bin:$PATH"
-
-## Go
-export PATH="$HOME/go/bin:$PATH"
-
-## PHP > Composer
-export PATH="$HOME/.config/composer/vendor/bin:$PATH"
-
-## local/sbin
-export PATH="/usr/local/sbin:$PATH"
-
-## $HOME/bin
-export PATH="$HOME/.bin:$PATH"
-
-# Aliases
-## System
-alias ll='ls -l'
-
-## Zsh
-alias reload!='exec "$SHELL" -l'
-
-## Vagrant aliases
-alias vdf="vagrant destroy -f"
-alias vup="vagrant up"
-alias vre="vdf && vup"
-alias vba="vagrant package --base"
-
-## Open Sublime Text using best match from z
-## Repository: https://github.com/rupa/z
-function zubl {
-  subl $(z -e $1)
-}
-
-## Kill a processus by it's port
-function killp {
-  kill -9 $( lsof -i:$1 -t )
-}
-
-## Copy to clipboard (pbcopy because I member it from OS X times)
-alias pbcopy="xsel -ib"
-## Generate a password
-function g_password {
-  date +%s | sha256sum | base64 | head -c 32 ; echo
-}
-
-# exa - https://github.com/ogham/exa
-alias la="exa -abghl --git --color=automatic"
-
-# Restart audio
-alias restart-audio="pulseaudio -k && sudo alsa force-reload"
-
-# Uncomment for profiling
-# zprof

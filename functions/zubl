@@ -1,0 +1,7 @@
+#!/bin/sh
+
+## Open Sublime Text using best match from z
+## Repository: https://github.com/rupa/z
+zubl() {
+  subl "$(z -e $1)"
+}

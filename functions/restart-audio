@@ -1,0 +1,6 @@
+#!/usr/bin/env zsh
+
+# Restart audio
+restart-audio(){
+  pulseaudio -k && sudo alsa force-reload
+}
