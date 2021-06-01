@@ -17,3 +17,8 @@ alias gpA='git push --all && git push --tags'
 # Stash (s)
 alias gs='git stash'
 alias gsp='git stash pop'
+
+# Branches
+## Remove merged branch from a Git repository
+## Inspiration: https://gist.github.com/TBonnin/4060788
+alias gR='git branch --merged master | grep -v 'master$' | xargs git branch -d'
