@@ -1,0 +1,62 @@
+#! /usr/bin/env bash
+
+# See: https://kvz.io/bash-best-practices.html
+set -o errexit
+set -o nounset
+set -o pipefail
+
+##########
+# CONFIG #
+##########
+
+borgmatic_config=$DOTFILES/borgmatic/rsync.net.yml
+pass_path=wearemd/rsync.net/awea
+
+## Default variable
+export VERBOSE_FLAG=""
+
+## Parse options
+# Require gnu-getopt
+OPTIONS=$(getopt -n "$0" -o hrv --long "help,remote,verbose" -- "$@")
+eval set -- "$OPTIONS"
+
+while true ; do
+  case "$1" in
+    -v|--verbose)
+      # --stats print statistics for the created archive
+      export VERBOSE_FLAG="--verbosity 2 --stats"
+      shift ;;
+    -h|--help) help; exit 0 ;;
+    --) shift ; break ;;
+    *) help; exit 1;;
+esac
+done
+
+#############
+# FUNCTIONS #
+#############
+
+function help() {
+  echo "usage: $(basename $0) [--remote|--help] [--verbose]"
+}
+
+function get_password() {
+  # Get borg backup passphrase
+  export BORG_PASSPHRASE="$(pass show ${1})"
+}
+
+function backup () {
+  get_password $pass_path
+  # Backup the shit
+  borgmatic -c $borgmatic_config --create ${VERBOSE_FLAG}
+
+  # Prune after the backup, I find that way better
+  borgmatic -c $borgmatic_config --prune ${VERBOSE_FLAG}
+}
+
+########
+# MAIN #
+########
+
+# Run the script
+backup

@@ -1,0 +1,28 @@
+location:
+  # List of source directories to backup. Globs are expanded.
+  source_directories:
+    # - /home/awea/.workspace
+    - /home/awea/.ssh
+    - /home/awea/.gnupg
+    - /home/awea/.password-store
+    - /home/awea/Dropbox/documents
+
+  # Paths to local or remote repositories.
+  repositories:
+    - rsync.net:borg-repos/awea
+
+  # Any paths matching these patterns are excluded from backups.
+  exclude_patterns:
+    - node_modules/
+    - deps/
+    - _build/
+
+retention:
+  # Retention policy for how many backups to keep in each category.
+  keep_daily: 30
+
+consistency:
+  # List of consistency checks to run: "repository", "archives", or both.
+  checks:
+    - repository
+    - archives
