@@ -1,7 +1,9 @@
+# borgmatic configuration
+# See https://torsion.org/borgmatic/docs/reference/configuration/
 location:
   # List of source directories to backup. Globs are expanded.
   source_directories:
-    # - /home/awea/.workspace
+    - /home/awea/.workspace
     - /home/awea/.ssh
     - /home/awea/.gnupg
     - /home/awea/.password-store
@@ -13,9 +15,14 @@ location:
 
   # Any paths matching these patterns are excluded from backups.
   exclude_patterns:
-    - node_modules/
-    - deps/
-    - _build/
+    - '*/node_modules/*'
+    - '*/deps/*'
+    - '*/vendor*'
+    - '*/_build/*'
+    # Poorly managed docker volumes
+    - '*/wordpress-starter/db/*'
+    - '*/stargazer/data.ms/*'
+    - '*/pipeline-sibil/data/*'
 
 retention:
   # Retention policy for how many backups to keep in each category.
@@ -26,3 +33,9 @@ consistency:
   checks:
     - repository
     - archives
+
+storage:
+  # Type of compression to use when creating archives. See
+  # http://borgbackup.readthedocs.io/en/stable/usage/create.html
+  # for details. Defaults to "lz4". Use "lz4" for first backup then "auto,lzma"
+  compression: lz4
