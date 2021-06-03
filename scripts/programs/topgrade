@@ -1,0 +1,11 @@
+#!/bin/bash
+
+topgrade_vsn=6.9.1
+
+# Topgrade
+# https://github.com/r-darwish/topgrade
+curl -L https://github.com/r-darwish/topgrade/releases/download/v${topgrade_vsn}/topgrade-v${topgrade_vsn}-x86_64-unknown-linux-musl.tar.gz -o topgrade.tar.gz
+tar -xvf topgrade.tar.gz
+sudo mv -f topgrade /usr/local/bin/topgrade
+sudo chmod +x /usr/local/bin/topgrade
+rm -rf topgrade.tar.gz

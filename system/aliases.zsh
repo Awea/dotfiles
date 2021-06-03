@@ -14,3 +14,7 @@ alias vdf="vagrant destroy -f"
 alias vup="vagrant up"
 alias vre="vdf && vup"
 alias vba="vagrant package --base"
+
+# Topgrade! to update everything simply
+# https://github.com/r-darwish/topgrade
+alias auto-update="topgrade --disable nix rustup cargo flutter composer"
