@@ -1,0 +1,6 @@
+#!/bin/sh
+
+## Open my dotfiles with Sublime Text
+zot() {
+  subl "$DOTFILES"
+}
