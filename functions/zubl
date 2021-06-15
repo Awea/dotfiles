@@ -5,5 +5,4 @@
 zubl() {
   local target="$(z -e $1)"
   subl "$target"
-  cd "$target"
 }
