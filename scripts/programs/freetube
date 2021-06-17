@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+# https://github.com/FreeTubeApp/FreeTube
+curl -L https://github.com/FreeTubeApp/FreeTube/releases/download/v0.13.1-beta/freetube_0.13.1_amd64.deb -o freetube.deb
+sudo dpkg -i freetube.deb
+rm -f freetube.dev
