@@ -22,6 +22,7 @@
 		"Language - French - Français",
 		"LSP",
 		"LSP-elixir",
+		"Markdown Images",
 		"MarkdownEditing",
 		"Package Control",
 		"PHP-Twig",
@@ -38,7 +39,7 @@
 		"Terraform",
 		"TOML",
 		"TypeScript Syntax",
-		"Vue Syntax Highlight"
+		"Vue Syntax Highlight",
 	],
 	"repositories":
 	[
