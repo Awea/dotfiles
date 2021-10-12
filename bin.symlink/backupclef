@@ -1,0 +1,17 @@
+#! /usr/bin/env bash
+
+# See: https://kvz.io/bash-best-practices.html
+set -o errexit
+set -o nounset
+set -o pipefail
+
+# Repository should exist, created with:
+# git init --bare path
+# then added with
+# git remote add clef path
+
+pushd $HOME/.password-store
+
+git push clef
+
+popd
