@@ -1,0 +1,16 @@
+#!/bin/bash
+
+# Tutanota desktop client
+# https://github.com/tutao/tutanota
+sudo curl -L "https://vault.bitwarden.com/download/?app=desktop&platform=linux" -o /usr/local/bin/bitwarden
+sudo chmod +x /usr/local/bin/bitwarden
+
+# Add a shortcut
+touch $HOME/.local/share/applications/bitwarden.desktop
+cat <<EOT > $HOME/.local/share/applications/bitwarden.desktop
+[Desktop Entry]
+Name=Bitwarden
+Exec=/usr/local/bin/bitwarden
+Terminal=false
+Type=Application
+EOT

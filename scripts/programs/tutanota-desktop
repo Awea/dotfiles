@@ -1,0 +1,17 @@
+#!/bin/bash
+
+# Tutanota desktop client
+# https://github.com/tutao/tutanota
+sudo curl -L https://mail.tutanota.com/desktop/tutanota-desktop-linux.AppImage -o /usr/local/bin/tutanota
+sudo chmod +x /usr/local/bin/tutanota
+
+# Add a shortcut
+touch $HOME/.local/share/applications/tutanota.desktop
+cat <<EOT > $HOME/.local/share/applications/tutanota.desktop
+[Desktop Entry]
+Name=Tutanota
+Exec=/usr/local/bin/tutanota
+Terminal=false
+Type=Application
+EOT
+
