@@ -1,0 +1,6 @@
+#!/usr/bin/env zsh
+
+# Restart audio
+readme-tree(){
+  tree -L 3 --dirsfirst
+}
