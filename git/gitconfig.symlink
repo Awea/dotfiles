@@ -8,6 +8,7 @@
   a = add
   d = diff
   dc = diff --cached
+  repos =  !"find -type d -execdir test -d {}/.git \\; -prune -print"
 
 [push]
   default = current
