@@ -24,6 +24,9 @@ eval set -- "$OPTIONS"
 
 while true ; do
   case "$1" in
+    -r|--restore)
+      command=restore
+      shift ;;
     -b|--break)
       command=break_lock
       shift ;;
@@ -57,6 +60,13 @@ function remote_backup() {
 
   # Prune after the backup, I find that way better
   borgmatic -c $borgmatic_config --prune ${VERBOSE_FLAG}
+}
+
+function restore_backup() {
+  borgmatic -c $borgmatic_config extract \
+    --archive latest \
+    --path $HOME/.workspace $HOME/.ssh $HOME/.gnupg \
+    --progress --destination /
 }
 
 function break_lock() {
