@@ -2,7 +2,7 @@
   "auto_format_on_save": true,
   "disable_prettier_cursor_offset": false,
   "auto_format_on_save_excludes": ["*.md", "*.html", "*.json", "*.yml"],
-  "node_path": "$HOME/.asdf/shims/node",
+  "prettier_cli_path": "$HOME/.asdf/shims/prettier",
   "additional_cli_args": {
     "--config": "${folder}/.prettierrc",
   }
