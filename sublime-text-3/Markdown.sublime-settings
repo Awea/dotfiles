@@ -1,5 +1,5 @@
 {
-  "color_scheme": "Packages/ayu/ayu-mirage.sublime-color-scheme",
+  "color_scheme": "ayu-mirage.sublime-color-scheme",
 	"extensions":
 	[
 		"md",
@@ -8,5 +8,5 @@
 		".idea"
 	],
   "word_wrap": true,
-  "wrap_width": 100
+  "wrap_width": 100,
 }
