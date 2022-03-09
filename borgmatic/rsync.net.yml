@@ -38,4 +38,4 @@ storage:
   # Type of compression to use when creating archives. See
   # http://borgbackup.readthedocs.io/en/stable/usage/create.html
   # for details. Defaults to "lz4". Use "lz4" for first backup then "auto,lzma"
-  compression: lz4
+  compression: auto,lzma
