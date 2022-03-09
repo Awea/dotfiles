@@ -1,0 +1,7 @@
+#!/bin/bash
+
+# Snap
+sudo apt install -y snapd
+
+# Snap packages
+sudo snap install emote
