@@ -1,0 +1,6 @@
+#!/bin/zsh
+
+# B2 command-line too
+# https://www.backblaze.com/b2/docs/quick_command_line.html
+sudo curl -L https://github.com/Backblaze/B2_Command_Line_Tool/releases/latest/download/b2-linux -o /usr/local/bin/b2
+sudo chmod +x /usr/local/bin/b2
