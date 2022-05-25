@@ -1,6 +1,7 @@
 # Git
 # Source: https://github.com/sorin-ionescu/prezto/blob/master/modules/git/alias.zsh
 alias g='git'
+alias gc='git clone'
 
 # Commit (c)
 alias gcm='git commit --message'

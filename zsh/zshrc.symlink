@@ -34,7 +34,7 @@ done
 # Static loading of Antibody https://getantibody.github.io/
 source $DOTFILES/antibody/zsh_plugins.sh
 
-## Asdf - https://github.com/asdf-vm/asdf
+## Asdf - https://github.com/asdf-vm/asdf
 . $HOME/.asdf/asdf.sh
 
 ## Completion
