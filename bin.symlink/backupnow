@@ -19,13 +19,13 @@ command=remote_backup
 
 ## Parse options
 # Require gnu-getopt
-OPTIONS=$(getopt -n "$0" -o hbv --long "help,break,verbose" -- "$@")
+OPTIONS=$(getopt -n "$0" -o rhbv --long "restore,help,break,verbose" -- "$@")
 eval set -- "$OPTIONS"
 
 while true ; do
   case "$1" in
     -r|--restore)
-      command=restore
+      command=restore_backup
       shift ;;
     -b|--break)
       command=break_lock
@@ -63,6 +63,8 @@ function remote_backup() {
 }
 
 function restore_backup() {
+  get_password $pass_path
+
   borgmatic -c $borgmatic_config extract \
     --archive latest \
     --path $HOME/.workspace $HOME/.ssh $HOME/.gnupg \
