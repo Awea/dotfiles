@@ -1,0 +1,6 @@
+#!/bin/zsh
+
+# Tezos client and stuff
+# https://github.com/serokell/tezos-packaging
+sudo add-apt-repository ppa:serokell/tezos && sudo apt-get update
+sudo apt install tezos-client

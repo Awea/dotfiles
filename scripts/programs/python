@@ -5,3 +5,7 @@ sudo apt install python3-pip -y
 # Ansible
 # https://www.ansible.com/
 pip3 install ansible
+
+# Borgmatic
+# https://torsion.org/borgmatic/
+pip3 install borgmatic

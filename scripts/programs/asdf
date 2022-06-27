@@ -22,6 +22,10 @@ bash ~/.asdf/bin/asdf plugin-add ruby
 bash ~/.asdf/bin/asdf plugin-add nodejs
 bash ~/.asdf/plugins/nodejs/bin/import-release-team-keyring
 
+# Yarn
+# https://github.com/twuni/asdf-yarn
+bash ~/.asdf/bin/asdf plugin-add yarn
+
 # Erlang
 # https://github.com/asdf-vm/asdf-erlang
 bash ~/.asdf/bin/asdf plugin-add erlang

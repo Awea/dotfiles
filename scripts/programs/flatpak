@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# Flatpak packages:
+# - https://obsidian.md/
+sudo flatpak install obsidian
