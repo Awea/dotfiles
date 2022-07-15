@@ -9,6 +9,8 @@
   d = diff
   dc = diff --cached
   repos =  !"find -type d -execdir test -d {}/.git \\; -prune -print"
+  lg = log --color --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit --
+  wip = for-each-ref --sort='-authordate:iso8601' --format=' %(color:green)%(authordate:relative)%09%(color:white)%(refname:short)' refs/heads
 
 [push]
   default = current
