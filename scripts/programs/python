@@ -9,3 +9,11 @@ pip3 install ansible
 # Borgmatic
 # https://torsion.org/borgmatic/
 pip3 install borgmatic
+
+# S3CMD
+# https://s3tools.org/s3cmd
+pip3 install s3cmd
+
+# Gigalixir
+# https://gigalixir.readthedocs.io/en/latest/getting-started-guide.html
+pip3 install gigalixir
