@@ -4,4 +4,4 @@
 sudo apt install -y snapd
 
 # Snap packages
-sudo snap install emote drawio
+sudo snap install emote drawio spotify

@@ -1,5 +1,0 @@
-#!/bin/zsh
-
-# Spotify
-# https://www.spotify.com
-sudo apt install -y spotify-client
