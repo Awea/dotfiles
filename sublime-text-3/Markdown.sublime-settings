@@ -2,10 +2,10 @@
   "color_scheme": "ayu-mirage.sublime-color-scheme",
 	"extensions":
 	[
-		"md",
 		".todo",
 		"md.erb",
-		".idea"
+		".idea",
+		"md",
 	],
   "word_wrap": true,
   "wrap_width": 100,

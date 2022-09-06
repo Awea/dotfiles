@@ -1,5 +1,5 @@
 {
-  "auto_format_on_save": true,
+  "auto_format_on_save": false,
   "disable_prettier_cursor_offset": false,
   "auto_format_on_save_excludes": ["*.md", "*.html", "*.json", "*.yml"],
   "prettier_cli_path": "$HOME/.asdf/shims/prettier",

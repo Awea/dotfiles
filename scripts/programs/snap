@@ -3,5 +3,7 @@
 # Snap
 sudo apt install -y snapd
 
-# Snap packages
-sudo snap install emote drawio spotify
+# [Snap packages](https://snapcraft.io)
+# - Emote - A Modern popup emoji picker
+# - doctl - The official DigitalOcean command line interface
+sudo snap install emote drawio spotify doctl signal-desktop
