@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+# Psst - Fast and multi-platform Spotify client with native GUI
+# https://github.com/jpochyla/psst
+curl -L https://nightly.link/jpochyla/psst/workflows/build/master/psst-deb.zip -o psst-deb.zip
+unzip psst-deb.zip
+sudo dpkg -i psst_440_amd64.deb
+rm -rf psst-deb.zip psst_440_amd64.deb
