@@ -56,10 +56,10 @@ function get_password() {
 function remote_backup() {
   get_password $pass_path
   # Backup the shit
-  borgmatic -c $borgmatic_config --create ${VERBOSE_FLAG}
+  borgmatic -c $borgmatic_config ${VERBOSE_FLAG} create
 
   # Prune after the backup, I find that way better
-  borgmatic -c $borgmatic_config --prune ${VERBOSE_FLAG}
+  borgmatic -c $borgmatic_config ${VERBOSE_FLAG} prune
 }
 
 function restore_backup() {
