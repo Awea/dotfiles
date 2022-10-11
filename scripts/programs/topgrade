@@ -1,6 +1,6 @@
 #!/bin/bash
 
-topgrade_vsn=6.9.1
+topgrade_vsn=9.0.1
 
 # Topgrade
 # https://github.com/r-darwish/topgrade

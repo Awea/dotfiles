@@ -17,4 +17,4 @@ alias vba="vagrant package --base"
 
 # Topgrade! to update everything simply
 # https://github.com/r-darwish/topgrade
-alias auto-update="topgrade --disable nix rustup cargo flutter composer"
+alias auto-update="topgrade --disable nix rustup cargo flutter composer containers"
