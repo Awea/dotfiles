@@ -34,7 +34,7 @@ sudo apt-get install -y build-essential autoconf m4 libncurses5-dev libwxgtk3.0-
 # Elixir
 # https://github.com/asdf-vm/asdf-elixir
 bash ~/.asdf/bin/asdf plugin-add elixir
-sudo apt-get install -y unzip
+sudo apt-get install -y unzip libgmp10-dev libsecp256k1-dev
 
 # Rust
 # https://github.com/code-lever/asdf-rust
