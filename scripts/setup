@@ -33,6 +33,7 @@ install flameshot
 install xsel
 install pv
 install wine
+install exiftool
 
 # Run all programs/ install scripts
 for f in scripts/programs/*; do ./$f; done
