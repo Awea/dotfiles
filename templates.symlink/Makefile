@@ -1,10 +1,11 @@
 #@name Project name
 #@description Project description.
 
-# Here we ensure that every command this Makefile run will run in a bash shell
-# instead of the default sh
-# See https://tech.davis-hansson.com/p/make
-SHELL := /usr/bin/env bash
+# Use one shell for the whole recipe, instead of per-line
+.ONESHELL:
+# Use bash in strict mode
+SHELL := bash
+.SHELLFLAGS = -eu -o pipefail -c
 
 .PHONY: deps
 deps: node_modules
