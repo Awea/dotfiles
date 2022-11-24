@@ -15,6 +15,10 @@ alias vup="vagrant up"
 alias vre="vdf && vup"
 alias vba="vagrant package --base"
 
-# Topgrade! to update everything simply
-# https://github.com/r-darwish/topgrade
+# Topgrade! aliases
 alias auto-update="topgrade --disable nix rustup cargo flutter composer containers"
+
+# Thyme aliases
+alias track="while true; do thyme track -o $DOTFILES/thyme.json; sleep 30s; done;"
+alias track-new="rm -f $DOTFILES/thyme.json; track;"
+alias track-display="thyme show -i $DOTFILES/thyme.json -w stats > /tmp/thyme.html; firefox /tmp/thyme.html"

@@ -1,0 +1,9 @@
+#!/bin/zsh
+
+# Thyme - Automatically track which applications you use and for how long
+# https://github.com/sourcegraph/thyme
+sudo curl -L https://github.com/sourcegraph/thyme/releases/latest/download/thyme-linux-386 -o /usr/local/bin/thyme
+sudo chmod +x /usr/local/bin/thyme
+
+# Dependencies for Thyme
+sudo apt install wmctrl -y

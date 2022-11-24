@@ -2,8 +2,9 @@
 
 topgrade_vsn=9.0.1
 
-# Topgrade
+# Topgrade - Upgrade everything
 # https://github.com/r-darwish/topgrade
+# 🚧 20221109: No longer maintained
 curl -L https://github.com/r-darwish/topgrade/releases/download/v${topgrade_vsn}/topgrade-v${topgrade_vsn}-x86_64-unknown-linux-musl.tar.gz -o topgrade.tar.gz
 tar -xvf topgrade.tar.gz
 sudo mv -f topgrade /usr/local/bin/topgrade
