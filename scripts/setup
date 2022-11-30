@@ -18,22 +18,23 @@ function install {
 install apache2-utils
 install apt-transport-https
 install borgbackup
+install exiftool
 install ffmpeg
+install flameshot
+install git-absorb
 install imagemagick
 install inotify-tools
 install libnotify-bin
 install nautilus-dropbox
 install network-manager-openvpn-gnome
 install parallel
-install ubuntu-restricted-extras
-install zsh
+install pv
 install software-properties-common
 install transmission
-install flameshot
-install xsel
-install pv
+install ubuntu-restricted-extras
 install wine
-install exiftool
+install xsel
+install zsh
 
 # Run all programs/ install scripts
 for f in scripts/programs/*; do ./$f; done

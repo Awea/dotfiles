@@ -5,6 +5,7 @@ alias gc='git clone'
 
 # Commit (c)
 alias gcm='git commit --message'
+alias gca='git absorb'
 
 # Fetch (f)
 alias gfa='git fetch --all'
@@ -18,6 +19,9 @@ alias gpA='git push --all && git push --tags'
 # Stash (s)
 alias gs='git stash'
 alias gsp='git stash pop'
+
+# Rebase (r)
+alias gra='git rebase -i --autosquash'
 
 # Branches
 ## Remove merged branch from a Git repository
