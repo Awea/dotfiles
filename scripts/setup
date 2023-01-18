@@ -17,6 +17,7 @@ function install {
 # Install basic dependencies
 install apache2-utils
 install apt-transport-https
+install birdtray
 install borgbackup
 install exiftool
 install ffmpeg
