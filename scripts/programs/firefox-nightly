@@ -1,0 +1,29 @@
+#!/bin/bash
+
+# Firefox nightly
+# https://github.com/tutao/tutanota
+curl -L "https://download.mozilla.org/?product=firefox-nightly-latest-ssl&os=linux64&lang=en-US" -o firefox.tar.bz2
+
+tar -xvf firefox.tar.bz2 -C ~/.local/bin/
+mv ~/.local/bin/firefox ~/.local/bin/firefox-nightly
+rm -f firefox.tar.bz2
+
+# Add a shortcut
+touch $HOME/.local/share/applications/firefox-nightly.desktop
+cat <<EOT > $HOME/.local/share/applications/firefox-nightly.desktop
+[Desktop Entry]
+Name=Firefox Nightly
+Comment=Web Browser
+Exec=$HOME/.local/bin/firefox-nightly/firefox %u
+Terminal=false
+Type=Application
+Icon=$HOME/.local/bin/firefox-nightly/browser/chrome/icons/default/default128.png
+Categories=Network;WebBrowser;
+MimeType=text/html;text/xml;application/xhtml+xml;application/xml;application/vnd.mozilla.xul+xml;application/rss+xml;application/rdf+xml;image/gif;image/jpeg;image/png;x-scheme-handler/http;x-scheme-handler/https;
+StartupNotify=true
+Actions=Private;
+
+[Desktop Action Private]
+Exec=$HOME/.local/bin/firefox-nightly/firefox --private-window %u
+Name=Open in private mode
+EOT
