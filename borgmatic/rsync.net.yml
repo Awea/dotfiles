@@ -7,6 +7,8 @@ location:
     - /home/awea/.ssh
     - /home/awea/.gnupg
     - /home/awea/.password-store
+    - /home/awea/.z
+    - /home/awea/.zsh_history
     - /home/awea/Dropbox/documents
 
   # Paths to local or remote repositories.

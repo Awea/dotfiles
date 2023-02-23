@@ -2,14 +2,13 @@
 	"bootstrapped": true,
 	"in_process_packages":
 	[
+		"TypeScript Syntax",
 	],
 	"installed_packages":
 	[
 		"A File Icon",
 		"ayu",
-		"Base Encoder",
 		"Better CoffeeScript",
-		"Dart",
 		"DocBlockr",
 		"Dockerfile Syntax Highlighting",
 		"Elixir",
@@ -25,7 +24,6 @@
 		"LSP-typescript",
 		"MarkdownEditing",
 		"Package Control",
-		"PHP-Twig",
 		"Pug",
 		"Rubyfmt",
 		"Rust Enhanced",

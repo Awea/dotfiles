@@ -39,12 +39,15 @@
 		"node_modules",
 		".elixir_ls"
 	],
-	"font_face": "Cascadia Code",
-	"font_size": 16,
+	"font_face": "Cascadia Code Regular",
+	"font_options": ["no_italic"],
+	"font_size": 15,
 	"ignored_packages":
 	[
-		"Markdown",
+		"Base Encoder",
+		"PHP-Twig",
 		"Rust",
+		"TypeScript Syntax",
 		"Vintage",
 	],
 	"indent_guide_options":

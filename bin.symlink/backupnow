@@ -67,7 +67,7 @@ function restore_backup() {
 
   borgmatic -c $borgmatic_config extract \
     --archive latest \
-    --path $HOME/.workspace $HOME/.ssh $HOME/.gnupg \
+    --path $HOME/.workspace $HOME/.ssh $HOME/.gnupg $HOME/.z $HOME/.zsh_history \
     --progress --destination /
 }
 

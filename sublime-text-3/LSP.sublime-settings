@@ -1,5 +1,6 @@
 {
 	"auto_show_diagnostics_panel": "never",
+	"lsp_format_on_save": true,
 	"clients":
 	{
 		"elixir-ls":

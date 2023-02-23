@@ -29,3 +29,5 @@
   required = true
   clean = git-lfs clean -- %f
 
+[init]
+	defaultBranch = main
