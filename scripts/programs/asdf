@@ -52,3 +52,15 @@ sudo apt-get install -y bison libcurl4-gnutls-dev libpq-dev libzip-dev
 # Minio client
 # https://github.com/penpyt/asdf-mc
 bash ~/.asdf/bin/asdf plugin-add mc
+
+# Terraform
+# https://github.com/asdf-community/asdf-hashicorp
+bash ~/.asdf/bin/asdf plugin-add terraform
+
+# Terraform docs
+# https://github.com/looztra/asdf-terraform-docs
+bash ~/.asdf/bin/asdf plugin-add terraform-docs
+
+# GCloud CLI
+# https://github.com/jthegedus/asdf-gcloud
+bash ~/.asdf/bin/asdf plugin-add gcloud
