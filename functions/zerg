@@ -1,0 +1,8 @@
+#!/bin/sh
+
+## Open Sublime Merge using best match from z
+## Repository: https://github.com/rupa/z
+zerg() {
+  local target="$(z -e $1)"
+  smerge "$target"
+}
