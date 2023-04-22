@@ -19,6 +19,7 @@ install apache2-utils
 install apt-transport-https
 install birdtray
 install borgbackup
+install direnv
 install exiftool
 install ffmpeg
 install flameshot

@@ -37,6 +37,9 @@ source $DOTFILES/antibody/zsh_plugins.sh
 ## Asdf - https://github.com/asdf-vm/asdf
 . $HOME/.asdf/asdf.sh
 
+## direnv hook - https://direnv.net/docs/hook.html
+eval "$(direnv hook zsh)"
+
 ## Completion
 fpath=(~/.zsh/completion $fpath)
 
