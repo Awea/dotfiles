@@ -1,0 +1,11 @@
+#!/bin/bash
+
+vsn=0.13.0
+
+# Cloudflare Terraforming
+# https://github.com/cloudflare/cf-terraforming
+curl -L https://github.com/cloudflare/cf-terraforming/releases/download/v${vsn}/cf-terraforming_${vsn}_linux_amd64.tar.gz -o cf-terraforming.tar.gz
+tar -xvf cf-terraforming.tar.gz cf-terraforming
+sudo mv -f cf-terraforming /usr/local/bin/cf-terraforming
+sudo chmod +x /usr/local/bin/cf-terraforming
+rm -rf cf-terraforming.tar.gz
