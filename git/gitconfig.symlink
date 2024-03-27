@@ -1,6 +1,7 @@
 [user]
 	name = Awea
 	email = aweaoftheworld@gmail.com
+	signingkey = 0EFB7676262FAE706D16A035ECB1177F79271C30
 
 [alias]
   s = status
@@ -39,3 +40,5 @@
   process = git-lfs filter-process
   required = true
   clean = git-lfs clean -- %f
+[commit]
+	gpgsign = true
