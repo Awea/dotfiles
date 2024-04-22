@@ -18,7 +18,6 @@ alias vba="vagrant package --base"
 # Topgrade! aliases
 alias auto-update="topgrade --disable nix rustup cargo flutter composer containers"
 
-# Thyme aliases
-alias track="while true; do thyme track -o $DOTFILES/thyme.json; sleep 30s; done;"
-alias track-new="rm -f $DOTFILES/thyme.json; track;"
-alias track-display="thyme show -i $DOTFILES/thyme.json -w stats > /tmp/thyme.html; firefox /tmp/thyme.html"
+# Sublime
+alias subl='/opt/sublime_text/sublime_text'
+alias smerge='/opt/sublime_merge/sublime_merge'

@@ -4,5 +4,5 @@
 ## Repository: https://github.com/rupa/z
 zubl() {
   local target="$(z -e $1)"
-  subl "$target"
+  /opt/sublime_text/sublime_text "$target"
 }

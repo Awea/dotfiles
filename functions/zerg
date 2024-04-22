@@ -4,5 +4,5 @@
 ## Repository: https://github.com/rupa/z
 zerg() {
   local target="$(z -e $1)"
-  smerge "$target"
+  /opt/sublime_merge/sublime_merge "$target"
 }

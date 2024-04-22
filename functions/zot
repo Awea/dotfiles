@@ -2,5 +2,5 @@
 
 ## Open my dotfiles with Sublime Text
 zot() {
-  subl "$DOTFILES"
+  /opt/sublime_text/sublime_text "$DOTFILES"
 }

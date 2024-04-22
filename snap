@@ -1,0 +1,9 @@
+Name               Version          Rev    Tracking       Publisher      Notes
+bare               1.0              5      latest/stable  canonical**    base
+core18             20231027         2810   latest/stable  canonical**    base
+core22             20240111         1125   latest/stable  canonical**    base
+gnome-42-2204      0+git.510a601    178    latest/stable  canonical**    -
+gtk-common-themes  0.1-81-g442e511  1535   latest/stable  canonical**    -
+signal-desktop     7.5.1            649    latest/stable  snapcrafters*  -
+snapd              2.62             21467  latest/stable  canonical**    snapd
+spotify-qt         v3.11            2814   latest/stable  kraxarn        -

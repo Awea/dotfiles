@@ -1,0 +1,24 @@
+Emote	com.tomjwatson.Emote	4.0.2	stable	flathub	system
+DBeaver Corporation	io.dbeaver.DBeaverCommunity	24.0.2	stable	flathub	system
+Obsidian	md.obsidian.Obsidian	1.5.12	stable	flathub	system
+Fedora Platform	org.fedoraproject.Platform	40	f40	fedora	system
+Flameshot	org.flameshot.Flameshot	12.1.0	stable	flathub	system
+Flatpak External Data Checker	org.flathub.flatpak-external-data-checker		stable	flathub	system
+Freedesktop Platform	org.freedesktop.Platform	22.08.24	22.08	flathub	system
+Freedesktop Platform	org.freedesktop.Platform	23.08.16	23.08	flathub	system
+Mesa	org.freedesktop.Platform.GL.default	24.0.4	22.08	flathub	system
+Mesa (Extra)	org.freedesktop.Platform.GL.default	24.0.4	22.08-extra	flathub	system
+Mesa	org.freedesktop.Platform.GL.default	24.0.5	23.08	flathub	system
+Mesa (Extra)	org.freedesktop.Platform.GL.default	24.0.5	23.08-extra	flathub	system
+openh264	org.freedesktop.Platform.openh264	2.1.0	2.2.0	flathub	system
+openh264	org.freedesktop.Platform.openh264	2.4.1	2.4.1	flathub	system
+Freedesktop SDK	org.freedesktop.Sdk	23.08.16	23.08	flathub	system
+Extensions	org.gnome.Extensions	46.0	stable	fedora	system
+GNOME Application Platform version 44	org.gnome.Platform		44	flathub	system
+GNOME Application Platform version 46	org.gnome.Platform		46	flathub	system
+Adwaita theme	org.kde.KStyle.Adwaita		5.15-23.08	flathub	system
+KDE Application Platform	org.kde.Platform		5.15-23.08	flathub	system
+QGnomePlatform	org.kde.PlatformTheme.QGnomePlatform		5.15-23.08	flathub	system
+QAdwaitaDecorations	org.kde.WaylandDecoration.QAdwaitaDecorations		5.15-23.08	flathub	system
+QGnomePlatform-decoration	org.kde.WaylandDecoration.QGnomePlatform-decoration		5.15-23.08	flathub	system
+ArmCord	xyz.armcord.ArmCord	3.2.6	stable	flathub	system
