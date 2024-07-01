@@ -1,12 +1,9 @@
 #!/bin/bash
 
 # Flatpak packages:
-# - https://obsidian.md/
-flatpak install obsidian
-
-# Simple animated GIF screen recorder with an easy to use interface
-# https://github.com/phw/peek
-flatpak install flathub com.uploadedlobster.peek
+# - peek: Simple animated GIF screen recorder with an easy to use interface
+# - qpwgraph: A PipeWire Graph Qt GUI Interface -Working alternative to helvum
+flatpak install obsidian flathub com.uploadedlobster.peek qpwgraph com.protonvpn.www
 
 # Required by peek to run via app icon
 sudo apt install -y xdg-desktop-portal-gtk
