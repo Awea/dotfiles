@@ -37,7 +37,10 @@
 		".hg",
 		"CVS",
 		"node_modules",
-		".elixir_ls"
+		".elixir_ls",
+		"deps",
+		"_build",
+		".direnv"
 	],
 	"font_face": "Cascadia Code Regular",
 	"font_options": ["no_italic"],
@@ -58,6 +61,7 @@
 	"index_exclude_patterns":
 	[
 		"node_modules/*",
+		"deps/*",
 		"*.log"
 	],
 	"line_padding_bottom": 1,
@@ -74,4 +78,5 @@
 	"ui_font_size_small": true,
 	"ui_separator": true,
 	"word_wrap": true,
+	"index_files": true,
 }
