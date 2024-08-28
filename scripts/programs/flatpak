@@ -5,5 +5,10 @@
 # - qpwgraph: A PipeWire Graph Qt GUI Interface -Working alternative to helvum
 flatpak install obsidian flathub com.uploadedlobster.peek qpwgraph com.protonvpn.www
 
+# Install Signal with flatpak, snap install is broken:
+# See: https://github.com/signalapp/Signal-Desktop/issues/6970
+flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+flatpak install flathub org.signal.Signal
+
 # Required by peek to run via app icon
 sudo apt install -y xdg-desktop-portal-gtk
