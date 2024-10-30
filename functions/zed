@@ -3,6 +3,6 @@
 ## Open Zed best match from z
 ## Repository: https://github.com/rupa/z
 zed() {
-  local target="$(z -e $1)"
-  flatpak run dev.zed.Zed "$target"
+  local target=$([ "$1" != "." ] && "$(z -e $1)" || echo "$1")
+  flatpak run dev.zed.Zed $target
 }
