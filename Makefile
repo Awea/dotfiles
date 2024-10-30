@@ -24,6 +24,12 @@ $(HOME)/.config/sublime-merge/Packages/User:
 $(HOME)/.config/sublime-text/Packages/User:
 	ln -s $(PWD)/sublime-text-3 $@
 
+$(HOME)/.var/app/dev.zed.Zed/config/zed/settings.json:
+	ln -s $(PWD)/zed/settings.json $@
+
+$(HOME)/.var/app/dev.zed.Zed/config/zed/keymap.json:
+	ln -s $(PWD)/zed/keymap.json $@
+
 $(HOME)/.config/%:
 	ln -s $(PWD)/config/$* $@
 
