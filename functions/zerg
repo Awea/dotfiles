@@ -3,6 +3,6 @@
 ## Open Sublime Merge using best match from z
 ## Repository: https://github.com/rupa/z
 zerg() {
-  local target=$([ "$1" != "." ] && "$(z -e $1)" || echo "$1")
+  local target=$([ "$1" != "." ] && echo "$(z -e $1)" || echo "$1")
   smerge "$target"
 }
