@@ -15,7 +15,10 @@
   // "buffer_font_features": {
   //   "italic": false,
   //   "calt": true
-  // },
+  "terminal": {
+    "font_family": "Fira Code",
+    "working_directory": "current_project_directory"
+  },
   "theme": {
     "mode": "system",
     "light": "One Light",
@@ -27,5 +30,27 @@
     }
   },
   "seed_search_query_from_cursor": "selection",
-  "soft_wrap": "editor_width"
+  "tab_size": 2,
+  "soft_wrap": "editor_width",
+  "file_scan_exclusions": [
+    "**/.git",
+    "**/.svn",
+    "**/.hg",
+    "**/CVS",
+    "**/.DS_Store",
+    "**/Thumbs.db",
+    "**/.classpath",
+    "**/.settings",
+    ".nx/**",
+    ".angular/**",
+    "node_modules/**"
+  ],
+  "languages": {
+    "SQL": {
+      "prettier": {
+        "allowed": false,
+        "logicalOperatorNewline": "after"
+      }
+    }
+  }
 }
