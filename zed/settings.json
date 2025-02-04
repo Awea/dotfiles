@@ -43,8 +43,12 @@
     "**/.settings",
     ".nx/**",
     ".angular/**",
-    "node_modules/**"
+    "node_modules/**",
+    ".elixir-ls/**"
   ],
+  "project_panel": {
+    "auto_reveal_entries": false
+  },
   "languages": {
     "SQL": {
       "prettier": {
