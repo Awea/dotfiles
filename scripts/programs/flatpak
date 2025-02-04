@@ -15,3 +15,7 @@ flatpak install flathub dev.zed.Zed
 
 # Required by peek to run via app icon
 sudo apt install -y xdg-desktop-portal-gtk
+
+# https://github.com/beancount/fava
+# https://github.com/beancount/beancount
+flatpak install fava
