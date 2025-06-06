@@ -10,7 +10,7 @@ set -o pipefail
 vsn=0.17.0
 
 # Dependencies for languages
-sudo apt install automake autoconf libreadline-dev libncurses-dev libssl-dev libyaml-dev libxslt-dev libffi-dev libtool unixodbc-dev -y
+sudo apt install automake autoconf libreadline-dev libncurses-dev libssl-dev libyaml-dev libxslt-dev libffi-dev libtool unixodbc-dev gcc g++ clang -y
 
 # Ruby
 # https://github.com/asdf-vm/asdf-ruby
