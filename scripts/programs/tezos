@@ -1,6 +1,17 @@
 #!/bin/zsh
 
-# Tezos client and stuff
-# https://github.com/serokell/tezos-packaging
-sudo add-apt-repository ppa:serokell/tezos && sudo apt-get update
-sudo apt install -y tezos-client
+set -o errexit
+set -o nounset
+set -o pipefail
+
+# octez-client release URL found on: https://gitlab.com/tezos/tezos/-/packages/37393733
+# 🚧 Automate to retrieve latest version
+
+RELEASE_URL="https://gitlab.com/tezos/tezos/-/package_files/185580267/download"
+
+# Tezos client
+cd `mktemp -d`
+curl -L $RELEASE_URL -o octez.tar.gz
+tar -xvf octez.tar.gz octez-x86_64/octez-client
+sudo mv -f octez-x86_64/octez-client /usr/local/bin/octez-client
+sudo chmod +x /usr/local/bin/octez-client
