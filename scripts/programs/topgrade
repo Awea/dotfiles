@@ -4,12 +4,12 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-topgrade_vsn=10.2.4
+topgrade_vsn=16.0.3
 
 # Topgrade - Upgrade everything
 # https://github.com/topgrade-rs/topgrade
+cd `mktemp -d`
 curl -L https://github.com/topgrade-rs/topgrade/releases/download/v${topgrade_vsn}/topgrade-v${topgrade_vsn}-x86_64-unknown-linux-musl.tar.gz -o topgrade.tar.gz
 tar -xvf topgrade.tar.gz
 sudo mv -f topgrade /usr/local/bin/topgrade
 sudo chmod +x /usr/local/bin/topgrade
-rm -rf topgrade.tar.gz
