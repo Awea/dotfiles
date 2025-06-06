@@ -6,13 +6,8 @@ set -o pipefail
 
 # asdf
 # https://asdf-vm.com/
-if [ ! -d "$HOME/.asdf" ]; then
-	git clone https://github.com/asdf-vm/asdf.git ~/.asdf
-fi
 
-cd ~/.asdf
-git pull
-git checkout "$(git describe --abbrev=0 --tags)"
+vsn=0.17.0
 
 # Dependencies for languages
 sudo apt install automake autoconf libreadline-dev libncurses-dev libssl-dev libyaml-dev libxslt-dev libffi-dev libtool unixodbc-dev -y
@@ -68,3 +63,9 @@ bash ~/.asdf/bin/asdf plugin-add terraform-docs
 # GCloud CLI
 # https://github.com/jthegedus/asdf-gcloud
 bash ~/.asdf/bin/asdf plugin-add gcloud
+pushd `mktemp -d`
+  curl -L https://github.com/asdf-vm/asdf/releases/download/v${vsn}/asdf-v${vsn}-linux-amd64.tar.gz -o asdf.tar.gz
+  tar -xvf asdf.tar.gz asdf
+  sudo mv -f asdf /usr/local/bin/asdf
+  sudo chmod +x /usr/local/bin/asdf
+popd

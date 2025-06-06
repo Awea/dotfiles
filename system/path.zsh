@@ -10,3 +10,7 @@ export PATH="$HOME/.config/composer/vendor/bin:$PATH"
 ## $HOME/.bin -> $DOTFILES/bin.symlink
 export PATH="$HOME/.bin:$PATH"
 export PATH="$HOME/.local/bin:$PATH"
+
+# asdf
+export ASDF_DATA_DIR="$HOME/.asdf"
+export PATH="$ASDF_DATA_DIR/shims:$PATH"
