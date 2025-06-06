@@ -1,0 +1,17 @@
+#!/bin/zsh
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+# extrepo
+# External repositories are additional software package repositories that are not maintained by Debian. Before extrepo, maintainers of such repositories would suggest that you download and execute an (unsigned) shell script as root, or that you download and install their (unsigned) package, which is not ideal for security.
+# The extrepo package tries to remedy this, by providing a curated list of external repositories that can be enabled by a simple command, allowing unsigned scripts to be replaced by a simple "extrepo enable example.com_repo".
+# https://packages.debian.org/sid/extrepo
+sudo apt update && sudo apt install extrepo -y
+
+# LibreWolf
+# A custom and independent version of Firefox, with the primary goals of privacy, security and user freedom
+# https://librewolf.net/installation/debian/
+sudo extrepo enable librewolf
+sudo apt update && sudo apt install librewolf -y
