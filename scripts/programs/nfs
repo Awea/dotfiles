@@ -1,5 +1,9 @@
 #!/bin/zsh
 
+set -o errexit
+set -o nounset
+set -o pipefail
+
 # Network File System
 # https://fr.wikipedia.org/wiki/Network_File_System
 sudo apt install -y nfs-kernel-server

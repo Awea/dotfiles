@@ -1,4 +1,8 @@
-#!/usr/bin/env bash
+#!/bin/zsh
+
+set -o errexit
+set -o nounset
+set -o pipefail
 
 # Psst - Fast and multi-platform Spotify client with native GUI
 # https://github.com/jpochyla/psst

@@ -1,4 +1,8 @@
-#!/bin/bash
+#!/bin/zsh
+
+set -o errexit
+set -o nounset
+set -o pipefail
 
 sudo apt install python3-pip -y
 

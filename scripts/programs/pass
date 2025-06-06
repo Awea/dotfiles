@@ -1,4 +1,8 @@
-#!/bin/bash
+#!/bin/zsh
+
+set -o errexit
+set -o nounset
+set -o pipefail
 
 # Pass
 # https://www.passwordstore.org/
@@ -14,7 +18,8 @@ curl -sSL github.com/passff/passff-host/releases/latest/download/install_host_ap
 
 # Pass extension that provides an easy flow for updating passwords
 # https://github.com/roddhjav/pass-update
-wget -qO - https://pkg.pujol.io/debian/gpgkey | sudo apt-key add -
+sudo curl -fsSL https://pkg.pujol.io/debian/gpgkey | sudo gpg --dearmour -o /etc/apt/trusted.gpg.d/pujol.gpg
+
 echo 'deb https://pkg.pujol.io/debian/repo all main' | sudo tee /etc/apt/sources.list.d/pkg.pujol.io.list
 sudo apt-get update
 sudo apt-get install -y pass-extension-update

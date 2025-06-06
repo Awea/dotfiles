@@ -1,4 +1,8 @@
-#!/bin/bash
+#!/bin/zsh
+
+set -o errexit
+set -o nounset
+set -o pipefail
 
 # Tutanota desktop client
 # https://github.com/tutao/tutanota
@@ -14,4 +18,3 @@ Exec=/usr/local/bin/tutanota
 Terminal=false
 Type=Application
 EOT
-

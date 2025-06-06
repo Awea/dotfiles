@@ -1,6 +1,10 @@
 #!/bin/zsh
 
-# Composer 
+set -o errexit
+set -o nounset
+set -o pipefail
+
+# Composer
 # https://getcomposer.org/
 sudo apt install -y composer php-xml
 

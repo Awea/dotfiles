@@ -1,5 +1,9 @@
 #!/bin/zsh
 
+set -o errexit
+set -o nounset
+set -o pipefail
+
 # Nix
 # https://nixos.org/download.html#download-nix
 sh <(curl -L https://nixos.org/nix/install) --daemon

@@ -1,4 +1,8 @@
-#!/bin/bash
+#!/bin/zsh
+
+set -o errexit
+set -o nounset
+set -o pipefail
 
 # Add source
 wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
@@ -8,4 +12,3 @@ sudo apt update
 # Google Chrome
 # https://www.google.com/intl/fr_fr/chrome/
 sudo apt install google-chrome-stable -y
-

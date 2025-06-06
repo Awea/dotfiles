@@ -1,5 +1,9 @@
 #!/bin/zsh
 
+set -o errexit
+set -o nounset
+set -o pipefail
+
 # Slack
 # https://slack.com
 sudo apt install -y slack-desktop
