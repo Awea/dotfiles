@@ -21,3 +21,7 @@ pip3 install s3cmd
 # Gigalixir
 # https://gigalixir.readthedocs.io/en/latest/getting-started-guide.html
 pip3 install gigalixir
+
+# httpie
+# https://httpie.io/
+pip3 install httpie
