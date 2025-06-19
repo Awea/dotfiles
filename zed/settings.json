@@ -75,6 +75,12 @@
     "Markdown": {
       "show_edit_predictions": false
     },
+    "YAML": {
+      "format_on_save": "off",
+      "prettier": {
+        "allowed": false
+      }
+    },
     "SQL": {
       "prettier": {
         "allowed": false,
