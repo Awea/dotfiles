@@ -7,7 +7,7 @@
 		{
 			"command":
 			[
-				"/home/awea/.workspace/elixir-ls/release/language_server.sh"
+				"/Users/awea/.workspace/elixir-ls/release/language_server.sh"
 			],
 			"enabled": true,
 			"languageId": "elixir",
@@ -25,7 +25,7 @@
 			"enabled": true,
 			"command":
       [
-        "/home/awea/.asdf/shims/solargraph"
+        "/Users/awea/.asdf/shims/solargraph"
       ]
 		}
 	}

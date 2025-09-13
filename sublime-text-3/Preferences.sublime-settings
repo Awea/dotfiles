@@ -37,20 +37,14 @@
 		".hg",
 		"CVS",
 		"node_modules",
-		".elixir_ls",
-		"deps",
-		"_build",
-		".direnv"
+		".elixir_ls"
 	],
 	"font_face": "Cascadia Code Regular",
 	"font_options": ["no_italic"],
-	"font_size": 15,
+	"font_size": 16,
 	"ignored_packages":
 	[
-		"Base Encoder",
-		"PHP-Twig",
 		"Rust",
-		"TypeScript Syntax",
 		"Vintage",
 	],
 	"indent_guide_options":
@@ -61,7 +55,6 @@
 	"index_exclude_patterns":
 	[
 		"node_modules/*",
-		"deps/*",
 		"*.log"
 	],
 	"line_padding_bottom": 1,
@@ -79,4 +72,5 @@
 	"ui_separator": true,
 	"word_wrap": true,
 	"index_files": true,
+	"update_check": true,
 }

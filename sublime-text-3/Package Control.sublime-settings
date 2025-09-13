@@ -2,13 +2,12 @@
 	"bootstrapped": true,
 	"in_process_packages":
 	[
-		"TypeScript Syntax",
 	],
 	"installed_packages":
 	[
 		"A File Icon",
 		"ayu",
-		"Better CoffeeScript",
+		"CoffeeScript",
 		"DocBlockr",
 		"Dockerfile Syntax Highlighting",
 		"Elixir",
@@ -37,7 +36,7 @@
 		"Terraform",
 		"TOML",
 		"TypeScript Syntax",
-		"Vue Syntax Highlight",
+		"Vue",
 	],
 	"repositories":
 	[

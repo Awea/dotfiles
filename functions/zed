@@ -4,5 +4,5 @@
 ## Repository: https://github.com/rupa/z
 zed() {
   local target=$([ "$1" != "." ] && echo "$(z -e $1)" || echo "$1")
-  flatpak run dev.zed.Zed $target
+  /opt/homebrew/bin/zed $target
 }

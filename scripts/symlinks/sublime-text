@@ -1,0 +1,23 @@
+#!/bin/bash
+
+sublime-text-symlink() {
+  if test ! -L $HOME/Library/Application\ Support/Sublime\ Text/Packages/User; then
+    rm -rf $HOME/Library/Application\ Support/Sublime\ Text/Packages/User
+    ln -fs $PWD/sublime-text-3 $HOME/Library/Application\ Support/Sublime\ Text/Packages/User
+    echo "🔗 Symbolic link for Sublime Text is created"
+  fi
+}
+
+if test -f $HOME/Library/Application\ Support/Sublime\ Text/Installed\ Packages/Package\ Control.sublime-package; then
+  sublime-text-symlink
+else
+  subl
+  read -p "✋ Install Package Control in Sublime Text then hit enter"
+  pkill "Sublime Text"
+  sublime-text-symlink
+  subl
+  read -p "⏳ Sublime Text is currently completing packages installation, hit enter when it is done"
+  pkill "Sublime Text"
+  smerge .
+  read -p "✋ Discard unwanted changes on Preferences.sublime-settings then hit enter"
+fi
