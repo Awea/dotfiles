@@ -26,4 +26,4 @@ alias gra='git rebase -i --autosquash'
 # Branches
 ## Remove merged branch from a Git repository
 ## Inspiration: https://gist.github.com/TBonnin/4060788
-alias gR='git branch --merged master | grep -v 'master$' | xargs git branch -d'
+alias gR='git branch --merged main | grep -v 'main$' | xargs git branch -d'
