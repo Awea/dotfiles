@@ -53,3 +53,11 @@ for dump in ~/.zcompdump(N.mh+24); do
 done
 
 compinit -C
+
+# Paperspace
+export PAPERSPACE_INSTALL="$HOME/.paperspace"
+export PATH="$PAPERSPACE_INSTALL/bin:$PATH"
+
+# Fly.io
+export FLYCTL_INSTALL="$HOME/.fly"
+export PATH="$FLYCTL_INSTALL/bin:$PATH"

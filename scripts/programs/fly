@@ -1,0 +1,8 @@
+#!/bin/zsh
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+# https://fly.io/docs/flyctl/install/
+curl -L https://fly.io/install.sh | sh
