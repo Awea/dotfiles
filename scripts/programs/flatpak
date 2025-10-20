@@ -14,9 +14,6 @@ flatpak install obsidian flathub com.uploadedlobster.peek qpwgraph com.protonvpn
 flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
 flatpak install flathub org.signal.Signal
 
-# https://zed.dev/
-flatpak install flathub dev.zed.Zed
-
 # Required by peek to run via app icon
 sudo apt install -y xdg-desktop-portal-gtk
 

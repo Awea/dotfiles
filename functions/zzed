@@ -2,7 +2,7 @@
 
 ## Open Zed best match from z
 ## Repository: https://github.com/rupa/z
-zed() {
+zzed() {
   local target=$([ "$1" != "." ] && echo "$(z -e $1)" || echo "$1")
-  flatpak run dev.zed.Zed $target
+  zed $target
 }

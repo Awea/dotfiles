@@ -1,0 +1,8 @@
+#!/bin/zsh
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+# https://zed.dev/
+curl -f https://zed.dev/install.sh | sh

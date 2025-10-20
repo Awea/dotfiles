@@ -2,5 +2,5 @@
 
 ## Open my dotfiles
 zot() {
-  flatpak run dev.zed.Zed $DOTFILES
+  zed $DOTFILES
 }
