@@ -16,7 +16,7 @@ alias vre="vdf && vup"
 alias vba="vagrant package --base"
 
 # Topgrade! aliases
-alias auto-update="topgrade --disable nix rustup cargo flutter composer containers"
+alias auto-update="topgrade --yes flatpak snap system config_update firmware --disable nix rustup cargo flutter composer containers asdf git_repos pnpm gcloud"
 
 # Thyme aliases
 alias track="while true; do thyme track -o $DOTFILES/thyme.json; sleep 30s; done;"
