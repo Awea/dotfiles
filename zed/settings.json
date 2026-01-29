@@ -7,6 +7,22 @@
 // custom settings, run `zed: open default settings` from the
 // command palette (cmd-shift-p / ctrl-shift-p)
 {
+  "session": {
+    "trust_all_worktrees": true
+  },
+  "scrollbar": {
+    "git_diff": true
+  },
+  "context_servers": {
+    "tidewave-mcp": {
+      "enabled": true,
+      "command": "mcp-proxy",
+      "args": [
+        "http://localhost:3000/tidewave/mcp"
+      ],
+      "env": {}
+    }
+  },
   "edit_predictions": {
     "mode": "subtle",
     "copilot": {
@@ -45,7 +61,7 @@
   },
   "git": {
     "inline_blame": {
-      "enabled": false
+      "enabled": true
     }
   },
   "seed_search_query_from_cursor": "selection",
