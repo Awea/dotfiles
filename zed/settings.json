@@ -7,40 +7,60 @@
 // custom settings, run `zed: open default settings` from the
 // command palette (cmd-shift-p / ctrl-shift-p)
 {
+  "outline_panel": {
+    "dock": "right",
+  },
+  "collaboration_panel": {
+    "dock": "left",
+  },
+  "git_panel": {
+    "dock": "left",
+  },
+  "agent_servers": {
+    "claude-acp": {
+      "default_config_options": {
+        "effort": "medium",
+        "mode": "plan",
+        "model": "default",
+      },
+      "type": "registry",
+    },
+  },
+  "colorize_brackets": true,
   "session": {
-    "trust_all_worktrees": true
+    "trust_all_worktrees": true,
   },
   "scrollbar": {
-    "git_diff": true
+    "git_diff": true,
   },
   "context_servers": {
-    "tidewave-mcp": {
+    "tidewave": {
+      "settings": {},
+
       "enabled": true,
-      "command": "mcp-proxy",
-      "args": [
-        "http://localhost:3000/tidewave/mcp"
-      ],
-      "env": {}
-    }
+      "url": "http://localhost:3000/tidewave/mcp",
+    },
   },
   "edit_predictions": {
+    "provider": "zed",
     "mode": "subtle",
     "copilot": {
       "proxy": null,
-      "proxy_no_verify": null
+      "proxy_no_verify": null,
     },
-    "enabled_in_text_threads": false
+    "enabled_in_text_threads": false,
   },
   "show_edit_predictions": false,
   "agent": {
-    "always_allow_tool_actions": true,
+    "sidebar_side": "right",
+    "dock": "right",
+    "tool_permissions": {
+      "default": "allow",
+    },
     "default_model": {
       "provider": "zed.dev",
-      "model": "claude-sonnet-4"
-    }
-  },
-  "features": {
-    "edit_prediction_provider": "zed"
+      "model": "claude-opus-4-6",
+    },
   },
   "base_keymap": "SublimeText",
   "ui_font_size": 16,
@@ -52,17 +72,17 @@
   //   "calt": true
   "terminal": {
     "font_family": "Fira Code",
-    "working_directory": "current_project_directory"
+    "working_directory": "current_project_directory",
   },
   "theme": {
     "mode": "system",
     "light": "One Light",
-    "dark": "Ayu Mirage"
+    "dark": "Ayu Mirage",
   },
   "git": {
     "inline_blame": {
-      "enabled": true
-    }
+      "enabled": true,
+    },
   },
   "seed_search_query_from_cursor": "selection",
   "tab_size": 2,
@@ -79,52 +99,54 @@
     ".nx/**",
     ".angular/**",
     "node_modules/**",
-    ".elixir-ls/**"
+    ".elixir-ls/**",
   ],
   "project_panel": {
-    "auto_reveal_entries": false
+    "dock": "left",
+    "auto_reveal_entries": false,
   },
   "lsp": {
     "json-language-server": {
       "settings": {
-        "json": { "validate": false }
-      }
-    }
+        "json": { "validate": false },
+      },
+    },
   },
   "languages": {
     "TypeScript": {
       "show_edit_predictions": true,
       "code_actions_on_format": {
-        "source.fixAll.eslint": true
-      }
+        "source.fixAll.eslint": true,
+      },
     },
     "Elixir": {
+      "format_on_save": "on",
       "show_edit_predictions": true,
       "language_servers": [
-        "expert",
-        "!elixir-ls",
+        "elixir-ls",
+        "!expert",
         "!next-ls",
         "!lexical",
-        "..."
-      ]
+        "...",
+      ],
     },
     "Markdown": {
-      "show_edit_predictions": false
+      "show_edit_predictions": false,
     },
     "YAML": {
       "format_on_save": "off",
       "prettier": {
-        "allowed": false
-      }
+        "allowed": false,
+      },
     },
     "SQL": {
       "prettier": {
         "allowed": false,
-        "logicalOperatorNewline": "after"
-      }
+        "logicalOperatorNewline": "after",
+      },
     },
     "JSON": {
-      "format_on_save": "off"
-    }
-  }
+      "format_on_save": "off",
+    },
+  },
 }
