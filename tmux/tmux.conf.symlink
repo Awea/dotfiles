@@ -5,6 +5,9 @@ set -g mouse on
 bind '"' split-window -c "#{pane_current_path}"
 bind % split-window -h -c "#{pane_current_path}"
 
+# binds `prefix + Ctrl-c` to open claude-tmux
+bind-key C-c display-popup -E -w 80 -h 30 "/home/awea/.asdf/shims/claude-tmux"
+
 # Automatically reorder windows when one is deleted
 set -g renumber-windows on
 

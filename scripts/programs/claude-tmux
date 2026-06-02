@@ -1,0 +1,20 @@
+#!/bin/zsh
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+# claude-tmux
+# https://github.com/nielsgroen/claude-tmux
+
+# Rust (via asdf)
+# https://github.com/code-lever/asdf-rust
+asdf install rust latest
+asdf set --home rust latest
+
+# Install with cargo
+cargo install claude-tmux
+
+# Make claude-tmux available under shims
+# "~/.asdf/shims/claude-tmux"
+asdf reshim
