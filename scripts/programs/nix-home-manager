@@ -1,0 +1,17 @@
+#!/bin/zsh
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+# home-manager (flake-based, standalone)
+# https://nix-community.github.io/home-manager/
+
+# Resolve the flake dir (repo's config/nix) from this script's location, so it
+# works before `make links` has symlinked ~/.config/nix. ${0:A:h:h:h} strips the
+# filename, programs/, and scripts/ to reach the repo root.
+flake_dir="${0:A:h:h:h}/config/nix"
+
+# Bootstrap + apply the configuration. `-b backup` renames any pre-existing
+# files that would otherwise block the switch (e.g. foo -> foo.backup).
+nix run home-manager/master -- switch -b backup --flake "${flake_dir}#awea"
