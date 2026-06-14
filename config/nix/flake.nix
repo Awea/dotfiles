@@ -9,6 +9,11 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    hunk = {
+      url = "github:VoidLattice/hunk/feat/reviewed-hunks";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # Add extra flake inputs here, e.g.:
     # claude-tmux.url = "github:nielsgroen/claude-tmux";
   };
