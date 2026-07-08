@@ -11,7 +11,7 @@ VPATH = $(shell dirname $(files_to_symlink))
 
 ## Create symbolic links for files/folders with a .symlink suffix
 .PHONY: links
-links: $(symlink_paths) $(HOME)/.config/sublime-merge/Packages/User $(HOME)/.config/sublime-text/Packages/User antibody/zsh_plugins.sh $(HOME)/.config/direnv $(HOME)/.config/nix $(HOME)/.config/zed/settings.json $(HOME)/.config/zed/keymap.json
+links: $(symlink_paths) $(HOME)/.config/sublime-merge/Packages/User $(HOME)/.config/sublime-text/Packages/User antibody/zsh_plugins.sh $(HOME)/.config/direnv $(HOME)/.config/nix $(HOME)/.config/zed/settings.json $(HOME)/.config/zed/keymap.json $(HOME)/.claude/CLAUDE.md
 
 # Create all symlink
 # Documentation: https://www.gnu.org/software/make/manual/html_node/Automatic-Variables.html#Automatic-Variables
@@ -29,6 +29,10 @@ $(HOME)/.config/zed/settings.json:
 
 $(HOME)/.config/zed/keymap.json:
 	ln -s $(PWD)/zed/keymap.json $@
+
+$(HOME)/.claude/CLAUDE.md:
+	@mkdir -p $(dir $@)
+	ln -s $(PWD)/claude/CLAUDE.md $@
 
 $(HOME)/.config/%:
 	ln -s $(PWD)/config/$* $@
