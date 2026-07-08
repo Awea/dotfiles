@@ -1,0 +1,28 @@
+[Unit]
+Description=Apply DNS for the ZeroTier anarcho.tech network
+# ZeroTier on Linux cannot push DNS into the resolver itself
+# (https://github.com/zerotier/ZeroTierOne/issues/2492), so we feed the
+# network's resolver to systemd-resolved by hand, scoped to the zt link.
+#
+# The interface name (ztgxfhjjdm) is derived from the network id
+# (883e0ebdf47a1998) and is stable across reboots/reconnects.
+BindsTo=sys-subsystem-net-devices-ztgxfhjjdm.device
+After=sys-subsystem-net-devices-ztgxfhjjdm.device
+After=zerotier-one.service
+# systemd-resolved drops per-link DNS when it restarts; re-apply alongside it.
+PartOf=systemd-resolved.service
+After=systemd-resolved.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# NOTE: confirm this resolver address against the network's controller DNS
+# setting once the member is authorized; it is the rfc4193 address of the
+# DNS host observed on the network (peer 48f236c2ab).
+ExecStart=/usr/bin/resolvectl dns ztgxfhjjdm fd88:3e0e:bdf4:7a19:9899:9348:f236:c2ab
+ExecStart=/usr/bin/resolvectl domain ztgxfhjjdm "~anarcho.tech"
+ExecStop=-/usr/bin/resolvectl revert ztgxfhjjdm
+
+[Install]
+WantedBy=sys-subsystem-net-devices-ztgxfhjjdm.device
+WantedBy=systemd-resolved.service

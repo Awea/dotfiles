@@ -1,0 +1,17 @@
+#!/bin/bash
+
+# ZeroTier on Linux can't push DNS to the resolver (ZeroTierOne#2492), so we
+# install a systemd oneshot that applies the anarcho.tech network's DNS to
+# systemd-resolved, scoped to the zt link. Re-runnable / idempotent.
+
+set -e
+
+DOTFILES="$(cd "$(dirname "$0")/../.." && pwd)"
+UNIT=zt-anarcho-dns.service
+
+sudo cp "$DOTFILES/zerotier/$UNIT" "/etc/systemd/system/$UNIT"
+sudo systemctl daemon-reload
+sudo systemctl enable --now "$UNIT"
+
+echo "Installed and started $UNIT"
+resolvectl domain ztgxfhjjdm 2>/dev/null || true
