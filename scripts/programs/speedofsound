@@ -1,0 +1,19 @@
+#!/bin/zsh
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+speedofsound_vsn=0.14.0
+trigger_dest="$HOME/.local/bin/speedofsound-trigger.sh"
+
+# Speed of Sound - local voice dictation
+# https://github.com/zugaldia/speedofsound
+sudo snap install speedofsound
+
+# Release trigger script (bind it to a keyboard shortcut to toggle dictation)
+mkdir -p "$(dirname "$trigger_dest")"
+curl -fL "https://github.com/zugaldia/speedofsound/releases/download/v${speedofsound_vsn}/trigger.sh" -o "$trigger_dest"
+chmod +x "$trigger_dest"
+
+echo "Installed speedofsound; trigger script at $trigger_dest"
