@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+
+# Convert WebP images inside CBZ archives to JPG.
+# The output archive keeps the exact same internal directory structure;
+# every .webp entry is replaced by a .jpg, all other files are copied as-is.
+#
+#   Usage: cbz-webp2jpg [-q QUALITY] <file.cbz | directory> [...]
+#
+# For each INPUT.cbz, an archive with the SAME name is written into a
+# "converted/" folder next to it (e.g. foo/bar.cbz -> foo/converted/bar.cbz).
+# A directory argument is expanded to every *.cbz it directly contains
+# (its own "converted/" folder is skipped).
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+quality=90
+jobs=$(nproc 2>/dev/null || echo 4)
+
+usage() {
+  echo "Convert WebP images inside CBZ archives to JPG."
+  echo "  Usage: cbz-webp2jpg [-q QUALITY] [-j JOBS] <file.cbz | directory> [...]"
+  echo "  -j  parallel page conversions (default: number of CPU cores)"
+  exit "${1:-1}"
+}
+
+while getopts ":q:j:h" opt; do
+  case "$opt" in
+    q) quality="$OPTARG" ;;
+    j) jobs="$OPTARG" ;;
+    h) usage 0 ;;
+    *) usage ;;
+  esac
+done
+shift $((OPTIND - 1))
+
+if test "$#" -eq 0; then
+  usage
+fi
+
+for missing in convert unzip zip; do
+  command -v "$missing" >/dev/null 2>&1 || {
+    echo "error: '$missing' is required but not installed" >&2
+    exit 1
+  }
+done
+
+convert_one() {
+  local src="$1"
+  local dir base out_dir out tmp count
+
+  if test ! -f "$src"; then
+    echo "skip: '$src' is not a file" >&2
+    return 1
+  fi
+
+  # Resolve to an absolute dir so the output path survives the `cd "$tmp"` below.
+  dir=$(cd "$(dirname "$src")" && pwd)
+  base=$(basename "$src")
+  out_dir="$dir/converted"
+  out="$out_dir/$base"
+
+  tmp=$(mktemp -d)
+  # shellcheck disable=SC2064
+  trap "rm -rf '$tmp'" RETURN
+
+  unzip -qq "$src" -d "$tmp"
+
+  # Convert pages in parallel: each worker rewrites one .webp as .jpg, then
+  # drops the original. CBZ_QUALITY is exported so the xargs child shells see it.
+  count=$(find "$tmp" -type f -iname '*.webp' -printf '.' | wc -c)
+  export CBZ_QUALITY="$quality"
+  find "$tmp" -type f -iname '*.webp' -print0 \
+    | xargs -0 -r -P "$jobs" -n 1 sh -c \
+        'convert "$1" -strip -quality "$CBZ_QUALITY" "${1%.*}.jpg" && rm -f "$1"' _
+
+  # Re-zip from inside the temp dir so paths stay relative (same structure).
+  mkdir -p "$out_dir"
+  rm -f "$out"
+  ( cd "$tmp" && zip -q -r -X "$out" . )
+
+  echo "$src -> $out ($count converted)"
+}
+
+for arg in "$@"; do
+  if test -d "$arg"; then
+    found=0
+    while IFS= read -r -d '' archive; do
+      convert_one "$archive"
+      found=1
+    done < <(find "$arg" -mindepth 1 -maxdepth 1 -type f -iname '*.cbz' -print0)
+    if test "$found" -eq 0; then
+      echo "skip: no .cbz files in '$arg'" >&2
+    fi
+  else
+    convert_one "$arg"
+  fi
+done
