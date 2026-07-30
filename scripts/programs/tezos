@@ -4,14 +4,47 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-# octez-client release URL found on: https://gitlab.com/tezos/tezos/-/packages/37393733
-# 🚧 Automate to retrieve latest version
+# Octez client - Tezos node & client
+# Release index: https://octez.tezos.com/releases/
+# The latest version is resolved from the GitLab releases API, then the
+# matching static binary is pulled from the official release site.
 
-RELEASE_URL="https://gitlab.com/tezos/tezos/-/package_files/185580267/download"
+api="https://gitlab.com/api/v4/projects/tezos%2Ftezos/releases?per_page=50"
 
-# Tezos client
+# Newest main release tag, e.g. octez-v25.1. Matching the octez-vN.N shape
+# skips component releases such as octez-smart-rollup-node-*; the API already
+# returns releases newest-first, so the first match is the latest.
+version=$(curl -fsSL "$api" \
+  | grep -oE '"tag_name":"octez-v[0-9]+\.[0-9]+"' \
+  | head -1 \
+  | grep -oE 'octez-v[0-9]+\.[0-9]+')
+
+if [[ -z "$version" ]]; then
+  echo "error: could not determine the latest octez release" >&2
+  exit 1
+fi
+
+case "$(uname -m)" in
+  x86_64) arch=x86_64 ;;
+  aarch64 | arm64) arch=arm64 ;;
+  *) echo "error: unsupported architecture $(uname -m)" >&2; exit 1 ;;
+esac
+
+base="https://octez.tezos.com/releases/${version}/binaries/${arch}"
+
+echo "Installing octez-client ${version} (${arch})"
 cd `mktemp -d`
-curl -L $RELEASE_URL -o octez.tar.gz
-tar -xvf octez.tar.gz octez-x86_64/octez-client
-sudo mv -f octez-x86_64/octez-client /usr/local/bin/octez-client
+curl -fSL "${base}/octez-client" -o octez-client
+
+# Verify integrity against the published checksums.
+expected=$(curl -fsSL "${base}/sha256sums.txt" | awk '$2 == "octez-client" { print $1 }')
+actual=$(sha256sum octez-client | awk '{ print $1 }')
+if [[ "$expected" != "$actual" ]]; then
+  echo "error: sha256 mismatch (expected ${expected:-none}, got $actual)" >&2
+  exit 1
+fi
+
+sudo mv -f octez-client /usr/local/bin/octez-client
 sudo chmod +x /usr/local/bin/octez-client
+
+echo "Installed octez-client ${version} to /usr/local/bin/octez-client"
