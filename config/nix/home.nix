@@ -37,6 +37,7 @@ in
     ripgrep
     fd
     jq
+    uv
   ] ++ [
     hunk
   ];
