@@ -1,7 +1,7 @@
 [user]
 	name = Awea
-	email = aweaoftheworld@gmail.com
-	signingkey = 0EFB7676262FAE706D16A035ECB1177F79271C30
+	email = d@davidauthier.com
+	signingkey = FD99ACE34A7357883484B91A74659601551B45C3
 
 [alias]
   s = status
