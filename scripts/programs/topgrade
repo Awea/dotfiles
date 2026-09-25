@@ -4,7 +4,7 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-topgrade_vsn=16.0.3
+topgrade_vsn=17.9.0
 
 # Topgrade - Upgrade everything
 # https://github.com/topgrade-rs/topgrade
