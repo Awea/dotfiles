@@ -1,0 +1,29 @@
+#!/bin/zsh
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+# OpenSSH server, started now and at boot
+# https://www.openssh.com/
+sudo apt install -y openssh-server
+
+# Key-only login. sshd keeps the first value it reads, so the 00- prefix
+# makes this file win over sshd_config and other drop-in files.
+sudo mkdir -p /etc/ssh/sshd_config.d
+sudo tee /etc/ssh/sshd_config.d/00-key-only.conf > /dev/null <<'CONF'
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitRootLogin no
+CONF
+sudo sshd -t
+
+sudo systemctl unmask ssh
+sudo systemctl enable --now ssh
+sudo systemctl restart ssh
+
+# Port redirection on the gateway (192.168.1.1), only for access from
+# outside ZeroTier. Give this machine a DHCP reservation first.
+#
+# - ssh: TCP 2222 -> 22
+# - mosh: UDP 60000-60010 -> 60000-60010 (optional)
