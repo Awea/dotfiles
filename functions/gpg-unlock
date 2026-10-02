@@ -1,0 +1,10 @@
+#!/usr/bin/env zsh
+
+# Unlock the GPG key from the terminal, without the pinentry window
+gpg-unlock(){
+  local tmp=$(mktemp)
+  pkill pinentry 2>/dev/null
+  echo unlock > $tmp
+  gpg --pinentry-mode loopback --clearsign -o /dev/null $tmp
+  rm -f $tmp
+}
