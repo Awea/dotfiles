@@ -55,4 +55,26 @@ in
     };
     Install.WantedBy = [ "default.target" ];
   };
+
+  # Free disk space every day, only when / has less than 100G free.
+  # The script lives in the dotfiles: bin.symlink/prune-disk.
+  systemd.user.services.prune-disk = {
+    Unit.Description = "Free disk space when / is low";
+    Service = {
+      Type = "oneshot";
+      ExecStart = "%h/.bin/prune-disk";
+      Nice = 19;
+      IOSchedulingClass = "idle";
+    };
+  };
+
+  systemd.user.timers.prune-disk = {
+    Unit.Description = "Daily disk space check";
+    Timer = {
+      OnCalendar = "daily";
+      Persistent = true;
+      RandomizedDelaySec = "1h";
+    };
+    Install.WantedBy = [ "timers.target" ];
+  };
 }
