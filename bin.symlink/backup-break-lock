@@ -1,3 +1,4 @@
 #!/bin/sh
 export BORG_REPO=rsync.net:borg-repos/awea
+export BORG_REMOTE_PATH=borg1
 borg break-lock

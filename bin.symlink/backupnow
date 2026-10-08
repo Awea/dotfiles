@@ -50,7 +50,8 @@ function help() {
 
 function get_password() {
   # Get borg backup passphrase
-  export BORG_PASSPHRASE="$(pass show ${1})"
+  BORG_PASSPHRASE="$(pass show "${1}")"
+  export BORG_PASSPHRASE
 }
 
 function remote_backup() {
@@ -73,6 +74,7 @@ function restore_backup() {
 
 function break_lock() {
   export BORG_REPO="${borg_repo}"
+  export BORG_REMOTE_PATH=borg1
   borg break-lock ${VERBOSE_FLAG}
 }
 
