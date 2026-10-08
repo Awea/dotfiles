@@ -1,0 +1,34 @@
+id = "awea.agent-tabs"
+name = "Agent tabs"
+version = "0.1.0"
+min_herdr_version = "0.9.1"
+description = "Open claude in a new tab, clean or from a /handoff document"
+platforms = ["linux", "macos"]
+
+[[actions]]
+id = "new-tab"
+title = "agent-tabs: new claude tab"
+contexts = ["pane", "workspace"]
+command = ["bash", "new-agent-tab.sh", "open"]
+
+[[actions]]
+id = "handoff"
+title = "agent-tabs: handoff to new tab"
+contexts = ["pane"]
+command = ["bash", "handoff.sh", "open"]
+
+[[panes]]
+id = "new-tab-prompt"
+title = "New claude"
+placement = "popup"
+width = "60%"
+height = 7
+command = ["bash", "new-agent-tab.sh", "prompt"]
+
+[[panes]]
+id = "handoff-prompt"
+title = "Handoff"
+placement = "popup"
+width = "60%"
+height = 7
+command = ["bash", "handoff.sh", "prompt"]

@@ -1,0 +1,32 @@
+onboarding = false
+[ui]
+agent_panel_sort = "priority"
+
+show_agent_labels_on_pane_borders = false
+[ui.sound]
+enabled = false
+
+[ui.toast]
+delivery = "herdr"
+
+[theme]
+name = "catppuccin"
+auto_switch = false
+
+[[keys.command]]
+key = "prefix+a"
+type = "plugin_action"
+command = "awea.agent-tabs.new-tab"
+description = "new claude tab"
+
+[[keys.command]]
+key = "prefix+shift+a"
+type = "plugin_action"
+command = "awea.agent-tabs.handoff"
+description = "handoff to new claude tab"
+
+[[keys.command]]
+key = "prefix+shift+n"
+type = "plugin_action"
+command = "awea.workspaces.new"
+description = "new workspace in a frequent folder"

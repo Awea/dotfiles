@@ -1,0 +1,20 @@
+id = "awea.workspaces"
+name = "Workspaces"
+version = "0.2.0"
+min_herdr_version = "0.9.1"
+description = "Create a new workspace in ~/.workspace or in a frequent folder from z"
+platforms = ["linux", "macos"]
+
+[[actions]]
+id = "new"
+title = "workspaces: new workspace in a frequent folder"
+contexts = ["pane", "workspace"]
+command = ["bash", "new-workspace.sh", "open"]
+
+[[panes]]
+id = "pick"
+title = "New workspace"
+placement = "popup"
+width = "60%"
+height = "50%"
+command = ["bash", "new-workspace.sh", "pick"]

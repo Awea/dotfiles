@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+# Fake herdr for the tests. It logs each call to $FAKE_LOG and prints fixed JSON.
+args=$(printf '%s | ' "$@")
+printf '%s\n' "${args% | }" >>"$FAKE_LOG"
+
+case "$1 $2" in
+  "pane get")
+    if [ -n "${FAKE_SESSION:-}" ]; then
+      printf '{"result":{"pane":{"agent_session":{"value":"%s"}}}}\n' "$FAKE_SESSION"
+    elif [ -n "${FAKE_CWD:-}" ]; then
+      printf '{"result":{"pane":{"foreground_cwd":"%s"}}}\n' "$FAKE_CWD"
+    else
+      printf '{"result":{"pane":{}}}\n'
+    fi
+    ;;
+  "pane list")
+    if [ -n "${FAKE_PANES_JSON:-}" ]; then
+      printf '%s\n' "$FAKE_PANES_JSON"
+    else
+      printf '{"result":{"panes":[]}}\n'
+    fi
+    ;;
+  "pane process-info")
+    # FAKE_REVIEWR_PANES: the panes that run herdr-reviewr, separated by spaces.
+    exe=claude
+    [[ " ${FAKE_REVIEWR_PANES:-} " == *" ${4:-} "* ]] && exe=/plugin/bin/herdr-reviewr
+    jq -cn --arg exe "$exe" '{result: {process_info: {foreground_processes: [{argv0: $exe, argv: [$exe]}]}}}'
+    ;;
+  "plugin pane")
+    if [ -n "${FAKE_PLUGIN_OPEN_FAIL:-}" ]; then
+      printf '{"error":{"code":"plugin_not_found"}}\n' >&2
+      exit 1
+    fi
+    printf '{"result":{"plugin_pane":{"pane":{"pane_id":"w1:p8","tab_id":"w1:t1"}}}}\n'
+    ;;
+  "tab create")
+    printf '{"result":{"root_pane":{"pane_id":"w1:p9"},"tab":{"tab_id":"w1:t9"}}}\n'
+    ;;
+  "agent get")
+    # FAKE_AGENT_GETS: the number of calls that find the agent. The next calls do not.
+    if [ -z "${FAKE_AGENT_KIND:-}" ] && [ -z "${FAKE_TITLE:-}" ] ||
+      { [ -n "${FAKE_AGENT_GETS:-}" ] && [ "$(grep -c '^agent | get' "$FAKE_LOG")" -gt "$FAKE_AGENT_GETS" ]; }; then
+      printf '{"error":{"code":"agent_not_found"}}\n' >&2
+      exit 1
+    fi
+    jq -cn --arg kind "${FAKE_AGENT_KIND:-claude}" --arg status "${FAKE_AGENT_STATUS:-idle}" \
+      --arg title "${FAKE_TITLE:-claude}" --arg name "${FAKE_NAME:-}" \
+      '{result: {agent: {agent: $kind, agent_status: $status, tab_id: "w1:t9", terminal_title_stripped: $title,
+        name: (if $name == "" then null else $name end)}}}'
+    ;;
+  "agent start")
+    if [ -n "${FAKE_START_FAIL:-}" ]; then
+      printf '{"error":{"code":"agent_not_ready"}}\n' >&2
+      exit 1
+    fi
+    printf '{"result":{}}\n'
+    ;;
+  "agent prompt")
+    if [ "${3:-}" != "w1:p1" ] && [ -n "${FAKE_FINAL_PROMPT_FAIL:-}" ]; then
+      printf '{"error":{"code":"agent_blocked"}}\n' >&2
+      exit 1
+    fi
+    if [ "${3:-}" = "w1:p1" ] && [ -n "${FAKE_PROMPT_FAIL:-}" ]; then
+      printf '{"error":{"code":"timeout"}}\n' >&2
+      exit 1
+    fi
+    if [ -n "${FAKE_WRITE_DOC:-}" ] && [[ "$4" == /handoff* ]]; then
+      printf '# Handoff\n' >"${4##* }"
+    fi
+    printf '{"result":{}}\n'
+    ;;
+  "agent rename")
+    if [ "${4:-}" != --clear ] && ! [[ "${4:-}" =~ ^[a-z][a-z0-9_-]{0,31}$ ]]; then
+      printf '{"error":{"code":"invalid_agent_name"}}\n' >&2
+      exit 1
+    fi
+    if [ -n "${FAKE_NAME_TAKEN:-}" ] && [ "${4:-}" = "$FAKE_NAME_TAKEN" ]; then
+      printf '{"error":{"code":"agent_name_taken"}}\n' >&2
+      exit 1
+    fi
+    printf '{"result":{}}\n'
+    ;;
+  *)
+    printf '{"result":{}}\n'
+    ;;
+esac

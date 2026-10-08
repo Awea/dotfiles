@@ -13,3 +13,6 @@ antibody/zsh_plugins.sh
 # m
 # See: https://gitlab.com/Mayeu/m
 bin.symlink/m
+
+# Superpowers specs and plans
+doc/superpowers/

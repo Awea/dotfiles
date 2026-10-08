@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Fake herdr for the tests. It logs each call to $FAKE_LOG and prints fixed JSON.
+args=$(printf '%s | ' "$@")
+printf '%s\n' "${args% | }" >>"$FAKE_LOG"
+printf '{"result":{}}\n'

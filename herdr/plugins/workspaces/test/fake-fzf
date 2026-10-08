@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Fake fzf for the tests. It logs its input to $FAKE_FZF_INPUT. It prints the line
+# $FAKE_PICK (1 by default), or exits 130 like fzf on Esc when FAKE_CANCEL is set.
+cat >"$FAKE_FZF_INPUT"
+[ -z "${FAKE_CANCEL:-}" ] || exit 130
+sed -n "${FAKE_PICK:-1}p" "$FAKE_FZF_INPUT"

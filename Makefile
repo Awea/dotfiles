@@ -11,7 +11,7 @@ VPATH = $(shell dirname $(files_to_symlink))
 
 ## Create symbolic links for files/folders with a .symlink suffix
 .PHONY: links
-links: $(symlink_paths) $(HOME)/.config/sublime-merge/Packages/User $(HOME)/.config/sublime-text/Packages/User antibody/zsh_plugins.sh $(HOME)/.config/direnv $(HOME)/.config/nix $(HOME)/.config/zed/settings.json $(HOME)/.config/zed/keymap.json $(HOME)/.claude/CLAUDE.md
+links: $(symlink_paths) $(HOME)/.config/sublime-merge/Packages/User $(HOME)/.config/sublime-text/Packages/User antibody/zsh_plugins.sh $(HOME)/.config/direnv $(HOME)/.config/nix $(HOME)/.config/zed/settings.json $(HOME)/.config/zed/keymap.json $(HOME)/.claude/CLAUDE.md $(HOME)/.config/herdr/config.toml $(HOME)/.claude/skills/handoff $(HOME)/.claude/hooks/herdr-agent-name.sh $(HOME)/.claude/skills/reviewr
 
 # Create all symlink
 # Documentation: https://www.gnu.org/software/make/manual/html_node/Automatic-Variables.html#Automatic-Variables
@@ -33,6 +33,28 @@ $(HOME)/.config/zed/keymap.json:
 $(HOME)/.claude/CLAUDE.md:
 	@mkdir -p $(dir $@)
 	ln -s $(PWD)/claude/CLAUDE.md $@
+
+$(HOME)/.config/herdr/config.toml:
+	@mkdir -p $(dir $@)
+	ln -s $(PWD)/herdr/config.toml $@
+
+$(HOME)/.claude/skills/handoff:
+	@mkdir -p $(dir $@)
+	ln -s $(PWD)/claude/skills/handoff $@
+
+$(HOME)/.claude/hooks/herdr-agent-name.sh:
+	@mkdir -p $(dir $@)
+	ln -s $(PWD)/herdr/plugins/agent-tabs/sync-name.sh $@
+
+$(HOME)/.claude/skills/reviewr:
+	@mkdir -p $(dir $@)
+	ln -s $(PWD)/claude/skills/reviewr $@
+
+## Register the local Herdr plugins
+.PHONY: herdr-plugins
+herdr-plugins:
+	herdr plugin link $(PWD)/herdr/plugins/agent-tabs
+	herdr plugin link $(PWD)/herdr/plugins/workspaces
 
 $(HOME)/.config/%:
 	ln -s $(PWD)/config/$* $@
