@@ -23,6 +23,18 @@ title = "agent-tabs: new tab in the main worktree"
 contexts = ["pane", "workspace"]
 command = ["bash", "new-shell-tab.sh"]
 
+[[actions]]
+id = "focus-link"
+title = "agent-tabs: focus a Herdr link"
+contexts = ["pane"]
+command = ["bash", "focus-link.sh"]
+
+[[link_handlers]]
+id = "herdr-link"
+title = "Focus the Herdr pane or tab"
+pattern = "^https://herdr\\.invalid/(pane|tab)/[A-Za-z0-9]+:[A-Za-z0-9]+$"
+action = "focus-link"
+
 [[panes]]
 id = "new-tab-prompt"
 title = "New claude"

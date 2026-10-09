@@ -81,6 +81,25 @@ A name that you give with `herdr agent start <name>` stays. When the loop first 
 claude and claude already has a name other than `claude`, the loop stops. So
 `herdr agent wait <name>` works for the full session.
 
+## Focus a pane or a tab from a link
+
+Ctrl-click a link of the form `https://herdr.invalid/pane/<pane ID>` or
+`https://herdr.invalid/tab/<tab ID>` in a pane. The link handler `herdr-link` runs the
+action `focus-link`:
+
+- For a tab link, the action focuses the tab.
+- For a pane link, the action focuses the tab of the pane, then the agent in the pane.
+  Herdr has no API to focus a pane by ID, so a pane without an agent gets only its tab.
+- For a pane or a tab that does not exist, the action writes the cause to the log.
+
+The host `herdr.invalid` never resolves. Herdr detects `https://` URLs and OSC 8 links,
+but not a custom scheme such as `herdr://`. `claude/CLAUDE.md` tells claude to write
+each pane and tab ID as such a link.
+
+The terminal must send the Ctrl-click to Herdr. Ghostty does (tested 2026-10-09). GNOME
+Terminal opens the link in the browser itself, so Herdr never gets the click.
+`scripts/programs/ghostty` installs Ghostty.
+
 ## Open reviewr next to claude
 
 In claude, type `/reviewr`. A [reviewr](https://github.com/persiyanov/herdr-reviewr) pane
@@ -166,12 +185,13 @@ The plugin needs `bash`, `jq` in `/usr/bin` or `/bin`, `setsid` and `flock` (Lin
 
 | File | Use |
 |---|---|
-| `herdr-plugin.toml` | Manifest: the actions `new-tab`, `handoff` and `new-shell-tab`, and the popup panes `new-tab-prompt` and `handoff-prompt`. |
+| `herdr-plugin.toml` | Manifest: the actions `new-tab`, `handoff`, `new-shell-tab` and `focus-link`, the link handler `herdr-link`, and the popup panes `new-tab-prompt` and `handoff-prompt`. |
 | `lib.sh` | Shared helpers: `notify` (log, and a toast in debug), `read_effort`, `read_focus`, `pane_cwd`, `main_worktree`, `open_claude_tab`, `name_agent`, `rename_agent`, `sync_agent_name`. |
 | `new-agent-tab.sh` | The `new-tab` action in three modes: `open` (opens the popup), `prompt` (popup), `worker` (background). |
 | `new-shell-tab.sh` | The `new-shell-tab` action: opens a shell tab with the focus, in one step, without a popup. |
 | `handoff.sh` | The `handoff` action in three modes: `open` (checks the agent), `prompt` (popup), `worker` (background). |
 | `sync-name.sh` | The SessionStart hook in two modes: `start` (hook) and `loop` (background). `make links` links it as `~/.claude/hooks/herdr-agent-name.sh`. |
+| `focus-link.sh` | The `focus-link` action: focuses the pane or the tab of a clicked Herdr link. |
 | `reviewr.sh` | The `/reviewr` command: opens reviewr right of the claude pane, for the worktree of claude. |
 | `test/agent-tabs.bats` | Tests. |
 | `test/fake-herdr` | A fake `herdr` for the tests. It logs each call and gives fixed JSON. |

@@ -719,3 +719,52 @@ write_transcript() {
   [ "$status" -eq 1 ]
   grep -q '^notification | show | Agent tabs | --body | ' "$FAKE_LOG"
 }
+
+@test "focus-link focuses the tab and the agent of a pane link" {
+  export HERDR_PLUGIN_CLICKED_URL="https://herdr.invalid/pane/wQ:p2N" FAKE_AGENT_KIND=claude
+  run bash "$PLUGIN_DIR/focus-link.sh"
+  [ "$status" -eq 0 ]
+  grep -qx 'pane | get | wQ:p2N' "$FAKE_LOG"
+  grep -qx 'tab | focus | w1:t9' "$FAKE_LOG"
+  grep -qx 'agent | focus | wQ:p2N' "$FAKE_LOG"
+}
+
+@test "focus-link focuses the tab of a pane link without an agent" {
+  export HERDR_PLUGIN_CLICKED_URL="https://herdr.invalid/pane/wQ:p2"
+  run bash "$PLUGIN_DIR/focus-link.sh"
+  [ "$status" -eq 0 ]
+  grep -qx 'tab | focus | w1:t9' "$FAKE_LOG"
+}
+
+@test "focus-link focuses the tab of a tab link" {
+  export HERDR_PLUGIN_CLICKED_URL="https://herdr.invalid/tab/wQ:t3"
+  run bash "$PLUGIN_DIR/focus-link.sh"
+  [ "$status" -eq 0 ]
+  grep -qx 'tab | focus | wQ:t3' "$FAKE_LOG"
+  [ "$(grep -c '^pane | get\|^agent' "$FAKE_LOG")" -eq 0 ]
+}
+
+@test "focus-link shows a notification when the pane does not exist" {
+  export HERDR_PLUGIN_CLICKED_URL="https://herdr.invalid/pane/wQ:p2" FAKE_PANE_MISSING=1
+  run bash "$PLUGIN_DIR/focus-link.sh"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"agent-tabs: The pane wQ:p2 does not exist."* ]]
+  [ "$(grep -c '^tab | focus' "$FAKE_LOG")" -eq 0 ]
+}
+
+@test "focus-link shows a notification when the tab does not exist" {
+  export HERDR_PLUGIN_CLICKED_URL="https://herdr.invalid/tab/wQ:t3" FAKE_TAB_MISSING=1
+  run bash "$PLUGIN_DIR/focus-link.sh"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"agent-tabs: The tab wQ:t3 does not exist."* ]]
+}
+
+@test "focus-link shows a notification for a URL that is not a Herdr link" {
+  for url in "https://herdr.invalid/pane/" "https://herdr.invalid/window/wQ:p2" "https://example.com/pane/wQ:p2" ""; do
+    : >"$FAKE_LOG"
+    HERDR_PLUGIN_CLICKED_URL="$url" run bash "$PLUGIN_DIR/focus-link.sh"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"agent-tabs: Not a Herdr pane or tab link: $url"* ]]
+    [ "$(grep -c '^tab | focus\|^pane | get' "$FAKE_LOG")" -eq 0 ]
+  done
+}
