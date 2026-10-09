@@ -1,0 +1,14 @@
+#!/bin/zsh
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+# The "HD Web Camera" (05a3:9331) firmware can hang when PipeWire sets its
+# microphone to 16 kHz ("cannot set freq 16000 to ep 0x83"). The video then
+# hangs too, until a power cycle. This rule blocks the camera audio interface
+# (class 01), so snd-usb-audio never binds to it. Replug the camera after.
+sudo tee /etc/udev/rules.d/70-webcam-no-audio.rules > /dev/null <<'RULES'
+ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_interface", ATTRS{idVendor}=="05a3", ATTRS{idProduct}=="9331", ATTR{bInterfaceClass}=="01", ATTR{authorized}="0"
+RULES
+sudo udevadm control --reload-rules
