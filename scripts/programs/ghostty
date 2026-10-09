@@ -1,0 +1,16 @@
+#!/bin/zsh
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+# [Ghostty](https://ghostty.org) - A fast, GPU-accelerated terminal emulator
+# Pop!_OS 22.04 ships GTK 4.6, too old for a native Ghostty build. The classic snap
+# brings its own GTK. setup runs this script before scripts/programs/snap, so install
+# snapd here too.
+sudo apt install -y snapd
+sudo snap install ghostty --classic
+
+# Make Ghostty the default terminal for the <Super>t shortcut
+gsettings set org.gnome.desktop.default-applications.terminal exec 'ghostty'
+gsettings set org.gnome.desktop.default-applications.terminal exec-arg '-e'

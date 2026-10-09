@@ -1,0 +1,20 @@
+# Copied from the GNOME Terminal profile: the font and the GNOME palette.
+font-family = Fira Code
+font-size = 14
+
+palette = 0=#171421
+palette = 1=#c01c28
+palette = 2=#26a269
+palette = 3=#a2734c
+palette = 4=#12488b
+palette = 5=#a347ba
+palette = 6=#2aa1b3
+palette = 7=#d0cfcc
+palette = 8=#5e5c64
+palette = 9=#f66151
+palette = 10=#33d17a
+palette = 11=#e9ad0c
+palette = 12=#2a7bde
+palette = 13=#c061cb
+palette = 14=#33c7de
+palette = 15=#ffffff
