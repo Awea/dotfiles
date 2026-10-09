@@ -177,11 +177,11 @@ Four real conflicts, and the ruling for each.
 
 # Verify
 
-## Lint before you send, not after
+## Lint prose for a file, let the gate check replies
 
-An installed gate lints the reply after the model sends it. A block then makes the model send the same reply a second time, so the reader sees the answer twice. Lint first, and the gate never fires.
+An installed gate lints each chat reply after the model sends it, at no token cost. It warns over 2.5 and blocks only over 4.0. A block makes the model send the same reply a second time. So do not lint a chat reply first: a draft file doubles the output tokens of each reply.
 
-Before a final reply of more than 60 words, and before you write prose to a file:
+Before you write prose to a file (docs, commit messages, task trackers), or when the user asks for a lint:
 
 1. Write the draft to a scratch file.
 2. Run `python3 ste-lint.py --fail-over 2.5 draft.md` (installed path: `~/.claude/skills/ste-writing/ste-lint.py`).

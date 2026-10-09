@@ -18,38 +18,17 @@ WARN="$HOME/.claude/ste-gate/${KEY}.warn.json"
 emit_card() {
   cat <<'EOF'
 <ste-writing-standing-rule>
-ASD-STE100 governs every word the reader sees in this reply, and in any prose
-you write to a file: chat text, commit messages, docs, code comments, PR text,
-error messages, task trackers, wiki pages. It never applies to code,
-identifiers, or command syntax. Default mode: STE-flavored. Use strict mode for
-runbooks, procedures, error messages, and safety text.
-
-LAYER 1 - the words
-- Active voice. Simple tenses only. No present perfect, no stacked modals.
-- One instruction per sentence. Max 20 words for an instruction, 25 otherwise.
-- No contractions. No semicolons. Keep the articles.
-- Short common words: use, start, make sure, do, give, show, before, about.
-- No phrasal verbs: spin up, dive into, kick off, roll out, reach out.
-- No marketing adjectives: seamless, robust, powerful, effortless, elegant.
-- One name for one thing. Do not rotate synonyms for the same action.
-- Use a verb for an action. Write "analyze the log", not "perform an analysis".
-- Multi-word nouns: three words maximum.
-
-LAYER 2 - the shape (a reply to a person, a task, a PR description)
-- The reader has ADHD. Lead with the action, the command, or the path.
-- Number a multi-step task. One bounded action for each step.
-- No preamble, no recap, no closer. Start with the answer, stop when it is done.
-- Cap an action list at five items. A reference table has no cap.
-- Restate the state each turn: step N of M, what is done, what is next.
-- Give an estimate in minutes, hours, or days. Never "a while".
-- Show what now works, in concrete terms. Stay matter-of-fact about an error.
-- Finish one issue. Offer the second one as a separate question.
-- Cut a hedge that carries no fact. Keep a qualifier that bounds a claim.
-
-Lint the draft BEFORE you send it. A Stop hook lints it after, and a block puts
-a second copy of the same answer on the reader's screen:
-  python3 ~/.claude/skills/ste-writing/ste-lint.py --fail-over 2.5 FILE
-Full rules, both modes, and the four layer conflicts: load the ste-writing skill.
+ASD-STE100 governs all prose the reader sees: replies, commits, docs, comments,
+PR text, trackers. Never code or command syntax. Default: STE-flavored. Strict
+for runbooks, procedures, error messages, safety text.
+Words: active voice, simple tenses, keep the articles. No contractions,
+semicolons, phrasal verbs or marketing adjectives. 20 words max for an
+instruction, 25 otherwise. Short common words. One name for one thing. A verb
+for an action. Noun stacks of three words max.
+Shape (the reader has ADHD): lead with the action. Number steps, one action
+each, five max. No preamble, recap or closer. State step N of M. Estimates in
+minutes, hours or days. One issue at a time. Cut a hedge that carries no fact.
+Full rules: load the ste-writing skill.
 </ste-writing-standing-rule>
 EOF
 }
@@ -63,7 +42,7 @@ emit_feedback() {
     (if (.top | length) > 0 then "Worst Layer 1 categories: \(.top | join(", "))." else empty end),
     (if .shape_total > 0 then "Layer 2 shape hits: \(.shape_total) (\(.shape_top | join(", ")))." else empty end),
     "Longest sentence: \(.longest_sentence_words) words.",
-    "Lint the draft of this reply before you send it.",
+    "Fix those categories in this reply.",
     "</ste-writing-feedback>"
   ' "$WARN" 2>/dev/null || true
   rm -f "$WARN"
