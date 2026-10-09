@@ -144,13 +144,18 @@ read_focus() {
 # Herdr gives the tab its number.
 # Start claude in it and print the pane ID. agent start needs a unique name, so use
 # the name "claude" while it starts, then clear it. name_agent gives the real name.
+# Clear the name also when the start fails: claude can still run in the pane, for
+# example blocked at a question, and the name "claude" then blocks each next start.
 # Return 1 on failure: callers run it where set -e does not apply.
 open_claude_tab() {
   local created pane
   created=$("$H" tab create --workspace "$1" --cwd "$2" "${3:---focus}") || return 1
   pane=$(jq -r '.result.root_pane.pane_id' <<<"$created") || return 1
-  "$H" agent start claude --kind claude --pane "$pane" --timeout 60000 \
-    ${4:+-- --effort "$4"} >/dev/null || return 1
+  if ! "$H" agent start claude --kind claude --pane "$pane" --timeout 60000 \
+    ${4:+-- --effort "$4"} >/dev/null; then
+    "$H" agent rename "$pane" --clear >/dev/null 2>&1 || true
+    return 1
+  fi
   "$H" agent rename "$pane" --clear >/dev/null || true
   printf '%s\n' "$pane"
 }

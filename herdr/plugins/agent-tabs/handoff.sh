@@ -37,6 +37,13 @@ case "${1:-}" in
   worker)
     pane="$2" workspace="$3" focus="$4" effort="${5:-}" tab_focus="${6:---no-focus}"
     doc="${TMPDIR:-/tmp}/herdr-handoff-$(date +%Y%m%d-%H%M%S)-$$.md"
+    # The title of the new session: the focus, else the source title with "handoff".
+    # Without it, claude makes a title from the first prompt, the same for each handoff.
+    title="$focus"
+    if [ -z "$title" ]; then
+      title=$("$H" agent get "$pane" 2>/dev/null | jq -r '.result.agent.terminal_title_stripped // empty') || title=""
+      case "$title" in "" | claude | "Claude Code") title="" ;; *) title="$title handoff" ;; esac
+    fi
     if ! "$H" agent prompt "$pane" "/handoff ${focus:+$focus. }Save the handoff document to $doc" \
       --wait --until idle --until "done" --timeout 900000 >/dev/null; then
       notify "The /handoff in $pane did not end in 15 minutes."
@@ -50,6 +57,8 @@ case "${1:-}" in
       notify "Claude did not start in the new tab. The handoff document is $doc."
       exit 1
     fi
+    # /rename does not make claude work, so do not wait for it.
+    [ -z "$title" ] || "$H" agent prompt "$new_pane" "/rename $title" >/dev/null || true
     if ! "$H" agent prompt "$new_pane" "Read the handoff document at $doc, then continue the work." >/dev/null; then
       notify "Claude in $new_pane did not get the prompt. The handoff document is $doc."
       exit 1

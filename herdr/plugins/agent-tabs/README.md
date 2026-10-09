@@ -117,9 +117,12 @@ focused pane. The skill is in `claude/skills/reviewr/SKILL.md`. Its `open.sh` is
 5. Press one key for the focus of the new tab, as in "Start a conversation". To keep the
    focus on your pane, press Enter.
 6. Wait. The old claude runs `/handoff` and writes `/tmp/herdr-handoff-<time>-<pid>.md`.
-7. A new tab opens. Its claude reads the document and continues the work.
-8. The agent gets the session title of claude as its name. Without a title in 60 seconds,
-   the agent gets the focus text from step 3. Without a focus, the sidebar shows `claude`.
+7. A new tab opens. The plugin gives its claude a session title with `/rename`: the focus
+   text from step 3, else the old title with `handoff`, for example `Postgres port issue handoff`.
+8. The new claude reads the document and continues the work.
+9. The agent gets the session title of claude as its name. If the old session has no
+   title and you give no focus, claude makes a title. Without a title in 60 seconds, the
+   sidebar shows `claude`.
 
 If claude asks for permission to write the file, answer the question in the old pane.
 The handoff waits up to 15 minutes. The old tab stays open, so close it when you no

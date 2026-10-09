@@ -38,7 +38,7 @@ run_in_tty() {
   run bash "$PLUGIN_DIR/new-agent-tab.sh" open
   [ "$status" -eq 1 ]
   [[ "$output" == "agent-tabs: No pane has focus."* ]]
-  ! grep -q '^notification' "$FAKE_LOG"
+  [ "$(grep -c '^notification' "$FAKE_LOG")" -eq 0 ]
 }
 
 @test "new-tab open opens the prompt popup" {
@@ -52,7 +52,7 @@ run_in_tty() {
   run bash "$PLUGIN_DIR/new-agent-tab.sh" open
   [ "$status" -eq 1 ]
   grep -q '^notification | show | Agent tabs | --body | ' "$FAKE_LOG"
-  ! grep -q '^plugin | pane | open' "$FAKE_LOG"
+  [ "$(grep -c '^plugin | pane | open' "$FAKE_LOG")" -eq 0 ]
 }
 
 @test "new-tab worker opens a background tab and sends the prompt" {
@@ -71,7 +71,14 @@ run_in_tty() {
   [ "$status" -eq 0 ]
   grep -qx "tab | create | --workspace | w1 | --cwd | $HOME | --no-focus" "$FAKE_LOG"
   grep -qx 'agent | start | claude | --kind | claude | --pane | w1:p9 | --timeout | 60000' "$FAKE_LOG"
-  ! grep -q '^agent | prompt' "$FAKE_LOG"
+  [ "$(grep -c '^agent | prompt' "$FAKE_LOG")" -eq 0 ]
+}
+
+@test "new-tab worker clears the temporary agent name when claude does not start" {
+  export FAKE_START_FAIL=1
+  run bash "$PLUGIN_DIR/new-agent-tab.sh" worker w1:p1 w1 'hello'
+  [ "$status" -eq 1 ]
+  grep -qx 'agent | rename | w1:p9 | --clear' "$FAKE_LOG"
 }
 
 @test "new-tab worker shows a notification when claude does not start" {
@@ -79,7 +86,7 @@ run_in_tty() {
   run bash "$PLUGIN_DIR/new-agent-tab.sh" worker w1:p1 w1 'hello'
   [ "$status" -eq 1 ]
   grep -q '^notification | show | Agent tabs | --body | ' "$FAKE_LOG"
-  ! grep -q '^agent | prompt' "$FAKE_LOG"
+  [ "$(grep -c '^agent | prompt' "$FAKE_LOG")" -eq 0 ]
 }
 
 @test "new-tab worker shows a notification when the prompt fails" {
@@ -93,21 +100,21 @@ run_in_tty() {
   run bash "$PLUGIN_DIR/handoff.sh" open
   [ "$status" -eq 1 ]
   grep -q '^notification | show | Agent tabs' "$FAKE_LOG"
-  ! grep -q '^plugin | pane | open' "$FAKE_LOG"
+  [ "$(grep -c '^plugin | pane | open' "$FAKE_LOG")" -eq 0 ]
 }
 
 @test "handoff open shows a notification for an agent that is not claude" {
   export FAKE_AGENT_KIND="codex"
   run bash "$PLUGIN_DIR/handoff.sh" open
   [ "$status" -eq 1 ]
-  ! grep -q '^plugin | pane | open' "$FAKE_LOG"
+  [ "$(grep -c '^plugin | pane | open' "$FAKE_LOG")" -eq 0 ]
 }
 
 @test "handoff open shows a notification when claude is working" {
   export FAKE_AGENT_KIND="claude" FAKE_AGENT_STATUS="working"
   run bash "$PLUGIN_DIR/handoff.sh" open
   [ "$status" -eq 1 ]
-  ! grep -q '^plugin | pane | open' "$FAKE_LOG"
+  [ "$(grep -c '^plugin | pane | open' "$FAKE_LOG")" -eq 0 ]
 }
 
 @test "handoff open opens the popup for an idle claude" {
@@ -140,7 +147,7 @@ run_in_tty() {
   run bash "$PLUGIN_DIR/handoff.sh" worker w1:p1 w1 ''
   [ "$status" -eq 1 ]
   grep -q '^notification | show | Agent tabs' "$FAKE_LOG"
-  ! grep -q '^tab | create' "$FAKE_LOG"
+  [ "$(grep -c '^tab | create' "$FAKE_LOG")" -eq 0 ]
 }
 
 @test "handoff worker stops when the /handoff wait fails" {
@@ -148,7 +155,7 @@ run_in_tty() {
   run bash "$PLUGIN_DIR/handoff.sh" worker w1:p1 w1 ''
   [ "$status" -eq 1 ]
   grep -q '^notification | show | Agent tabs' "$FAKE_LOG"
-  ! grep -q '^tab | create' "$FAKE_LOG"
+  [ "$(grep -c '^tab | create' "$FAKE_LOG")" -eq 0 ]
 }
 
 @test "handoff worker shows the document path when claude does not start" {
@@ -156,7 +163,7 @@ run_in_tty() {
   run bash "$PLUGIN_DIR/handoff.sh" worker w1:p1 w1 ''
   [ "$status" -eq 1 ]
   grep -qE '^notification \| show \| Agent tabs \| --body \| .*/herdr-handoff-[0-9-]+\.md' "$FAKE_LOG"
-  ! grep -q '^agent | prompt | w1:p9' "$FAKE_LOG"
+  [ "$(grep -c '^agent | prompt | w1:p9' "$FAKE_LOG")" -eq 0 ]
 }
 
 @test "handoff worker shows the document path when the last prompt fails" {
@@ -298,7 +305,7 @@ run_in_tty() {
   export FAKE_TITLE="Some title"
   run bash "$PLUGIN_DIR/new-agent-tab.sh" worker w1:p1 w1 ''
   [ "$status" -eq 0 ]
-  ! grep -v -- '--clear' "$FAKE_LOG" | grep -q '^agent | rename'
+  [ "$(grep -v -- '--clear' "$FAKE_LOG" | grep -c '^agent | rename')" -eq 0 ]
 }
 
 @test "handoff worker names the tab with the claude session title" {
@@ -308,11 +315,38 @@ run_in_tty() {
   grep -qx 'agent | rename | w1:p9 | login-test-fix' "$FAKE_LOG"
 }
 
+@test "handoff worker renames the new session with the focus before the first prompt" {
+  export FAKE_WRITE_DOC=1 FAKE_TITLE="Postgres port issue"
+  run bash "$PLUGIN_DIR/handoff.sh" worker w1:p1 w1 'fix the migrations'
+  [ "$status" -eq 0 ]
+  local rename read
+  rename=$(grep -nx 'agent | prompt | w1:p9 | /rename fix the migrations' "$FAKE_LOG" | cut -d: -f1)
+  read=$(grep -n '^agent | prompt | w1:p9 | Read the handoff document' "$FAKE_LOG" | cut -d: -f1)
+  [ -n "$rename" ] && [ -n "$read" ] && [ "$rename" -lt "$read" ]
+}
+
+@test "handoff worker without focus renames the new session with the source title and handoff" {
+  export FAKE_WRITE_DOC=1 FAKE_TITLE="Postgres port issue"
+  run bash "$PLUGIN_DIR/handoff.sh" worker w1:p1 w1 ''
+  [ "$status" -eq 0 ]
+  grep -qx 'agent | prompt | w1:p9 | /rename Postgres port issue handoff' "$FAKE_LOG"
+}
+
+@test "handoff worker sends no /rename without focus and source title" {
+  export FAKE_WRITE_DOC=1
+  for title in claude "Claude Code"; do
+    : >"$FAKE_LOG"
+    FAKE_TITLE="$title" run bash "$PLUGIN_DIR/handoff.sh" worker w1:p1 w1 ''
+    [ "$status" -eq 0 ]
+    [ "$(grep -c '^agent | prompt | w1:p9 | /rename' "$FAKE_LOG")" -eq 0 ]
+  done
+}
+
 @test "handoff worker keeps the tab number without title and focus" {
   export FAKE_WRITE_DOC=1
   run bash "$PLUGIN_DIR/handoff.sh" worker w1:p1 w1 ''
   [ "$status" -eq 0 ]
-  ! grep -v -- '--clear' "$FAKE_LOG" | grep -q '^agent | rename'
+  [ "$(grep -v -- '--clear' "$FAKE_LOG" | grep -c '^agent | rename')" -eq 0 ]
 }
 
 @test "new-tab worker gives the focus to the new tab with --focus" {
@@ -394,7 +428,7 @@ run_in_tty() {
     : >"$FAKE_LOG"
     FAKE_NAME="$name" run bash "$PLUGIN_DIR/sync-name.sh" loop w1:p5
     [ "$status" -eq 0 ]
-    ! grep -q '^agent | rename' "$FAKE_LOG"
+    [ "$(grep -c '^agent | rename' "$FAKE_LOG")" -eq 0 ]
   done
 }
 
@@ -404,7 +438,7 @@ run_in_tty() {
     : >"$FAKE_LOG"
     FAKE_TITLE="$title" run bash "$PLUGIN_DIR/sync-name.sh" loop w1:p5
     [ "$status" -eq 0 ]
-    ! grep -q '^agent | rename' "$FAKE_LOG"
+    [ "$(grep -c '^agent | rename' "$FAKE_LOG")" -eq 0 ]
   done
 }
 
@@ -430,7 +464,7 @@ run_in_tty() {
   [ "$(grep -c '^agent | get' "$FAKE_LOG")" -eq 1 ]
   FAKE_AGENT_KIND=codex FAKE_TITLE="Some title" run bash "$PLUGIN_DIR/sync-name.sh" loop w1:p5
   [ "$status" -eq 0 ]
-  ! grep -q '^agent | rename' "$FAKE_LOG"
+  [ "$(grep -c '^agent | rename' "$FAKE_LOG")" -eq 0 ]
 }
 
 @test "sync-name start does nothing outside Herdr" {
@@ -566,7 +600,7 @@ write_transcript() {
   run bash "$PLUGIN_DIR/reviewr.sh" "$BATS_TEST_TMPDIR/plain"
   [ "$status" -eq 1 ]
   [[ "$output" == *"not in a git repo"* ]]
-  ! grep -q '^plugin | pane | open' "$FAKE_LOG"
+  [ "$(grep -c '^plugin | pane | open' "$FAKE_LOG")" -eq 0 ]
 }
 
 @test "reviewr keeps the reviewr of the same worktree in the same tab" {
@@ -577,7 +611,7 @@ write_transcript() {
   run bash "$PLUGIN_DIR/reviewr.sh" "$root"
   [ "$status" -eq 0 ]
   [[ "$output" == *"w1:p4"* ]]
-  ! grep -q '^plugin | pane | open' "$FAKE_LOG"
+  [ "$(grep -c '^plugin | pane | open' "$FAKE_LOG")" -eq 0 ]
 }
 
 @test "reviewr opens when the other reviewr is in another tab or for another worktree" {
@@ -642,7 +676,7 @@ write_transcript() {
   run bash "$PLUGIN_DIR/new-shell-tab.sh"
   [ "$status" -eq 0 ]
   grep -qx "tab | create | --workspace | w1 | --cwd | $root | --focus" "$FAKE_LOG"
-  ! grep -q '^agent' "$FAKE_LOG"
+  [ "$(grep -c '^agent' "$FAKE_LOG")" -eq 0 ]
 }
 
 @test "new-shell-tab keeps the pane folder in the main worktree" {
@@ -668,7 +702,7 @@ write_transcript() {
   run bash "$PLUGIN_DIR/new-shell-tab.sh"
   [ "$status" -eq 0 ]
   grep -qx 'tab | create | --workspace | w1 | --focus' "$FAKE_LOG"
-  ! grep -q '^pane | get' "$FAKE_LOG"
+  [ "$(grep -c '^pane | get' "$FAKE_LOG")" -eq 0 ]
 }
 
 @test "new-shell-tab shows a notification without a workspace" {
@@ -676,7 +710,7 @@ write_transcript() {
   run bash "$PLUGIN_DIR/new-shell-tab.sh"
   [ "$status" -eq 1 ]
   grep -q '^notification | show | Agent tabs | --body | ' "$FAKE_LOG"
-  ! grep -q '^tab | create' "$FAKE_LOG"
+  [ "$(grep -c '^tab | create' "$FAKE_LOG")" -eq 0 ]
 }
 
 @test "new-shell-tab shows a notification when the tab does not open" {
