@@ -1,9 +1,11 @@
 # agent-tabs
 
-A local Herdr plugin that opens claude in a new tab. It starts a conversation with your
-prompt, or it continues the focused conversation with a `/handoff` document. It also gives
-each claude in Herdr its session title as agent name, and changes the name after `/rename`.
-The `/reviewr` command of claude opens reviewr next to claude.
+A local Herdr plugin that opens claude, or a shell in the main git worktree, in a new tab.
+Claude starts a conversation with your prompt, or it continues the focused conversation
+with a `/handoff` document.
+
+The plugin also gives each claude in Herdr its session title as agent name, and changes
+the name after `/rename`. The `/reviewr` command of claude opens reviewr next to claude.
 
 ## Shortcuts
 
@@ -11,8 +13,9 @@ The prefix is the Herdr default, `ctrl+b`.
 
 | Keys | Action | Result |
 |---|---|---|
-| `ctrl+b` `a` | `awea.agent-tabs.new-tab` | Asks for a prompt, an effort level and the tab focus, then starts claude with them in a new tab, in the folder of the focused pane. The tab opens in the background by default. The sidebar shows the session title of claude as the agent name. An empty prompt opens a clean claude tab. |
+| `ctrl+b` `a` | `awea.agent-tabs.new-tab` | Asks for a prompt, an effort level and the tab focus, then starts claude with them in a new tab. In a linked git worktree, claude starts in the root of the main worktree of the repo. Else, claude starts in the folder of the focused pane. The tab opens in the background by default. The sidebar shows the session title of claude as the agent name. An empty prompt opens a clean claude tab. |
 | `ctrl+b` `shift+a` | `awea.agent-tabs.handoff` | Moves the focused claude conversation to a new tab with `/handoff`. |
+| `ctrl+b` `c` | `awea.agent-tabs.new-shell-tab` | Opens a shell tab without claude and gives it the focus. The tab starts in the same folder as the `ctrl+b` `a` tab. |
 
 The key bindings are in `herdr/config.toml`.
 
@@ -29,6 +32,12 @@ The key bindings are in `herdr/config.toml`.
 The new tab opens, and claude starts with your prompt and effort. To cancel in the
 popup, press Esc or `ctrl+c`.
 
+If the pane is in a linked git worktree, claude starts in the root of the main worktree
+of the same repo. A pane in a subfolder of the linked worktree also gives the main root.
+In all other cases, claude starts in the folder of the focused pane. This includes a
+pane in the main worktree, a pane outside a git repo and a bare repo. The handoff does
+not do this. Its new tab stays in the folder of the old claude.
+
 The prompt line uses readline, so the shell keys edit the text. For example, `ctrl+w`
 and `alt+backspace` delete a word, `ctrl+u` deletes the line, and the arrow keys move
 the cursor. The focus line of the handoff popup uses the same keys.
@@ -40,6 +49,19 @@ a number to a name that is taken, for example `postgres-port-issue-2`.
 
 To start a clean conversation, press Enter on an empty line in step 3. Claude in the new
 tab is ready for your prompt. To type the prompt at once, press `y` in step 5.
+
+## Open a shell tab
+
+1. Focus a pane in the workspace and folder that you want.
+2. Press `ctrl+b` `c`.
+
+A new tab opens with a shell and gets the focus. No popup opens and claude does not start.
+
+The folder of the tab follows the same rule as `ctrl+b` `a`. In a linked git worktree,
+the tab starts in the root of the main worktree. Else, it starts in the folder of the
+focused pane. If no pane has focus, Herdr gives the tab its default folder.
+
+This key replaces the Herdr default new tab key.
 
 ## Agent names follow the session title
 
@@ -141,9 +163,10 @@ The plugin needs `bash`, `jq` in `/usr/bin` or `/bin`, `setsid` and `flock` (Lin
 
 | File | Use |
 |---|---|
-| `herdr-plugin.toml` | Manifest: the actions `new-tab` and `handoff`, and the popup panes `new-tab-prompt` and `handoff-prompt`. |
-| `lib.sh` | Shared helpers: `notify` (log, and a toast in debug), `read_effort`, `read_focus`, `pane_cwd`, `open_claude_tab`, `name_agent`, `rename_agent`, `sync_agent_name`. |
+| `herdr-plugin.toml` | Manifest: the actions `new-tab`, `handoff` and `new-shell-tab`, and the popup panes `new-tab-prompt` and `handoff-prompt`. |
+| `lib.sh` | Shared helpers: `notify` (log, and a toast in debug), `read_effort`, `read_focus`, `pane_cwd`, `main_worktree`, `open_claude_tab`, `name_agent`, `rename_agent`, `sync_agent_name`. |
 | `new-agent-tab.sh` | The `new-tab` action in three modes: `open` (opens the popup), `prompt` (popup), `worker` (background). |
+| `new-shell-tab.sh` | The `new-shell-tab` action: opens a shell tab with the focus, in one step, without a popup. |
 | `handoff.sh` | The `handoff` action in three modes: `open` (checks the agent), `prompt` (popup), `worker` (background). |
 | `sync-name.sh` | The SessionStart hook in two modes: `start` (hook) and `loop` (background). `make links` links it as `~/.claude/hooks/herdr-agent-name.sh`. |
 | `reviewr.sh` | The `/reviewr` command: opens reviewr right of the claude pane, for the worktree of claude. |

@@ -22,6 +22,23 @@ pane_cwd() {
   printf '%s\n' "${cwd:-$HOME}"
 }
 
+# Print the folder for a new tab from folder $1. In a linked git worktree, print the
+# root of the main worktree. git lists the main worktree first. Else print $1: in the
+# main worktree, outside a git repo, in a bare repo (it has no main worktree) and when
+# git fails.
+main_worktree() {
+  local top main
+  if top=$(git -C "$1" rev-parse --show-toplevel 2>/dev/null) &&
+    main=$(git -C "$1" worktree list --porcelain 2>/dev/null |
+      awk 'NF == 0 { n++ } n == 0 && /^worktree / { path = substr($0, 10) }
+        n == 0 && $0 == "bare" { bare = 1 } END { if (!bare) print path }') &&
+    [ -n "$main" ] && [ "$(realpath "$top")" != "$(realpath "$main")" ]; then
+    printf '%s\n' "$main"
+  else
+    printf '%s\n' "$1"
+  fi
+}
+
 # Print the key reminder of the popups. In a terminal, print it dim on the last row
 # and put the cursor back where it was.
 keys_hint() {

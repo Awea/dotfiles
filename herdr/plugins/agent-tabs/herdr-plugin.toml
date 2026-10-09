@@ -17,6 +17,12 @@ title = "agent-tabs: handoff to new tab"
 contexts = ["pane"]
 command = ["bash", "handoff.sh", "open"]
 
+[[actions]]
+id = "new-shell-tab"
+title = "agent-tabs: new tab in the main worktree"
+contexts = ["pane", "workspace"]
+command = ["bash", "new-shell-tab.sh"]
+
 [[panes]]
 id = "new-tab-prompt"
 title = "New claude"

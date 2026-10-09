@@ -13,6 +13,10 @@ delivery = "herdr"
 name = "catppuccin"
 auto_switch = false
 
+# Free prefix+shift+n for awea.workspaces.new. The built-in binding wins over keys.command.
+[keys]
+new_workspace = []
+
 [[keys.command]]
 key = "prefix+a"
 type = "plugin_action"
@@ -24,6 +28,12 @@ key = "prefix+shift+a"
 type = "plugin_action"
 command = "awea.agent-tabs.handoff"
 description = "handoff to new claude tab"
+
+[[keys.command]]
+key = "prefix+c"
+type = "plugin_action"
+command = "awea.agent-tabs.new-shell-tab"
+description = "new tab in the main worktree"
 
 [[keys.command]]
 key = "prefix+shift+n"

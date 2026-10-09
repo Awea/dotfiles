@@ -489,7 +489,7 @@ panes_json() {
 
 # Make a commit in the repo and add the worktree repo-wt next to it. Print its root.
 make_worktree() {
-  git -C "$BATS_TEST_TMPDIR/repo" -c user.name=t -c user.email=t@t commit -q --allow-empty -m init
+  git -C "$BATS_TEST_TMPDIR/repo" -c user.name=t -c user.email=t@t -c commit.gpgsign=false commit -q --allow-empty -m init
   git -C "$BATS_TEST_TMPDIR/repo" worktree add -q "$BATS_TEST_TMPDIR/repo-wt"
   mkdir -p "$BATS_TEST_TMPDIR/repo-wt/src"
   git -C "$BATS_TEST_TMPDIR/repo-wt" rev-parse --show-toplevel
@@ -606,4 +606,82 @@ write_transcript() {
   run bash "$PLUGIN_DIR/reviewr.sh" "$root"
   [ "$status" -eq 1 ]
   [[ "$output" == *"plugin_not_found"* ]]
+}
+
+@test "new-tab worker starts claude in the main worktree root from a linked worktree" {
+  root=$(make_repo)
+  worktree=$(make_worktree)
+  export FAKE_CWD="$worktree/src"
+  run bash "$PLUGIN_DIR/new-agent-tab.sh" worker w1:p1 w1 ''
+  [ "$status" -eq 0 ]
+  grep -qx "tab | create | --workspace | w1 | --cwd | $root | --no-focus" "$FAKE_LOG"
+}
+
+@test "new-tab worker keeps the pane folder in the main worktree" {
+  root=$(make_repo)
+  make_worktree >/dev/null
+  export FAKE_CWD="$root/src"
+  run bash "$PLUGIN_DIR/new-agent-tab.sh" worker w1:p1 w1 ''
+  [ "$status" -eq 0 ]
+  grep -qx "tab | create | --workspace | w1 | --cwd | $root/src | --no-focus" "$FAKE_LOG"
+}
+
+@test "new-tab worker keeps the pane folder outside a git repo" {
+  export GIT_CEILING_DIRECTORIES="$BATS_TEST_TMPDIR"
+  mkdir -p "$BATS_TEST_TMPDIR/plain"
+  export FAKE_CWD="$BATS_TEST_TMPDIR/plain"
+  run bash "$PLUGIN_DIR/new-agent-tab.sh" worker w1:p1 w1 ''
+  [ "$status" -eq 0 ]
+  grep -qx "tab | create | --workspace | w1 | --cwd | $BATS_TEST_TMPDIR/plain | --no-focus" "$FAKE_LOG"
+}
+
+@test "new-shell-tab opens a focused tab in the main worktree root from a linked worktree" {
+  root=$(make_repo)
+  worktree=$(make_worktree)
+  export FAKE_CWD="$worktree/src"
+  run bash "$PLUGIN_DIR/new-shell-tab.sh"
+  [ "$status" -eq 0 ]
+  grep -qx "tab | create | --workspace | w1 | --cwd | $root | --focus" "$FAKE_LOG"
+  ! grep -q '^agent' "$FAKE_LOG"
+}
+
+@test "new-shell-tab keeps the pane folder in the main worktree" {
+  root=$(make_repo)
+  make_worktree >/dev/null
+  export FAKE_CWD="$root/src"
+  run bash "$PLUGIN_DIR/new-shell-tab.sh"
+  [ "$status" -eq 0 ]
+  grep -qx "tab | create | --workspace | w1 | --cwd | $root/src | --focus" "$FAKE_LOG"
+}
+
+@test "new-shell-tab keeps the pane folder outside a git repo" {
+  export GIT_CEILING_DIRECTORIES="$BATS_TEST_TMPDIR"
+  mkdir -p "$BATS_TEST_TMPDIR/plain"
+  export FAKE_CWD="$BATS_TEST_TMPDIR/plain"
+  run bash "$PLUGIN_DIR/new-shell-tab.sh"
+  [ "$status" -eq 0 ]
+  grep -qx "tab | create | --workspace | w1 | --cwd | $BATS_TEST_TMPDIR/plain | --focus" "$FAKE_LOG"
+}
+
+@test "new-shell-tab without a focused pane opens a tab in the workspace" {
+  unset HERDR_PANE_ID
+  run bash "$PLUGIN_DIR/new-shell-tab.sh"
+  [ "$status" -eq 0 ]
+  grep -qx 'tab | create | --workspace | w1 | --focus' "$FAKE_LOG"
+  ! grep -q '^pane | get' "$FAKE_LOG"
+}
+
+@test "new-shell-tab shows a notification without a workspace" {
+  unset HERDR_WORKSPACE_ID HERDR_PANE_ID
+  run bash "$PLUGIN_DIR/new-shell-tab.sh"
+  [ "$status" -eq 1 ]
+  grep -q '^notification | show | Agent tabs | --body | ' "$FAKE_LOG"
+  ! grep -q '^tab | create' "$FAKE_LOG"
+}
+
+@test "new-shell-tab shows a notification when the tab does not open" {
+  export FAKE_TAB_CREATE_FAIL=1
+  run bash "$PLUGIN_DIR/new-shell-tab.sh"
+  [ "$status" -eq 1 ]
+  grep -q '^notification | show | Agent tabs | --body | ' "$FAKE_LOG"
 }

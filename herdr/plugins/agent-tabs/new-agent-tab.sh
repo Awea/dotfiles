@@ -6,6 +6,8 @@
 #   new-agent-tab.sh worker PANE WS PROMPT [EFFORT] [--focus|--no-focus]
 #                                           worker: open the tab, send the prompt
 #
+# Claude starts in the folder of the pane. In a linked git worktree, claude starts in
+# the root of the main worktree of the repo.
 # The tab opens in the background (--no-focus, the default) or gets the focus.
 # With a prompt, the agent then gets the session title of claude, or the start of the
 # prompt. Without a prompt, a clean claude tab opens.
@@ -34,7 +36,8 @@ case "${1:-}" in
     ;;
   worker)
     pane="$2" workspace="$3" prompt="$4" effort="${5:-}" focus="${6:---no-focus}"
-    if ! new_pane=$(open_claude_tab "$workspace" "$(pane_cwd "$pane")" "$focus" "$effort"); then
+    cwd=$(main_worktree "$(pane_cwd "$pane")")
+    if ! new_pane=$(open_claude_tab "$workspace" "$cwd" "$focus" "$effort"); then
       notify "Claude did not start in the new tab."
       exit 1
     fi

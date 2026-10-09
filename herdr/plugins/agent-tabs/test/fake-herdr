@@ -34,6 +34,10 @@ case "$1 $2" in
     printf '{"result":{"plugin_pane":{"pane":{"pane_id":"w1:p8","tab_id":"w1:t1"}}}}\n'
     ;;
   "tab create")
+    if [ -n "${FAKE_TAB_CREATE_FAIL:-}" ]; then
+      printf '{"error":{"code":"workspace_not_found"}}\n' >&2
+      exit 1
+    fi
     printf '{"result":{"root_pane":{"pane_id":"w1:p9"},"tab":{"tab_id":"w1:t9"}}}\n'
     ;;
   "agent get")
