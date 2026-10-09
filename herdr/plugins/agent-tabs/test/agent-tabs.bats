@@ -382,10 +382,10 @@ run_in_tty() {
 }
 
 @test "sync-name loop follows a new title after /rename" {
-  export FAKE_NAME="postgres-port-issue" FAKE_TITLE="db-migration-fix" FAKE_AGENT_GETS=1 AGENT_TABS_SYNC_INTERVAL=0
+  export FAKE_START_NAME=claude FAKE_NAME="postgres-port-issue" FAKE_TITLE="db-migration-fix" FAKE_AGENT_GETS=2 AGENT_TABS_SYNC_INTERVAL=0
   run bash "$PLUGIN_DIR/sync-name.sh" loop w1:p5
   [ "$status" -eq 0 ]
-  grep -qx 'agent | rename | w1:p5 | db-migration-fix' "$FAKE_LOG"
+  [ "$(grep -cx 'agent | rename | w1:p5 | db-migration-fix' "$FAKE_LOG")" -eq 2 ]
 }
 
 @test "sync-name loop keeps a name that matches the title" {
@@ -399,13 +399,21 @@ run_in_tty() {
 }
 
 @test "sync-name loop keeps the name while the title is a placeholder" {
-  export FAKE_NAME="fix-the-login" FAKE_AGENT_GETS=2 AGENT_TABS_SYNC_INTERVAL=0
+  export FAKE_START_NAME=claude FAKE_NAME="fix-the-login" FAKE_AGENT_GETS=2 AGENT_TABS_SYNC_INTERVAL=0
   for title in claude "Claude Code"; do
     : >"$FAKE_LOG"
     FAKE_TITLE="$title" run bash "$PLUGIN_DIR/sync-name.sh" loop w1:p5
     [ "$status" -eq 0 ]
     ! grep -q '^agent | rename' "$FAKE_LOG"
   done
+}
+
+@test "sync-name loop keeps the name from herdr agent start and stops" {
+  export FAKE_NAME="repo-scout" FAKE_TITLE="Ansible role for weekly" FAKE_AGENT_GETS=2 AGENT_TABS_SYNC_INTERVAL=0
+  run bash "$PLUGIN_DIR/sync-name.sh" loop w1:p5
+  [ "$status" -eq 0 ]
+  [ "$(grep -c '^agent | rename' "$FAKE_LOG")" -eq 0 ]
+  [ "$(grep -c '^agent | get | w1:p5$' "$FAKE_LOG")" -eq 1 ]
 }
 
 @test "sync-name loop adds a number when the agent name is taken" {

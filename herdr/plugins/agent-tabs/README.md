@@ -55,6 +55,10 @@ To rename an agent, type `/rename <name>` in claude. The sidebar shows the new n
 2 seconds. The loop keeps the name while the title is `claude` or `Claude Code`, so the
 name from the prompt or the handoff focus stays until claude gives a title.
 
+A name that you give with `herdr agent start <name>` stays. When the loop first finds
+claude and claude already has a name other than `claude`, the loop stops. So
+`herdr agent wait <name>` works for the full session.
+
 ## Open reviewr next to claude
 
 In claude, type `/reviewr`. A [reviewr](https://github.com/persiyanov/herdr-reviewr) pane

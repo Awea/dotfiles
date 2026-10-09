@@ -187,6 +187,9 @@ rename_agent() {
 # /rename. Read the title every AGENT_TABS_SYNC_INTERVAL seconds (2 by default).
 # Wait AGENT_TABS_START_TIMEOUT seconds (60 by default) for Herdr to find claude in the
 # pane. Stop when claude exits. Keep the name while the title is a placeholder.
+# A name that claude has when the loop first finds it comes from the caller, for
+# example from `herdr agent start <name>`: keep it and stop. Herdr clears the name
+# when claude exits, so a new claude in the pane gets the sync again.
 sync_agent_name() {
   local kind name title label seen="" deadline=$((SECONDS + ${AGENT_TABS_START_TIMEOUT:-60}))
   while true; do
@@ -194,6 +197,9 @@ sync_agent_name() {
     IFS=$'\x1f' read -r kind name title < <("$H" agent get "$1" 2>/dev/null |
       jq -r '.result.agent | [.agent, .name // "", .terminal_title_stripped // ""] | join("\u001f")') || true
     if [ "$kind" = claude ]; then
+      if [ -z "$seen" ] && [ -n "$name" ] && [ "$name" != claude ]; then
+        return 0
+      fi
       seen=1
       case "$title" in
         "" | claude | "Claude Code") ;;
