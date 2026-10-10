@@ -7,6 +7,7 @@
 // custom settings, run `zed: open default settings` from the
 // command palette (cmd-shift-p / ctrl-shift-p)
 {
+  "diff_view_style": "unified",
   "cli_default_open_behavior": "new_window",
   "outline_panel": {
     "dock": "right",
@@ -15,6 +16,7 @@
     "dock": "left",
   },
   "git_panel": {
+    "tree_view": true,
     "dock": "left",
   },
   "agent_servers": {
@@ -114,6 +116,14 @@
     },
   },
   "languages": {
+    "Beancount": {
+      "auto_indent": "none",
+      "completions": {
+        "lsp": false
+      },
+      "format_on_save": "modifications",
+      "auto_indent_on_paste": false
+    },
     "TypeScript": {
       "show_edit_predictions": true,
       "code_actions_on_format": {
@@ -121,10 +131,10 @@
       },
     },
     "Elixir": {
-      "format_on_save": "on",
+      "format_on_save": "off",
       "show_edit_predictions": true,
       "language_servers": [
-        "elixir-ls",
+        "!elixir-ls",
         "!expert",
         "!next-ls",
         "!lexical",
