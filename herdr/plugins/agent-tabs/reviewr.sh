@@ -32,13 +32,9 @@ if [ -z "$dir" ]; then
       -name "$session.jsonl" -print -quit 2>/dev/null) || transcript=""
   fi
   if [ -n "$transcript" ]; then
-    # The folders of the edited files, the last edit first, each folder one time.
-    mapfile -t folders < <(grep '"tool_use"' "$transcript" | jq -r '
-      select(.type == "assistant") | .message.content[]?
-      | select(.type == "tool_use" and (.name | IN("Edit", "Write", "MultiEdit", "NotebookEdit")))
-      | .input.file_path // .input.notebook_path // empty
-    ' 2>/dev/null | sed 's|/[^/]*$||' | tac | awk '!seen[$0]++')
-    for folder in "${folders[@]}"; do
+    # The folders of the edited files, the last edit first, each folder one time. awk
+    # puts the lines in reverse order: macOS has no tac.
+    while IFS= read -r folder; do
       [[ "$folder" == /* ]] || continue
       # The folder of a deleted file can be gone. Use the nearest folder that exists.
       while [ -n "$folder" ] && [ ! -d "$folder" ]; do folder="${folder%/*}"; done
@@ -48,7 +44,12 @@ if [ -z "$dir" ]; then
         dir="$folder"
         break
       fi
-    done
+    done < <(grep '"tool_use"' "$transcript" | jq -r '
+      select(.type == "assistant") | .message.content[]?
+      | select(.type == "tool_use" and (.name | IN("Edit", "Write", "MultiEdit", "NotebookEdit")))
+      | .input.file_path // .input.notebook_path // empty
+    ' 2>/dev/null | sed 's|/[^/]*$||' |
+      awk '{ line[NR] = $0 } END { for (i = NR; i > 0; i--) if (!seen[line[i]]++) print line[i] }')
   fi
 fi
 dir="${dir:-$PWD}"

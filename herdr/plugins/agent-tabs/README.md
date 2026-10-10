@@ -179,14 +179,18 @@ herdr server reload-config
 { "type": "command", "command": "bash $HOME/.claude/hooks/herdr-agent-name.sh start", "timeout": 10 }
 ```
 
-The plugin needs `bash`, `jq` in `/usr/bin` or `/bin`, `setsid` and `flock` (Linux only).
+The plugin needs `bash` 4 or later and `jq`, in `/opt/homebrew/bin`, `/usr/local/bin`,
+`/usr/bin` or `/bin`. On macOS, `/bin/bash` is bash 3.2: install bash with Homebrew. The
+scripts then run again with that bash. The scripts use `setsid` and `flock` when they
+exist (Linux). Without them (macOS), `nohup` starts the background workers and a lock
+folder keeps one name loop for each pane.
 
 ## Files
 
 | File | Use |
 |---|---|
 | `herdr-plugin.toml` | Manifest: the actions `new-tab`, `handoff`, `new-shell-tab` and `focus-link`, the link handler `herdr-link`, and the popup panes `new-tab-prompt` and `handoff-prompt`. |
-| `lib.sh` | Shared helpers: `notify` (log, and a toast in debug), `read_effort`, `read_focus`, `pane_cwd`, `main_worktree`, `open_claude_tab`, `name_agent`, `rename_agent`, `sync_agent_name`. |
+| `lib.sh` | Shared helpers: `notify` (log, and a toast in debug), `detach`, `read_effort`, `read_focus`, `pane_cwd`, `main_worktree`, `open_claude_tab`, `name_agent`, `rename_agent`, `sync_agent_name`. |
 | `new-agent-tab.sh` | The `new-tab` action in three modes: `open` (opens the popup), `prompt` (popup), `worker` (background). |
 | `new-shell-tab.sh` | The `new-shell-tab` action: opens a shell tab with the focus, in one step, without a popup. |
 | `handoff.sh` | The `handoff` action in three modes: `open` (checks the agent), `prompt` (popup), `worker` (background). |

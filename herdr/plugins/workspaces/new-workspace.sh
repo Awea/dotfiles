@@ -10,8 +10,9 @@
 # ~/.workspace. Without ~/.workspace, $HOME is the first folder. Without fzf, the
 # action creates the workspace in the first folder.
 set -euo pipefail
-# Herdr runs plugin commands with a small PATH. Add the system paths for fzf.
-export PATH="${PATH:-}:/usr/bin:/bin"
+# Herdr runs plugin commands with a small PATH. Add the system paths for fzf. On macOS,
+# Homebrew puts fzf in /opt/homebrew/bin (Apple silicon) or /usr/local/bin.
+export PATH="${PATH:-}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
 
 H="${HERDR_BIN_PATH:-herdr}"
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -37,7 +38,10 @@ case "${1:-}" in
         ' "${_Z_DATA:-$HOME/.z}" | sort -t'|' -k1,1nr | cut -d'|' -f2-
       fi
     } | awk '!seen[$0]++' | while IFS= read -r dir; do
-      if [ -d "$dir" ]; then printf '%s\n' "${dir/#$HOME/\~}"; fi
+      [ -d "$dir" ] || continue
+      # Not ${dir/#$HOME/\~}: bash 3.2 (/bin/bash on macOS) keeps the backslash.
+      case "$dir" in "$HOME" | "$HOME"/*) dir="~${dir#"$HOME"}" ;; esac
+      printf '%s\n' "$dir"
     done
     ;;
   pick)
