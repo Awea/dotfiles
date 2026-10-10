@@ -4,6 +4,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+[[ "$(uname)" == Linux ]] || { echo "Skip: Linux only"; exit 0; }
+
 speedofsound_vsn=0.14.0
 trigger_dest="$HOME/.local/bin/speedofsound-trigger.sh"
 

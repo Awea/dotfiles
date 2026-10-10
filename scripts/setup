@@ -1,5 +1,14 @@
 #!/bin/bash
 
+# macOS: Homebrew installs the packages from the Brewfile, then the programs/
+# install scripts run. The Linux only scripts skip themselves.
+if [[ "$(uname)" == Darwin ]]; then
+  brew bundle --file=Brewfile
+  for f in scripts/programs/*; do ./$f; done
+  mkdir -p ~/.workspace
+  exit 0
+fi
+
 # Update Pop!_OS
 sudo apt update && sudo apt full-upgrade -y
 
