@@ -1,7 +1,7 @@
-{ pkgs, inputs, ... }:
+{ config, lib, pkgs, inputs, ... }:
 
 let
-  hunk = inputs.hunk.packages.${pkgs.system}.default;
+  hunk = inputs.hunk.packages.${pkgs.stdenv.hostPlatform.system}.default;
 
   # Hunk's broker binds a single fixed loopback port (47657). A plain `daemon
   # serve` therefore crash-loops if a TUI already holds that port -- which can
@@ -20,7 +20,7 @@ let
 in
 {
   home.username = "awea";
-  home.homeDirectory = "/home/awea";
+  home.homeDirectory = if pkgs.stdenv.isDarwin then "/Users/awea" else "/home/awea";
 
   # Do NOT change after the first install.
   # https://nix-community.github.io/home-manager/options.xhtml#opt-home.stateVersion
@@ -28,9 +28,6 @@ in
 
   # Let home-manager manage itself.
   programs.home-manager.enable = true;
-
-  # Start/restart changed systemd user services automatically on `switch`.
-  systemd.user.startServices = "sd-switch";
 
   # Packages installed here land on $PATH everywhere (via ~/.nix-profile/bin).
   home.packages = with pkgs; [
@@ -42,39 +39,79 @@ in
     hunk
   ];
 
-  # Run the Hunk session daemon as a user service so it starts on login.
-  systemd.user.services.hunk-daemon = {
-    Unit = {
-      Description = "Hunk session daemon and websocket broker";
-      After = [ "default.target" ];
+  # Linux: systemd user units.
+  systemd.user = lib.mkIf pkgs.stdenv.isLinux {
+    # Start/restart changed systemd user services automatically on `switch`.
+    startServices = "sd-switch";
+
+    # Run the Hunk session daemon as a user service so it starts on login.
+    services.hunk-daemon = {
+      Unit = {
+        Description = "Hunk session daemon and websocket broker";
+        After = [ "default.target" ];
+      };
+      Service = {
+        ExecStart = "${hunkDaemon}";
+        Restart = "on-failure";
+        RestartSec = 2;
+      };
+      Install.WantedBy = [ "default.target" ];
     };
-    Service = {
-      ExecStart = "${hunkDaemon}";
-      Restart = "on-failure";
-      RestartSec = 2;
+
+    # Free disk space every day, only when / has less than 100G free.
+    # The script lives in the dotfiles: bin.symlink/prune-disk.
+    services.prune-disk = {
+      Unit.Description = "Free disk space when / is low";
+      Service = {
+        Type = "oneshot";
+        ExecStart = "%h/.bin/prune-disk";
+        Nice = 19;
+        IOSchedulingClass = "idle";
+      };
     };
-    Install.WantedBy = [ "default.target" ];
+
+    timers.prune-disk = {
+      Unit.Description = "Daily disk space check";
+      Timer = {
+        OnCalendar = "daily";
+        Persistent = true;
+        RandomizedDelaySec = "1h";
+      };
+      Install.WantedBy = [ "timers.target" ];
+    };
   };
 
-  # Free disk space every day, only when / has less than 100G free.
-  # The script lives in the dotfiles: bin.symlink/prune-disk.
-  systemd.user.services.prune-disk = {
-    Unit.Description = "Free disk space when / is low";
-    Service = {
-      Type = "oneshot";
-      ExecStart = "%h/.bin/prune-disk";
-      Nice = 19;
-      IOSchedulingClass = "idle";
+  # macOS: the same two jobs as launchd user agents (~/Library/LaunchAgents).
+  # Logs go to ~/Library/Logs, there is no journal.
+  launchd.agents = lib.mkIf pkgs.stdenv.isDarwin {
+    # Start on login. Like Restart=on-failure: relaunch only on a non-zero
+    # exit, so the "port already in use" early exit 0 does not loop.
+    hunk-daemon = {
+      enable = true;
+      config = {
+        ProgramArguments = [ "${hunkDaemon}" ];
+        RunAtLoad = true;
+        KeepAlive.SuccessfulExit = false;
+        ThrottleInterval = 2;
+        StandardOutPath = "${config.home.homeDirectory}/Library/Logs/hunk-daemon.log";
+        StandardErrorPath = "${config.home.homeDirectory}/Library/Logs/hunk-daemon.log";
+      };
     };
-  };
 
-  systemd.user.timers.prune-disk = {
-    Unit.Description = "Daily disk space check";
-    Timer = {
-      OnCalendar = "daily";
-      Persistent = true;
-      RandomizedDelaySec = "1h";
+    # Same schedule as the systemd timer: daily at midnight. launchd runs a
+    # missed run on wake, like Persistent=true. Nice + LowPriorityIO match
+    # Nice=19 and IOSchedulingClass=idle.
+    prune-disk = {
+      enable = true;
+      config = {
+        ProgramArguments = [ "${config.home.homeDirectory}/.bin/prune-disk" ];
+        StartCalendarInterval = [ { Hour = 0; Minute = 0; } ];
+        ProcessType = "Background";
+        Nice = 19;
+        LowPriorityIO = true;
+        StandardOutPath = "${config.home.homeDirectory}/Library/Logs/prune-disk.log";
+        StandardErrorPath = "${config.home.homeDirectory}/Library/Logs/prune-disk.log";
+      };
     };
-    Install.WantedBy = [ "timers.target" ];
   };
 }

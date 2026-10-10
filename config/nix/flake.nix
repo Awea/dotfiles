@@ -20,16 +20,20 @@
 
   outputs = { nixpkgs, home-manager, ... }@inputs:
     let
-      system = "x86_64-linux";
-      pkgs = nixpkgs.legacyPackages.${system};
-    in {
-      homeConfigurations."awea" = home-manager.lib.homeManagerConfiguration {
-        inherit pkgs;
+      # One home-manager configuration per platform, built from the same
+      # ./home.nix. Flakes are pure (no builtins.currentSystem), so each
+      # platform gets its own output: scripts/programs/nix-home-manager picks
+      # one from `uname`.
+      mkHome = system: home-manager.lib.homeManagerConfiguration {
+        pkgs = nixpkgs.legacyPackages.${system};
 
         # Makes every flake input above available inside ./home.nix as `inputs`
         extraSpecialArgs = { inherit inputs; };
 
         modules = [ ./home.nix ];
       };
+    in {
+      homeConfigurations."awea" = mkHome "x86_64-linux";
+      homeConfigurations."awea@mac" = mkHome "aarch64-darwin";
     };
 }

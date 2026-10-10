@@ -12,6 +12,14 @@ set -o pipefail
 # filename, programs/, and scripts/ to reach the repo root.
 flake_dir="${0:A:h:h:h}/config/nix"
 
+# config/nix/flake.nix has one output per platform: awea (x86_64-linux) and
+# awea@mac (aarch64-darwin).
+if [[ "$(uname -s)" == Darwin ]]; then
+  config="awea@mac"
+else
+  config="awea"
+fi
+
 # Bootstrap + apply the configuration. `-b backup` renames any pre-existing
 # files that would otherwise block the switch (e.g. foo -> foo.backup).
-nix run home-manager/master -- switch -b backup --flake "${flake_dir}#awea"
+nix run home-manager/master -- switch -b backup --flake "${flake_dir}#${config}"
