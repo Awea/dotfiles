@@ -61,3 +61,6 @@ export PATH="$PAPERSPACE_INSTALL/bin:$PATH"
 # Fly.io
 export FLYCTL_INSTALL="$HOME/.fly"
 export PATH="$FLYCTL_INSTALL/bin:$PATH"
+
+# Replace cmake by gnumake
+export PATH="/opt/homebrew/opt/make/libexec/gnubin:$PATH"
