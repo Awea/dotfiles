@@ -24,3 +24,6 @@ copy-on-select = clipboard
 
 # One line per wheel notch. The default of 3 scrolls too far.
 mouse-scroll-multiplier = precision:1,discrete:1
+
+# macOS: Option sends Alt (e.g. Alt-b/Alt-f in the shell). Ignored on Linux.
+macos-option-as-alt = true
