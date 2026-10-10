@@ -19,7 +19,7 @@ cwd=()
 if [ -n "${HERDR_PANE_ID:-}" ]; then
   cwd=(--cwd "$(main_worktree "$(pane_cwd "$HERDR_PANE_ID")")")
 fi
-if ! "$H" tab create --workspace "$HERDR_WORKSPACE_ID" "${cwd[@]}" --focus >/dev/null; then
+if ! "$H" tab create --workspace "$HERDR_WORKSPACE_ID" ${cwd[@]+"${cwd[@]}"} --focus >/dev/null; then
   notify "The new tab did not open."
   exit 1
 fi
