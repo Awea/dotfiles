@@ -9,9 +9,19 @@ symlink_paths := $(addprefix $(HOME)/., $(symlinks))
 # Documentation: https://www.gnu.org/software/make/manual/html_node/General-Search.html
 VPATH = $(shell dirname $(files_to_symlink))
 
+# Sublime Text/Merge keep their user packages in ~/Library on macOS
+ifeq ($(shell uname),Darwin)
+sublime_links := sublime-links
+# Antibody is archived and gone from Homebrew; antidote reads the same plugin list
+bundle_plugins := zsh -c 'source $$(brew --prefix antidote)/share/antidote/antidote.zsh && antidote bundle'
+else
+sublime_links := $(HOME)/.config/sublime-merge/Packages/User $(HOME)/.config/sublime-text/Packages/User
+bundle_plugins := antibody bundle
+endif
+
 ## Create symbolic links for files/folders with a .symlink suffix
 .PHONY: links
-links: $(symlink_paths) $(HOME)/.config/sublime-merge/Packages/User $(HOME)/.config/sublime-text/Packages/User antibody/zsh_plugins.sh $(HOME)/.config/direnv $(HOME)/.config/nix $(HOME)/.config/zed/settings.json $(HOME)/.config/zed/keymap.json $(HOME)/.claude/CLAUDE.md $(HOME)/.config/herdr/config.toml $(HOME)/.config/ghostty/config.ghostty $(HOME)/.claude/skills/handoff $(HOME)/.claude/hooks/herdr-agent-name.sh $(HOME)/.claude/skills/reviewr $(HOME)/.claude/skills/ste-writing
+links: $(symlink_paths) $(sublime_links) antibody/zsh_plugins.sh $(HOME)/.config/direnv $(HOME)/.config/nix $(HOME)/.config/zed/settings.json $(HOME)/.config/zed/keymap.json $(HOME)/.claude/CLAUDE.md $(HOME)/.config/herdr/config.toml $(HOME)/.config/ghostty/config.ghostty $(HOME)/.claude/skills/handoff $(HOME)/.claude/hooks/herdr-agent-name.sh $(HOME)/.claude/skills/reviewr $(HOME)/.claude/skills/ste-writing
 
 # Create all symlink
 # Documentation: https://www.gnu.org/software/make/manual/html_node/Automatic-Variables.html#Automatic-Variables
@@ -23,6 +33,12 @@ $(HOME)/.config/sublime-merge/Packages/User:
 
 $(HOME)/.config/sublime-text/Packages/User:
 	ln -s $(PWD)/sublime-text-3 $@
+
+# macOS: the scripts replace the default User folder with a link to this repo
+.PHONY: sublime-links
+sublime-links:
+	./scripts/symlinks/sublime-merge
+	./scripts/symlinks/sublime-text
 
 $(HOME)/.config/zed/settings.json:
 	ln -s $(PWD)/zed/settings.json $@
@@ -68,7 +84,7 @@ $(HOME)/.config/%:
 	ln -s $(PWD)/config/$* $@
 
 antibody/zsh_plugins.sh: antibody/zsh_plugins.txt
-	antibody bundle < $< > $@
+	$(bundle_plugins) < $< > $@
 
 define primary
 \033[38;2;166;204;112;1m$(1)\033[0m
