@@ -4,6 +4,9 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+# Linux only. On macOS, the Brewfile installs tezos-client.
+[[ "$(uname)" == Linux ]] || { echo "Skip: Linux only"; exit 0; }
+
 # Octez client - Tezos node & client
 # Release index: https://octez.tezos.com/releases/
 # The latest version is resolved from the GitLab releases API, then the

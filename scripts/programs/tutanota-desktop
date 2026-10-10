@@ -4,6 +4,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+[[ "$(uname)" == Linux ]] || { echo "Skip: Linux only"; exit 0; }
+
 # Tutanota desktop client
 # https://github.com/tutao/tutanota
 sudo curl -L https://mail.tutanota.com/desktop/tutanota-desktop-linux.AppImage -o /usr/local/bin/tutanota

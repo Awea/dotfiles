@@ -4,6 +4,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+[[ "$(uname)" == Linux ]] || { echo "Skip: Linux only"; exit 0; }
+
 # Thyme - Automatically track which applications you use and for how long
 # https://github.com/sourcegraph/thyme
 sudo curl -L https://github.com/sourcegraph/thyme/releases/latest/download/thyme-linux-386 -o /usr/local/bin/thyme

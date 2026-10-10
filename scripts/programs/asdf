@@ -9,63 +9,69 @@ set -o pipefail
 
 vsn=0.17.0
 
+# On macOS the Brewfile installs asdf, so skip apt and the release tarball
+linux() { [[ "$(uname)" == Linux ]] }
+plugin-add() { if linux; then bash ~/.asdf/bin/asdf plugin-add $1; else asdf plugin add $1; fi }
+
 # Dependencies for languages
-sudo apt install automake autoconf libreadline-dev libncurses-dev libssl-dev libyaml-dev libxslt-dev libffi-dev libtool unixodbc-dev gcc g++ clang -y
+linux && sudo apt install automake autoconf libreadline-dev libncurses-dev libssl-dev libyaml-dev libxslt-dev libffi-dev libtool unixodbc-dev gcc g++ clang -y
 
 # Ruby
 # https://github.com/asdf-vm/asdf-ruby
-bash ~/.asdf/bin/asdf plugin-add ruby
+plugin-add ruby
 
 # Nodejs
 # https://github.com/asdf-vm/asdf-nodejs
-bash ~/.asdf/bin/asdf plugin-add nodejs
+plugin-add nodejs
 bash ~/.asdf/plugins/nodejs/bin/import-release-team-keyring
 
 # Yarn
 # https://github.com/twuni/asdf-yarn
-bash ~/.asdf/bin/asdf plugin-add yarn
+plugin-add yarn
 
 # Erlang
 # https://github.com/asdf-vm/asdf-erlang
-bash ~/.asdf/bin/asdf plugin-add erlang
-sudo apt-get install -y build-essential autoconf m4 libncurses5-dev libwxgtk3.0-gtk3-dev libgl1-mesa-dev libglu1-mesa-dev libpng-dev libssh-dev unixodbc-dev xsltproc fop libxml2-utils libncurses-dev openjdk-11-jdk
+plugin-add erlang
+linux && sudo apt-get install -y build-essential autoconf m4 libncurses5-dev libwxgtk3.0-gtk3-dev libgl1-mesa-dev libglu1-mesa-dev libpng-dev libssh-dev unixodbc-dev xsltproc fop libxml2-utils libncurses-dev openjdk-11-jdk
 
 # Elixir
 # https://github.com/asdf-vm/asdf-elixir
-bash ~/.asdf/bin/asdf plugin-add elixir
-sudo apt-get install -y unzip libgmp10-dev libsecp256k1-dev
+plugin-add elixir
+linux && sudo apt-get install -y unzip libgmp10-dev libsecp256k1-dev
 
 # Rust
 # https://github.com/code-lever/asdf-rust
-bash ~/.asdf/bin/asdf plugin-add rust
+plugin-add rust
 
 # Go
 # https://github.com/kennyp/asdf-golang
-bash ~/.asdf/bin/asdf plugin-add golang
+plugin-add golang
 
 # PHP
 # https://github.com/asdf-community/asdf-php
-bash ~/.asdf/bin/asdf plugin-add php
-sudo apt-get install -y bison libcurl4-gnutls-dev libpq-dev libzip-dev
+plugin-add php
+linux && sudo apt-get install -y bison libcurl4-gnutls-dev libpq-dev libzip-dev
 
 # Minio client
 # https://github.com/penpyt/asdf-mc
-bash ~/.asdf/bin/asdf plugin-add mc
+plugin-add mc
 
 # Terraform
 # https://github.com/asdf-community/asdf-hashicorp
-bash ~/.asdf/bin/asdf plugin-add terraform
+plugin-add terraform
 
 # Terraform docs
 # https://github.com/looztra/asdf-terraform-docs
-bash ~/.asdf/bin/asdf plugin-add terraform-docs
+plugin-add terraform-docs
 
 # GCloud CLI
 # https://github.com/jthegedus/asdf-gcloud
-bash ~/.asdf/bin/asdf plugin-add gcloud
+plugin-add gcloud
+if linux; then
 pushd `mktemp -d`
   curl -L https://github.com/asdf-vm/asdf/releases/download/v${vsn}/asdf-v${vsn}-linux-amd64.tar.gz -o asdf.tar.gz
   tar -xvf asdf.tar.gz asdf
   sudo mv -f asdf /usr/local/bin/asdf
   sudo chmod +x /usr/local/bin/asdf
 popd
+fi

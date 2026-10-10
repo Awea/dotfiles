@@ -4,6 +4,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+[[ "$(uname)" == Linux ]] || { echo "Skip: Linux only"; exit 0; }
+
 # The "HD Web Camera" (05a3:9331) firmware can hang when PipeWire sets its
 # microphone to 16 kHz ("cannot set freq 16000 to ep 0x83"). The video then
 # hangs too, until a power cycle. This rule blocks the camera audio interface

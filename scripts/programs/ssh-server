@@ -4,6 +4,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+[[ "$(uname)" == Linux ]] || { echo "Skip: Linux only"; exit 0; }
+
 # OpenSSH server, started now and at boot
 # https://www.openssh.com/
 sudo apt install -y openssh-server

@@ -11,4 +11,7 @@ if [ ! -d "$HOME/.tmux/plugins/tpm" ]; then
   git clone https://github.com/tmux-plugins/tpm $HOME/.tmux/plugins/tpm
 fi
 
-sudo apt install -y tmux
+# On macOS the Brewfile installs tmux
+if [[ "$(uname)" == Linux ]]; then
+  sudo apt install -y tmux
+fi

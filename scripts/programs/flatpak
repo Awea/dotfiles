@@ -4,6 +4,9 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+# Linux only. On macOS, the Brewfile installs Obsidian, Signal, Proton VPN and fava.
+[[ "$(uname)" == Linux ]] || { echo "Skip: Linux only"; exit 0; }
+
 # Flatpak packages:
 # - peek: Simple animated GIF screen recorder with an easy to use interface
 # - qpwgraph: A PipeWire Graph Qt GUI Interface -Working alternative to helvum
