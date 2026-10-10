@@ -18,3 +18,6 @@ palette = 12=#2a7bde
 palette = 13=#c061cb
 palette = 14=#33c7de
 palette = 15=#ffffff
+
+# macOS: Option sends Alt (e.g. Alt-b/Alt-f in the shell). Ignored on Linux.
+macos-option-as-alt = true

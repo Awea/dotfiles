@@ -27,4 +27,4 @@
 Hunk's review skill — drive live `hunk` review sessions via the `hunk session *`
 CLI. Imported from the nix profile so it tracks the installed hunk version.
 
-@/home/awea/.nix-profile/skills/hunk-review/SKILL.md
+@~/.nix-profile/skills/hunk-review/SKILL.md

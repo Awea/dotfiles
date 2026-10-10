@@ -19,3 +19,7 @@ doc/superpowers/
 
 # Python bytecode
 __pycache__/
+
+# Elixir crash dumps and Expert (Elixir LSP) logs
+erl_crash.dump
+.expert/
