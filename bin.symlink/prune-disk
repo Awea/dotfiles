@@ -6,20 +6,26 @@
 #
 # Does nothing while / has MIN_FREE_GB or more free (default: 100). Below that,
 # it removes:
-#   - Nix generations older than 14 days, then all unused store paths
+#   - Nix generations older than 14 days, then all unused store paths, then
+#     duplicate store files (hard-linked: replaces auto-optimise-store, see
+#     config/nix/nix.conf)
 #   - Docker images, containers and build cache unused for 7 days
 #   - anonymous Docker volumes that no container uses (named volumes stay)
-#   - files in ~/.cache and ~/.npm not read for 30 days
+#   - files in ~/.cache, ~/.npm (and ~/Library/Caches on macOS) not read for
+#     30 days
 #
 # --force runs the cleanup whatever the free space is.
-# A systemd user timer runs this script every day, see config/nix/home.nix.
+# A systemd user timer (Linux) or a launchd agent (macOS) runs this script every
+# day, see config/nix/home.nix.
 
 set -euo pipefail
 
 min_free_gb="${MIN_FREE_GB:-100}"
-export PATH="/nix/var/nix/profiles/default/bin:$HOME/.nix-profile/bin:/usr/bin:/bin:$PATH"
+# launchd gives a bare PATH: add Nix, and Homebrew/Docker Desktop on macOS.
+export PATH="/nix/var/nix/profiles/default/bin:$HOME/.nix-profile/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
-free_gb() { df --output=avail -B1G / | tail -1 | tr -d ' '; }
+# POSIX df (GNU and BSD): available 1K blocks, rounded down to GiB.
+free_gb() { df -Pk / | awk 'NR==2{print int($4/1048576)}'; }
 
 before=$(free_gb)
 if [[ "${1:-}" != "--force" && "$before" -ge "$min_free_gb" ]]; then
@@ -31,6 +37,7 @@ echo "${before}G free on /, threshold is ${min_free_gb}G: pruning"
 
 echo "==> nix"
 nix-collect-garbage --delete-older-than 14d || echo "nix gc failed"
+nix-store --optimise || echo "nix optimise failed"
 
 if command -v docker >/dev/null && docker info >/dev/null 2>&1; then
   echo "==> docker"
@@ -39,7 +46,10 @@ if command -v docker >/dev/null && docker info >/dev/null 2>&1; then
 fi
 
 echo "==> caches"
-for dir in "$HOME/.cache" "$HOME/.npm/_cacache"; do
+cache_dirs=("$HOME/.cache" "$HOME/.npm/_cacache")
+# macOS apps keep their caches there, and recreate them when they are missing.
+[[ "$(uname -s)" == Darwin ]] && cache_dirs+=("$HOME/Library/Caches")
+for dir in "${cache_dirs[@]}"; do
   [[ -d "$dir" ]] || continue
   find "$dir" -xdev -type f -atime +30 -delete 2>/dev/null || true
   find "$dir" -xdev -mindepth 1 -type d -empty -delete 2>/dev/null || true
@@ -48,6 +58,12 @@ done
 after=$(free_gb)
 message="Freed $((after - before))G, ${after}G free on /"
 echo "$message"
-if [[ "$after" -lt "$min_free_gb" ]] && command -v notify-send >/dev/null; then
-  notify-send --urgency=critical "prune-disk" "$message. Still under ${min_free_gb}G, run ncdu -x / to find the rest."
+if [[ "$after" -lt "$min_free_gb" ]]; then
+  alert="$message. Still under ${min_free_gb}G, run ncdu -x / to find the rest."
+  if command -v notify-send >/dev/null; then
+    notify-send --urgency=critical "prune-disk" "$alert"
+  elif command -v osascript >/dev/null; then
+    # Pass the text as an argument, so quotes in it cannot break the script.
+    osascript -e 'on run argv' -e 'display notification (item 1 of argv) with title "prune-disk"' -e 'end run' "$alert"
+  fi
 fi

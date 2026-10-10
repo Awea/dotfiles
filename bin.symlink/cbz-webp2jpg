@@ -16,7 +16,8 @@ set -o nounset
 set -o pipefail
 
 quality=90
-jobs=$(nproc 2>/dev/null || echo 4)
+# nproc is GNU only, macOS has sysctl.
+jobs=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 
 usage() {
   echo "Convert WebP images inside CBZ archives to JPG."
@@ -39,12 +40,22 @@ if test "$#" -eq 0; then
   usage
 fi
 
-for missing in convert unzip zip; do
+for missing in unzip zip; do
   command -v "$missing" >/dev/null 2>&1 || {
     echo "error: '$missing' is required but not installed" >&2
     exit 1
   }
 done
+
+# ImageMagick 7 (Homebrew) installs `magick`, ImageMagick 6 only `convert`.
+if command -v magick >/dev/null 2>&1; then
+  imagemagick=magick
+elif command -v convert >/dev/null 2>&1; then
+  imagemagick=convert
+else
+  echo "error: 'magick' or 'convert' (ImageMagick) is required but not installed" >&2
+  exit 1
+fi
 
 convert_one() {
   local src="$1"
@@ -68,12 +79,13 @@ convert_one() {
   unzip -qq "$src" -d "$tmp"
 
   # Convert pages in parallel: each worker rewrites one .webp as .jpg, then
-  # drops the original. CBZ_QUALITY is exported so the xargs child shells see it.
-  count=$(find "$tmp" -type f -iname '*.webp' -printf '.' | wc -c)
-  export CBZ_QUALITY="$quality"
+  # drops the original. CBZ_QUALITY and CBZ_MAGICK are exported so the xargs
+  # child shells see them.
+  count=$(find "$tmp" -type f -iname '*.webp' | wc -l | tr -d ' ')
+  export CBZ_QUALITY="$quality" CBZ_MAGICK="$imagemagick"
   find "$tmp" -type f -iname '*.webp' -print0 \
     | xargs -0 -r -P "$jobs" -n 1 sh -c \
-        'convert "$1" -strip -quality "$CBZ_QUALITY" "${1%.*}.jpg" && rm -f "$1"' _
+        '"$CBZ_MAGICK" "$1" -strip -quality "$CBZ_QUALITY" "${1%.*}.jpg" && rm -f "$1"' _
 
   # Re-zip from inside the temp dir so paths stay relative (same structure).
   mkdir -p "$out_dir"
