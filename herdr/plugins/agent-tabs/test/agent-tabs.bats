@@ -19,11 +19,14 @@ setup() {
 
 # Run the bash code $1 in a terminal. Type each next argument (a printf format) after
 # a pause, so that the code is ready to read it. Set status to the exit code of the
-# code, and output to the terminal output.
+# code, and output to the terminal output. The script of macOS (BSD) takes the command
+# after the file, and always exits with the exit code of the command.
 run_in_tty() {
+  local cmd=(script -qec 'bash -c "$TTY_CODE"' /dev/null)
+  [ "$(uname -s)" != Darwin ] || cmd=(script -q /dev/null bash -c "$1")
   export TTY_CODE="$1"
   shift
-  run script -qec 'bash -c "$TTY_CODE"' /dev/null < <(
+  run "${cmd[@]}" < <(
     for keys in "$@"; do
       sleep 0.3
       printf "$keys"
@@ -484,6 +487,29 @@ run_in_tty() {
     sleep 0.1
   done
   grep -qx 'agent | rename | w1:p1 | postgres-port-issue' "$FAKE_LOG"
+}
+
+@test "sync-name loop stops when a running loop has the lock folder" {
+  lock="$BATS_TEST_TMPDIR/sync.lock.d"
+  mkdir "$lock"
+  printf '%s\n' "$$" >"$lock/pid"
+  export FAKE_TITLE="Postgres port issue" FAKE_AGENT_GETS=1 AGENT_TABS_SYNC_INTERVAL=0
+  run bash "$PLUGIN_DIR/sync-name.sh" loop w1:p5 "$lock"
+  [ "$status" -eq 0 ]
+  [ ! -s "$FAKE_LOG" ]
+  [ "$(cat "$lock/pid")" = "$$" ]
+}
+
+@test "sync-name loop takes the lock folder of a stopped loop and removes it at the end" {
+  lock="$BATS_TEST_TMPDIR/sync.lock.d"
+  mkdir "$lock"
+  # The PID of a process that has stopped.
+  bash -c 'printf "%s\n" "$$"' >"$lock/pid"
+  export FAKE_TITLE="Postgres port issue" FAKE_AGENT_GETS=1 AGENT_TABS_SYNC_INTERVAL=0
+  run bash "$PLUGIN_DIR/sync-name.sh" loop w1:p5 "$lock"
+  [ "$status" -eq 0 ]
+  grep -qx 'agent | rename | w1:p5 | postgres-port-issue' "$FAKE_LOG"
+  [ ! -e "$lock" ]
 }
 
 # Make a git repo with a subfolder. Print the repo root as git gives it.

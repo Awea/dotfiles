@@ -1,10 +1,33 @@
 # shellcheck shell=bash
 # Shared helpers for the agent-tabs scripts. Source this file, do not run it.
 
-# Herdr runs plugin commands with a small PATH. Add the system paths for jq.
-export PATH="/usr/bin:/bin:${PATH:-}"
+# Herdr runs plugin commands with a small PATH. Add the system paths for jq. On macOS,
+# Homebrew puts jq and bash 5 in /opt/homebrew/bin (Apple silicon) or /usr/local/bin.
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}"
+
+# read_line and read_escape need bash 4 or later: $BASHPID, keyseq-timeout and read
+# with a timeout of less than 1 second. /bin/bash on macOS is bash 3.2. When a script
+# that sources this file runs under bash 3.2, run it again with the bash in PATH if that
+# bash is newer. Without a newer bash, continue: only the popups do not work correctly.
+# shellcheck disable=SC2016 # The other bash expands BASH_VERSINFO.
+if [ "${BASH_VERSINFO[0]}" -lt 4 ] && [ "${BASH_SOURCE[1]:-}" = "$0" ] &&
+  "$(command -v bash)" -c '[ "${BASH_VERSINFO[0]}" -ge 4 ]' 2>/dev/null; then
+  exec "$(command -v bash)" "$0" "$@"
+fi
 
 H="${HERDR_BIN_PATH:-herdr}"
+
+# Run the command $@ in the background, out of the session of the caller, so that it
+# continues when the popup or the hook stops. macOS has no setsid: there, nohup keeps
+# the command alive when the terminal closes. The caller sets the redirections.
+detach() {
+  if command -v setsid >/dev/null; then
+    setsid -f "$@"
+  else
+    nohup "$@" &
+    disown
+  fi
+}
 
 # Write MESSAGE to the plugin log. Show it as a Herdr notification only when the
 # file debug exists in the plugin config dir.
