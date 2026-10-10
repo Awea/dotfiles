@@ -6,6 +6,8 @@
 
 set -e
 
+[[ "$(uname)" == Linux ]] || { echo "Skip: Linux only"; exit 0; }
+
 DOTFILES="$(cd "$(dirname "$0")/../.." && pwd)"
 UNIT=zt-anarcho-dns.service
 
