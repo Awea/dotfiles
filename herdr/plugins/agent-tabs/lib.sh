@@ -18,14 +18,19 @@ fi
 H="${HERDR_BIN_PATH:-herdr}"
 
 # Run the command $@ in the background, out of the session of the caller, so that it
-# continues when the popup or the hook stops. macOS has no setsid: there, nohup keeps
-# the command alive when the terminal closes. The caller sets the redirections.
+# continues when the popup or the hook stops. macOS has no setsid: there, ignore SIGHUP
+# before the fork. Herdr sends SIGHUP when the popup closes, and the caller often exits
+# directly after detach: with nohup, SIGHUP can come before nohup ignores it and stop
+# the command. The subshell keeps the trap out of the caller. The caller sets the
+# redirections.
 detach() {
   if command -v setsid >/dev/null; then
     setsid -f "$@"
   else
-    nohup "$@" &
-    disown
+    (
+      trap '' HUP
+      "$@" &
+    )
   fi
 }
 

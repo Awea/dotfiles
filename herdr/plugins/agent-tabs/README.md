@@ -192,8 +192,8 @@ herdr server reload-config
 The plugin needs `bash` 4 or later and `jq`, in `/opt/homebrew/bin`, `/usr/local/bin`,
 `/usr/bin` or `/bin`. On macOS, `/bin/bash` is bash 3.2: install bash with Homebrew. The
 scripts then run again with that bash. The scripts use `setsid` and `flock` when they
-exist (Linux). Without them (macOS), `nohup` starts the background workers and a lock
-folder keeps one name loop for each pane.
+exist (Linux). Without them (macOS), a subshell that ignores SIGHUP starts the background
+workers and a lock folder keeps one name loop for each pane.
 
 ## Files
 
