@@ -2,6 +2,7 @@
 # Source: https://github.com/sorin-ionescu/prezto/blob/master/modules/git/alias.zsh
 alias g='git'
 alias gc='git clone'
+alias gC='git checkout'
 
 # Commit (c)
 alias gcm='git commit --message'
@@ -23,7 +24,15 @@ alias gsp='git stash pop'
 # Rebase (r)
 alias gra='git rebase -i --autosquash'
 
+# Trigger CI
+alias gCI='git commit --amend --no-edit && git push --force-with-lease'
+
 # Branches
 ## Remove merged branch from a Git repository
 ## Inspiration: https://gist.github.com/TBonnin/4060788
-alias gR='git branch --merged master | grep -v 'master$' | xargs git branch -d'
+gR() {
+  local base=${$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null)#origin/}
+  base=${base:-master}
+  git branch --merged "$base" | grep -v -e '^\*' -e " $base\$" | xargs -r git branch -d
+}
+alias gclean=gR
