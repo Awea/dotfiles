@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+
+# Make Zed's Delta editor run on Pop!_OS 22.04.
+#
+#   Usage: fix-delta
+#
+# Delta ships a binary that needs glibc 2.38 and 2.39. Pop!_OS 22.04 has 2.35,
+# so the binary does not start. This script points the binary at the glibc in
+# the Nix store, then installs a launcher at ~/.local/bin/delta.
+#
+# The launcher also forces the Mesa EGL vendor. The NVIDIA EGL vendor makes
+# Delta panic in khronos-egl. Rendering still uses Vulkan on the NVIDIA GPU.
+#
+# Delta's own installer overwrites both files on every update. Run this script
+# again after each Delta update.
+
+set -euo pipefail
+
+app="$HOME/.local/delta.app"
+bin="$app/bin/delta"
+launcher="$HOME/.local/bin/delta"
+gcroot="$HOME/.local/state/delta/glibc"
+
+[ -x "$bin" ] || { echo "not found: $bin" >&2; exit 1; }
+
+mkdir -p "$(dirname "$gcroot")" "$HOME/.local/bin"
+
+# Keep the glibc alive across `nix-collect-garbage`.
+nix build --out-link "$gcroot" 'nixpkgs#glibc.out'
+glibc="$(readlink -f "$gcroot")"
+
+# --force-rpath writes DT_RPATH, not DT_RUNPATH. The bundled libxcb.so.1 has no
+# rpath of its own, and only DT_RPATH is inherited by such a dependency.
+nix run nixpkgs#patchelf -- \
+    --force-rpath \
+    --set-interpreter "$glibc/lib/ld-linux-x86-64.so.2" \
+    --set-rpath "$glibc/lib:$app/lib:/usr/lib/x86_64-linux-gnu" \
+    "$bin"
+
+# Delta's installer leaves a symlink at $launcher that points at $bin. Write to
+# a temporary file and move it into place. A redirect follows the symlink and
+# destroys the binary.
+tmp="$(mktemp)"
+cat > "$tmp" <<LAUNCHER
+#!/usr/bin/env bash
+export __EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/50_mesa.json
+exec "$bin" "\$@"
+LAUNCHER
+chmod 755 "$tmp"
+mv -f "$tmp" "$launcher"
+
+echo "Delta patched. glibc: $glibc"
+"$launcher" --version
