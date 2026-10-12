@@ -4,39 +4,10 @@
 sudo apt update && sudo apt full-upgrade -y
 
 function install {
-  which $1 &> /dev/null
-
-  if [ $? -ne 0 ]; then
-    echo "Installing: ${1}..."
-    sudo apt install -y $1
-  else
-    echo "Already installed: ${1}"
-  fi
+  sudo apt install -y "$@"
 }
 
-# Install basic dependencies
-install apache2-utils
-install apt-transport-https
-install birdtray
-install borgbackup
-install direnv
-install exiftool
-install ffmpeg
-install flameshot
-install git-absorb
-install imagemagick
-install inotify-tools
-install libnotify-bin
-install nautilus-dropbox
-install network-manager-openvpn-gnome
-install parallel
-install pv
-install software-properties-common
-install transmission
-install ubuntu-restricted-extras
-install wine
-install xsel
-install zsh
+install apache2-utils apt-transport-https birdtray borgbackup exiftool ffmpeg flameshot git-absorb imagemagick inotify-tools libnotify-bin nautilus-dropbox network-manager-openvpn-gnome parallel pv software-properties-common transmission ubuntu-restricted-extras wine xsel zeal zsh jq direnv
 
 # Run all programs/ install scripts
 for f in scripts/programs/*; do ./$f; done
