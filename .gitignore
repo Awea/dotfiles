@@ -15,7 +15,7 @@ antibody/zsh_plugins.sh
 bin.symlink/m
 
 # Superpowers specs and plans
-doc/superpowers/
+docs/superpowers/
 
 # Python bytecode
 __pycache__/
