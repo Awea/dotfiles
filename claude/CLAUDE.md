@@ -3,6 +3,8 @@
 - Always use subagents when possible. Delegate searches, multi-file investigations, and
   broad fixes to subagents (Agent tool) instead of doing them inline. Run independent
   subagents in parallel.
+- Set the subagent effort level: `medium` for Explore and other search subagents, `high` for
+  implementation and review subagents.
 
 # Git
 
