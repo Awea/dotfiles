@@ -2,8 +2,8 @@
 	"bold_folder_labels": true,
 	"caret_extra_width": 2,
 	"caret_style": "phase",
-	"color_scheme": "Packages/ayu/ayu-mirage.sublime-color-scheme",
-	"dictionary": "Packages/Language - English/en_GB.dic",
+	"color_scheme": "ayu-mirage.sublime-color-scheme",
+	"dictionary": "Packages/Language - English/en_US.dic",
 	"ensure_newline_at_eof_on_save": true,
 	"fade_fold_buttons": false,
 	"file_exclude_patterns":
@@ -47,10 +47,7 @@
 	"font_size": 15,
 	"ignored_packages":
 	[
-		"Base Encoder",
-		"PHP-Twig",
 		"Rust",
-		"TypeScript Syntax",
 		"Vintage",
 	],
 	"indent_guide_options":
@@ -79,4 +76,7 @@
 	"ui_separator": true,
 	"word_wrap": true,
 	"index_files": true,
+	"file_icon_theme":
+	[
+	],
 }
