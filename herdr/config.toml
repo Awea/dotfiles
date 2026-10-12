@@ -7,7 +7,7 @@ show_agent_labels_on_pane_borders = false
 enabled = false
 
 [ui.toast]
-delivery = "herdr"
+delivery = "off"
 
 [theme]
 name = "catppuccin"
