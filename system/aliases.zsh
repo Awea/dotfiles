@@ -6,9 +6,6 @@ alias la="exa -abghl --git --color=automatic"
 ## Copy to clipboard (pbcopy because I member it from OS X times)
 alias pbcopy="xsel -ib"
 
-## Zsh
-alias reload!='exec "$SHELL" -l'
-
 ## Vagrant aliases
 alias vdf="vagrant destroy -f"
 alias vup="vagrant up"
@@ -22,3 +19,6 @@ alias auto-update="topgrade --yes flatpak snap system config_update firmware --d
 alias track="while true; do thyme track -o $DOTFILES/thyme.json; sleep 30s; done;"
 alias track-new="rm -f $DOTFILES/thyme.json; track;"
 alias track-display="thyme show -i $DOTFILES/thyme.json -w stats > /tmp/thyme.html; firefox /tmp/thyme.html"
+
+# Digital Ocean (doctl) aliases
+alias dohosts="doctl compute droplet list --format Name,PublicIPv4"
