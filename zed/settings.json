@@ -35,11 +35,15 @@
     "git_diff": true,
   },
   "context_servers": {
+    "appsignal": {
+      "enabled": true,
+      "url": "https://appsignal.com/api/mcp",
+    },
     "tidewave": {
       "settings": {},
 
       "enabled": true,
-      "url": "http://localhost:3000/tidewave/mcp",
+      "url": "http://localhost:4000/tidewave/mcp",
     },
   },
   "edit_predictions": {
@@ -59,8 +63,10 @@
       "default": "allow",
     },
     "default_model": {
-      "provider": "zed.dev",
-      "model": "claude-opus-4-6",
+      "effort": "high",
+      "enable_thinking": true,
+      "provider": "anthropic",
+      "model": "claude-sonnet-5-5",
     },
   },
   "base_keymap": "SublimeText",
@@ -88,6 +94,7 @@
   "seed_search_query_from_cursor": "selection",
   "tab_size": 2,
   "soft_wrap": "editor_width",
+  "file_scan_inclusions": ["docs/superpowers/**"],
   "file_scan_exclusions": [
     "**/.git",
     "**/.svn",
