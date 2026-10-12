@@ -1,0 +1,6 @@
+#!/usr/bin/env zsh
+
+# Restart ZeroTier
+restart-zerotier(){
+  sudo systemctl restart zerotier-one
+}
