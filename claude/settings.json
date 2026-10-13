@@ -1,6 +1,5 @@
 {
   "env": {
-    "OBSIDIAN_VAULT_PATH": "/Users/awea/.syncthing/second-brain",
     "CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-5-5"
   },
   "includeCoAuthoredBy": false,
