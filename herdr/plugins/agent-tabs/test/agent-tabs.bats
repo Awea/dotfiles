@@ -11,6 +11,7 @@ setup() {
   export HOME="$BATS_TEST_TMPDIR/home"
   export TMPDIR="$BATS_TEST_TMPDIR"
   export HERDR_PLUGIN_CONFIG_DIR="$BATS_TEST_TMPDIR/config"
+  export AGENT_TABS_LAUNCHER="$BATS_TEST_DIRNAME/fake-systemd-run"
   export AGENT_TABS_TITLE_TIMEOUT=0
   mkdir -p "$HERDR_PLUGIN_CONFIG_DIR"
   touch "$HERDR_PLUGIN_CONFIG_DIR/debug"
@@ -529,61 +530,14 @@ make_worktree() {
   git -C "$BATS_TEST_TMPDIR/repo-wt" rev-parse --show-toplevel
 }
 
-# Write the transcript of the claude session s1: one Edit for each file in $@, in order.
-write_transcript() {
-  local file dir="$BATS_TEST_TMPDIR/claude/projects/-repo"
-  export CLAUDE_CONFIG_DIR="$BATS_TEST_TMPDIR/claude" FAKE_SESSION=s1
-  mkdir -p "$dir"
-  for file in "$@"; do
-    jq -cn --arg f "$file" '{type: "assistant", message: {content: [{type: "tool_use", name: "Edit", input: {file_path: $f}}]}}'
-  done >"$dir/s1.jsonl"
-}
-
-@test "reviewr uses the worktree of the last edit in the repo of the current folder" {
+@test "reviewr uses the linked worktree of the folder, not the current folder" {
   export HERDR_ENV=1
   root=$(make_repo)
   worktree=$(make_worktree)
-  git init -q "$BATS_TEST_TMPDIR/other"
-  mkdir -p "$BATS_TEST_TMPDIR/plain"
-  write_transcript "$root/src/a.nix" "$worktree/src/b.nix" "$BATS_TEST_TMPDIR/other/c.md" \
-    "$BATS_TEST_TMPDIR/plain/d.md"
-  cd "$root/src"
-  run bash "$PLUGIN_DIR/reviewr.sh"
-  [ "$status" -eq 0 ]
-  grep -q "^plugin | pane | open | .* | --cwd | $worktree | --focus$" "$FAKE_LOG"
-}
-
-@test "reviewr uses the nearest folder that exists for a deleted file" {
-  export HERDR_ENV=1
-  root=$(make_repo)
-  worktree=$(make_worktree)
-  write_transcript "$worktree/gone/deep/e.nix"
   cd "$root"
-  run bash "$PLUGIN_DIR/reviewr.sh"
+  run bash "$PLUGIN_DIR/reviewr.sh" "$worktree/src"
   [ "$status" -eq 0 ]
   grep -q "^plugin | pane | open | .* | --cwd | $worktree | --focus$" "$FAKE_LOG"
-}
-
-@test "reviewr uses the current folder when no edit is in its repo" {
-  export HERDR_ENV=1
-  root=$(make_repo)
-  git init -q "$BATS_TEST_TMPDIR/other"
-  write_transcript "$BATS_TEST_TMPDIR/other/c.md" relative.md
-  cd "$root/src"
-  run bash "$PLUGIN_DIR/reviewr.sh"
-  [ "$status" -eq 0 ]
-  grep -q "^plugin | pane | open | .* | --cwd | $root | --focus$" "$FAKE_LOG"
-}
-
-@test "reviewr outside a git repo uses the last edit in any git repo" {
-  export HERDR_ENV=1
-  root=$(make_repo)
-  mkdir -p "$BATS_TEST_TMPDIR/plain"
-  write_transcript "$root/src/a.nix" "$BATS_TEST_TMPDIR/plain/d.md"
-  cd "$BATS_TEST_TMPDIR/plain"
-  run bash "$PLUGIN_DIR/reviewr.sh"
-  [ "$status" -eq 0 ]
-  grep -q "^plugin | pane | open | .* | --cwd | $root | --focus$" "$FAKE_LOG"
 }
 
 @test "reviewr opens nothing outside Herdr" {
@@ -766,5 +720,39 @@ write_transcript() {
     [ "$status" -eq 1 ]
     [[ "$output" == *"agent-tabs: Not a Herdr pane or tab link: $url"* ]]
     [ "$(grep -c '^tab | focus\|^pane | get' "$FAKE_LOG")" -eq 0 ]
+  done
+}
+
+@test "open-file opens the file of a file link in the editor" {
+  export AGENT_TABS_EDITOR="$BATS_TEST_DIRNAME/fake-herdr"
+  dir="$BATS_TEST_TMPDIR/docs"
+  mkdir -p "$dir"
+  touch "$dir/my spec.md" "$dir/x.ex"
+  for url in "file://${dir// /%20}/my%20spec.md|$dir/my spec.md" \
+    "file://host$dir/x.ex|$dir/x.ex" \
+    "file://$dir/x.ex:12|$dir/x.ex:12" \
+    "file://$dir/x.ex#L12|$dir/x.ex:12"; do
+    : >"$FAKE_LOG"
+    HERDR_PLUGIN_CLICKED_URL="${url%%|*}" run bash "$PLUGIN_DIR/open-file.sh"
+    [ "$status" -eq 0 ]
+    grep -qx "${url#*|}" "$FAKE_LOG"
+  done
+}
+
+@test "open-file shows a notification when the file does not exist" {
+  export AGENT_TABS_EDITOR="$BATS_TEST_DIRNAME/fake-herdr"
+  HERDR_PLUGIN_CLICKED_URL="file:///no/such/file.md" run bash "$PLUGIN_DIR/open-file.sh"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"agent-tabs: The file /no/such/file.md does not exist."* ]]
+  [ "$(grep -c . "$FAKE_LOG")" -eq 1 ]
+}
+
+@test "open-file shows a notification for a URL that is not a file link" {
+  export AGENT_TABS_EDITOR="$BATS_TEST_DIRNAME/fake-herdr"
+  for url in "https://example.com/x.md" "file://" ""; do
+    : >"$FAKE_LOG"
+    HERDR_PLUGIN_CLICKED_URL="$url" run bash "$PLUGIN_DIR/open-file.sh"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"agent-tabs: Not a file link: $url"* ]]
   done
 }

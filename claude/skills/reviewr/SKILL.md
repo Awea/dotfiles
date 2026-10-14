@@ -6,8 +6,20 @@ disable-model-invocation: true
 allowed-tools: Bash(bash ~/.claude/skills/reviewr/open.sh *)
 ---
 
-The command below opened reviewr, or it gave the cause of the failure:
+Run this command, with DIR as an absolute path:
 
-!`bash ~/.claude/skills/reviewr/open.sh "$ARGUMENTS"`
+```bash
+bash ~/.claude/skills/reviewr/open.sh DIR
+```
 
-Give the user this result in one line. Do nothing more.
+DIR is the first folder that applies:
+
+1. The folder that the user gave: `$ARGUMENTS`.
+2. The root of the git worktree where you did the work of this session: edits, commits,
+   commands. Use the worktree of your most recent work. This worktree can be different
+   from your current folder.
+3. Your current folder.
+
+Do not run other commands to find DIR. Use what you know from this session.
+
+Give the user the output of the command in one line. Do nothing more.

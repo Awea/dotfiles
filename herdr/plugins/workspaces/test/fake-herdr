@@ -2,4 +2,23 @@
 # Fake herdr for the tests. It logs each call to $FAKE_LOG and prints fixed JSON.
 args=$(printf '%s | ' "$@")
 printf '%s\n' "${args% | }" >>"$FAKE_LOG"
-printf '{"result":{}}\n'
+case "${1:-} ${2:-}" in
+  "workspace create")
+    printf '{"result":{"workspace":{"workspace_id":"w2"},"root_pane":{"pane_id":"w2:p1"}}}\n'
+    ;;
+  "agent start")
+    if [ -n "${FAKE_START_FAIL:-}" ]; then
+      printf '{"error":{"code":"agent_not_ready"}}\n' >&2
+      exit 1
+    fi
+    printf '{"result":{}}\n'
+    ;;
+  "agent prompt")
+    if [ -n "${FAKE_PROMPT_FAIL:-}" ]; then
+      printf '{"error":{"code":"agent_blocked"}}\n' >&2
+      exit 1
+    fi
+    printf '{"result":{}}\n'
+    ;;
+  *) printf '{"result":{}}\n' ;;
+esac

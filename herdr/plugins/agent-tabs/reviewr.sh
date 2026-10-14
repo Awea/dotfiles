@@ -2,8 +2,9 @@
 # The /reviewr command of claude: open a reviewr pane right of the claude pane, for the
 # git worktree of claude. The tab zooms on reviewr.
 #
-#   reviewr.sh [DIR]    DIR is a folder of the worktree. Without DIR, the worktree of
-#                       the last edit of claude, or the current folder.
+#   reviewr.sh [DIR]    DIR is a folder of the worktree. Without DIR, the current folder.
+#
+# The skill tells claude to give DIR: claude knows the worktree where it works.
 #
 # The reviewr action "open" allows one reviewr in each workspace and uses the cwd of the
 # focused pane. This script opens one next to claude, unless the tab already has one for
@@ -17,41 +18,7 @@ if [ "${HERDR_ENV:-}" != 1 ] || [ -z "${HERDR_PANE_ID:-}" ]; then
   echo "reviewr: run /reviewr in a Herdr pane."
   exit 1
 fi
-dir="${1:-}"
-
-# Without DIR, use the worktree of the last file that claude edited in this session, in
-# the git repo of the current folder. Outside a git repo, use any git repo. The Herdr
-# pane gives the claude session ID, and the session transcript gives the edited files.
-if [ -z "$dir" ]; then
-  common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || common=""
-  session=$("$H" pane get "$HERDR_PANE_ID" 2>/dev/null |
-    jq -r '.result.pane.agent_session.value // empty') || session=""
-  transcript=""
-  if [ -n "$session" ]; then
-    transcript=$(find "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects" -maxdepth 2 \
-      -name "$session.jsonl" -print -quit 2>/dev/null) || transcript=""
-  fi
-  if [ -n "$transcript" ]; then
-    # The folders of the edited files, the last edit first, each folder one time.
-    mapfile -t folders < <(grep '"tool_use"' "$transcript" | jq -r '
-      select(.type == "assistant") | .message.content[]?
-      | select(.type == "tool_use" and (.name | IN("Edit", "Write", "MultiEdit", "NotebookEdit")))
-      | .input.file_path // .input.notebook_path // empty
-    ' 2>/dev/null | sed 's|/[^/]*$||' | tac | awk '!seen[$0]++')
-    for folder in "${folders[@]}"; do
-      [[ "$folder" == /* ]] || continue
-      # The folder of a deleted file can be gone. Use the nearest folder that exists.
-      while [ -n "$folder" ] && [ ! -d "$folder" ]; do folder="${folder%/*}"; done
-      [ -n "$folder" ] || continue
-      edited=$(git -C "$folder" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || continue
-      if [ -z "$common" ] || [ "$edited" = "$common" ]; then
-        dir="$folder"
-        break
-      fi
-    done
-  fi
-fi
-dir="${dir:-$PWD}"
+dir="${1:-$PWD}"
 if ! root=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null); then
   echo "reviewr: $dir is not in a git repo."
   exit 1

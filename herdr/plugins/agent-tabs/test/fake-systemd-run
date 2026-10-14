@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Fake systemd-run for the tests. It drops the options and runs the command.
+while [[ "${1:-}" == -* ]]; do
+  [ "$1" = -p ] && shift
+  shift
+done
+exec "$@"
