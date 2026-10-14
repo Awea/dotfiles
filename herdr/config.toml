@@ -1,6 +1,7 @@
 onboarding = false
 [ui]
 agent_panel_sort = "priority"
+pane_gaps = false
 
 show_agent_labels_on_pane_borders = false
 [ui.sound]

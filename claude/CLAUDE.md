@@ -46,6 +46,9 @@
 - In Herdr (`HERDR_ENV=1`), write each Herdr pane or tab ID in a reply as a link:
   `[wQ:p2](https://herdr.invalid/pane/wQ:p2)` or `[wQ:t2](https://herdr.invalid/tab/wQ:t2)`.
   A Ctrl-click on the link focuses that pane or tab (the agent-tabs plugin).
+- In Herdr, write each file path in a reply as a link to the absolute path:
+  `[docs/spec.md](file:///home/awea/repo/docs/spec.md)`. Add a line as `#L12`. A
+  Ctrl-click on the link opens the file in Sublime Text (the agent-tabs plugin).
 
 # Plugins
 

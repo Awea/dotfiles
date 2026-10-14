@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 # Fake fzf for the tests. It logs its input to $FAKE_FZF_INPUT. It prints the line
 # $FAKE_PICK (1 by default), or exits 130 like fzf on Esc when FAKE_CANCEL is set.
+# With --expect, it first prints the key $FAKE_KEY (empty for Enter), like fzf.
+# It logs its arguments, one for each line, to $FAKE_FZF_INPUT.args.
 cat >"$FAKE_FZF_INPUT"
+printf '%s\n' "$@" >"$FAKE_FZF_INPUT.args"
 [ -z "${FAKE_CANCEL:-}" ] || exit 130
+for arg in "$@"; do
+  case "$arg" in --expect | --expect=*) printf '%s\n' "${FAKE_KEY:-}" ;; esac
+done
 sed -n "${FAKE_PICK:-1}p" "$FAKE_FZF_INPUT"

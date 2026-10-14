@@ -100,22 +100,31 @@ The terminal must send the Ctrl-click to Herdr. Ghostty does (tested 2026-10-09)
 Terminal opens the link in the browser itself, so Herdr never gets the click.
 `scripts/programs/ghostty` installs Ghostty.
 
+## Open a file from a link
+
+Ctrl-click a link of the form `file:///<path>` in a pane. The link handler `file-link`
+runs the action `open-file`, and the file opens in Sublime Text. A line as `:12` or
+`#L12` at the end of the link opens the file at that line.
+
+Herdr opens only `http://` and `https://` links itself, so a file link needs the
+handler. Claude writes a bare path as plain text, which is not a link.
+`claude/CLAUDE.md` tells claude to write each file path as a `file://` link.
+
 ## Open reviewr next to claude
 
 In claude, type `/reviewr`. A [reviewr](https://github.com/persiyanov/herdr-reviewr) pane
 opens to the right of the claude pane and gets the focus. The tab zooms on reviewr. To see
-claude again, turn off the zoom. The command finds the git worktree for reviewr in this
-order:
+claude again, turn off the zoom. Claude gives the git worktree for reviewr in this order:
 
 1. The folder that you give: `/reviewr ../infrastructure-pds`.
-2. The worktree of the last file that claude edited in the session, in the git repo of
-   the current folder of claude. This can be a different worktree than the current folder.
-   Outside a git repo, the last edit in any git repo.
+2. The worktree of the most recent work of claude in the session. This can be a different
+   worktree than the current folder of claude.
 3. The current folder of claude.
 
-For step 2, Herdr gives the claude session ID of the pane. The script reads the edits
-(Edit, Write, MultiEdit and NotebookEdit) in the session transcript in
-`~/.claude/projects`. An edit with a Bash command, for example `sed -i`, does not count.
+Claude knows the worktree where it works, so the skill tells claude to give the folder to
+`open.sh`. This costs one claude turn. A script that reads the session transcript gives the
+wrong worktree when claude works with Bash commands, for example
+`cd ../objkt-com-web-2426 && git commit`.
 
 - If the tab already has a reviewr for the same worktree, the command opens nothing and
   shows the pane ID of that reviewr.
@@ -185,14 +194,15 @@ The plugin needs `bash`, `jq` in `/usr/bin` or `/bin`, `setsid` and `flock` (Lin
 
 | File | Use |
 |---|---|
-| `herdr-plugin.toml` | Manifest: the actions `new-tab`, `handoff`, `new-shell-tab` and `focus-link`, the link handler `herdr-link`, and the popup panes `new-tab-prompt` and `handoff-prompt`. |
-| `lib.sh` | Shared helpers: `notify` (log, and a toast in debug), `read_effort`, `read_focus`, `pane_cwd`, `main_worktree`, `open_claude_tab`, `name_agent`, `rename_agent`, `sync_agent_name`. |
+| `herdr-plugin.toml` | Manifest: the actions `new-tab`, `handoff`, `new-shell-tab`, `focus-link` and `open-file`, the link handlers `herdr-link` and `file-link`, and the popup panes `new-tab-prompt` and `handoff-prompt`. |
+| `lib.sh` | Shared helpers: `notify` (log, and a toast in debug), `read_effort`, `read_focus`, `pane_cwd`, `main_worktree`, `start_claude`, `open_claude_tab`, `name_agent`, `rename_agent`, `sync_agent_name`. The workspaces plugin also uses this file. |
 | `new-agent-tab.sh` | The `new-tab` action in three modes: `open` (opens the popup), `prompt` (popup), `worker` (background). |
 | `new-shell-tab.sh` | The `new-shell-tab` action: opens a shell tab with the focus, in one step, without a popup. |
 | `handoff.sh` | The `handoff` action in three modes: `open` (checks the agent), `prompt` (popup), `worker` (background). |
 | `sync-name.sh` | The SessionStart hook in two modes: `start` (hook) and `loop` (background). `make links` links it as `~/.claude/hooks/herdr-agent-name.sh`. |
 | `focus-link.sh` | The `focus-link` action: focuses the pane or the tab of a clicked Herdr link. |
-| `reviewr.sh` | The `/reviewr` command: opens reviewr right of the claude pane, for the worktree of claude. |
+| `open-file.sh` | The `open-file` action: opens the file of a clicked file link in Sublime Text. |
+| `reviewr.sh` | The `/reviewr` command: opens reviewr right of the claude pane, for the worktree of the folder that claude gives. |
 | `test/agent-tabs.bats` | Tests. |
 | `test/fake-herdr` | A fake `herdr` for the tests. It logs each call and gives fixed JSON. |
 

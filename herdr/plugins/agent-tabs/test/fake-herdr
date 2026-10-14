@@ -8,8 +8,6 @@ case "$1 $2" in
     if [ -n "${FAKE_PANE_MISSING:-}" ]; then
       printf '{"error":{"code":"pane_not_found"}}\n' >&2
       exit 1
-    elif [ -n "${FAKE_SESSION:-}" ]; then
-      printf '{"result":{"pane":{"tab_id":"w1:t9","agent_session":{"value":"%s"}}}}\n' "$FAKE_SESSION"
     elif [ -n "${FAKE_CWD:-}" ]; then
       printf '{"result":{"pane":{"tab_id":"w1:t9","foreground_cwd":"%s"}}}\n' "$FAKE_CWD"
     else

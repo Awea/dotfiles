@@ -29,11 +29,23 @@ title = "agent-tabs: focus a Herdr link"
 contexts = ["pane"]
 command = ["bash", "focus-link.sh"]
 
+[[actions]]
+id = "open-file"
+title = "agent-tabs: open a file link in Sublime Text"
+contexts = ["pane"]
+command = ["bash", "open-file.sh"]
+
 [[link_handlers]]
 id = "herdr-link"
 title = "Focus the Herdr pane or tab"
 pattern = "^https://herdr\\.invalid/(pane|tab)/[A-Za-z0-9]+:[A-Za-z0-9]+$"
 action = "focus-link"
+
+[[link_handlers]]
+id = "file-link"
+title = "Open the file in Sublime Text"
+pattern = "^file://"
+action = "open-file"
 
 [[panes]]
 id = "new-tab-prompt"

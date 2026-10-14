@@ -139,24 +139,30 @@ read_focus() {
   done
 }
 
-# Open a tab in workspace $1 with cwd $2. $3 is --focus (the default) or --no-focus.
-# $4 is the claude effort level, empty for the claude default.
-# Herdr gives the tab its number.
-# Start claude in it and print the pane ID. agent start needs a unique name, so use
-# the name "claude" while it starts, then clear it. name_agent gives the real name.
+# Start claude in pane $1. $2 is the claude effort level, empty for the claude default.
+# agent start needs a unique name, so use the name "claude" while it starts, then
+# clear it. name_agent gives the real name.
 # Clear the name also when the start fails: claude can still run in the pane, for
 # example blocked at a question, and the name "claude" then blocks each next start.
 # Return 1 on failure: callers run it where set -e does not apply.
+start_claude() {
+  if ! "$H" agent start claude --kind claude --pane "$1" --timeout 60000 \
+    ${2:+-- --effort "$2"} >/dev/null; then
+    "$H" agent rename "$1" --clear >/dev/null 2>&1 || true
+    return 1
+  fi
+  "$H" agent rename "$1" --clear >/dev/null || true
+}
+
+# Open a tab in workspace $1 with cwd $2. $3 is --focus (the default) or --no-focus.
+# $4 is the claude effort level, empty for the claude default.
+# Herdr gives the tab its number.
+# Start claude in it and print the pane ID. Return 1 on failure.
 open_claude_tab() {
   local created pane
   created=$("$H" tab create --workspace "$1" --cwd "$2" "${3:---focus}") || return 1
   pane=$(jq -r '.result.root_pane.pane_id' <<<"$created") || return 1
-  if ! "$H" agent start claude --kind claude --pane "$pane" --timeout 60000 \
-    ${4:+-- --effort "$4"} >/dev/null; then
-    "$H" agent rename "$pane" --clear >/dev/null 2>&1 || true
-    return 1
-  fi
-  "$H" agent rename "$pane" --clear >/dev/null || true
+  start_claude "$pane" "${4:-}" || return 1
   printf '%s\n' "$pane"
 }
 
