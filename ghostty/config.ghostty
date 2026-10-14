@@ -19,5 +19,8 @@ palette = 13=#c061cb
 palette = 14=#33c7de
 palette = 15=#ffffff
 
+# Copy the selected text to the system clipboard and the primary selection.
+copy-on-select = clipboard
+
 # One line per wheel notch. The default of 3 scrolls too far.
 mouse-scroll-multiplier = precision:1,discrete:1

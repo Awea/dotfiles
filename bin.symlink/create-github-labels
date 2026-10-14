@@ -33,7 +33,7 @@ labelsToDelete=(
 )
 
 echo "Delete labels"
-parallel --bar "curl -s --user '$USER:$PASS' --request DELETE 'https://api.github.com/repos/$USER_AND_REPO/labels/{}' > /dev/null" ::: ${labelsToDelete[@]}
+# parallel --bar "curl -s --user '$USER:$PASS' --request DELETE 'https://api.github.com/repos/$USER_AND_REPO/labels/{}' > /dev/null" ::: ${labelsToDelete[@]}
 
 # Labels to add to repository
 labelsToCreate=(
@@ -47,4 +47,4 @@ labelsToCreate=(
 )
 
 echo "Create labels"
-parallel --bar "curl -s --user '$USER:$PASS' --request POST --data {} 'https://api.github.com/repos/$USER_AND_REPO/labels' > /dev/null" ::: ${labelsToCreate[@]}
+parallel --bar "curl -s --user '$USER:$PASS' --request POST --data {} 'https://api.github.com/repos/$USER_AND_REPO/labels'" ::: "${labelsToCreate[@]}"
