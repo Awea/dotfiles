@@ -1,6 +1,6 @@
 # Copied from the GNOME Terminal profile: the font and the GNOME palette.
 font-family = Fira Code
-font-size = 14
+font-size = 16
 
 palette = 0=#171421
 palette = 1=#c01c28
