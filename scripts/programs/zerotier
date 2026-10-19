@@ -1,0 +1,53 @@
+#!/bin/zsh
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+zerotier_systemd_manager_vsn=0.4.0
+
+# anarcho.tech network. The zt link name (ztgxfhjjdm) comes from this id.
+network_id=883e0ebdf47a1998
+
+# ZeroTier One, from the vendor apt repo
+# https://www.zerotier.com/download/
+# gpg verifies the signed install script before bash runs it.
+if ! command -v zerotier-cli > /dev/null; then
+  curl -fsSL 'https://raw.githubusercontent.com/zerotier/ZeroTierOne/main/doc/contact%40zerotier.com.gpg' | gpg --import
+  install_script=$(curl -fsSL https://install.zerotier.com/ | gpg)
+  echo "$install_script" | sudo bash
+fi
+
+# zerotier-systemd-manager writes a systemd-networkd file for each zt link,
+# with the DNS servers and domains that the network controller sends.
+# ZeroTier cannot set DNS on Linux itself. A timer runs it every minute.
+# https://github.com/zerotier/zerotier-systemd-manager
+deb=zerotier-systemd-manager_${zerotier_systemd_manager_vsn}_linux_amd64.deb
+base=https://github.com/zerotier/zerotier-systemd-manager/releases/download/v${zerotier_systemd_manager_vsn}
+cd `mktemp -d`
+curl -fSL "${base}/${deb}" -o "$deb"
+
+# Verify integrity against the published checksums.
+expected=$(curl -fsSL "${base}/checksums.txt" | awk -v f="$deb" '$2 == f { print $1 }')
+actual=$(sha256sum "$deb" | awk '{ print $1 }')
+if [[ "$expected" != "$actual" ]]; then
+  echo "error: sha256 mismatch (expected ${expected:-none}, got $actual)" >&2
+  exit 1
+fi
+
+sudo apt install -y "./${deb}"
+
+# systemd-networkd applies the files, systemd-resolved serves the DNS.
+sudo systemctl enable --now systemd-networkd systemd-resolved
+sudo systemctl enable --now zerotier-systemd-manager.timer
+
+# Enabling systemd-networkd also enables systemd-networkd-wait-online. That
+# service waits for the zt link, which exists only after zerotier-one starts.
+# zerotier-one waits for network-online, so each boot gets a 2 minute delay.
+# NetworkManager-wait-online marks the network as online.
+sudo systemctl disable systemd-networkd-wait-online
+
+# Join the network and accept the DNS settings that it sends. The network
+# controller must also authorize this member.
+sudo zerotier-cli join "$network_id"
+sudo zerotier-cli set "$network_id" allowDNS=1
