@@ -1,0 +1,23 @@
+#!/bin/zsh
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+# NetworkManager manages the ethernet link, systemd-networkd manages ZeroTier.
+# Proton VPN needs NetworkManager on the uplink: NetworkManager routes the
+# VPN server through that link. Without that route, the tunnel loops into
+# itself. zerotier-systemd-manager needs systemd-networkd for the zt link DNS.
+
+# NetworkManager must not touch the links that other tools manage.
+sudo mkdir -p /etc/NetworkManager/conf.d
+sudo tee /etc/NetworkManager/conf.d/99-unmanaged.conf > /dev/null <<'CONF'
+[keyfile]
+unmanaged-devices=interface-name:wlo1;interface-name:zt*;interface-name:docker*;interface-name:br-*;interface-name:veth*
+CONF
+
+# systemd-networkd must not manage the ethernet link.
+sudo rm -f /etc/systemd/network/00-enp3s0.network
+
+sudo systemctl enable --now NetworkManager
+sudo systemctl reload NetworkManager
