@@ -9,7 +9,11 @@
 #   - Nix generations older than 14 days, then all unused store paths
 #   - Docker images, containers and build cache unused for 7 days
 #   - anonymous Docker volumes that no container uses (named volumes stay)
-#   - files in ~/.cache and ~/.npm not read for 30 days
+#   - caches that rebuild themselves, listed in rebuildable_caches below
+#
+# The caches go whole: / is mounted noatime, so a file's access time does not
+# tell whether a tool still reads it. Other tools keep data in ~/.cache, such as
+# antibody plugins and the iex history, so only the listed caches are removed.
 #
 # --force runs the cleanup whatever the free space is.
 # A systemd user timer runs this script every day, see config/nix/home.nix.
@@ -39,10 +43,23 @@ if command -v docker >/dev/null && docker info >/dev/null 2>&1; then
 fi
 
 echo "==> caches"
-for dir in "$HOME/.cache" "$HOME/.npm/_cacache"; do
+rebuildable_caches=(
+  "$HOME/.cache/uv"
+  "$HOME/.cache/pip"
+  "$HOME/.cache/yarn"
+  "$HOME/.cache/ms-playwright"
+  "$HOME/.cache/bazel"
+  "$HOME/.cache/typescript"
+  "$HOME/.cache/mesa_shader_cache"
+  "$HOME/.cache/mesa_shader_cache_db"
+  "$HOME/.cache/thumbnails"
+  "$HOME/.npm/_cacache"
+)
+for dir in "${rebuildable_caches[@]}"; do
   [[ -d "$dir" ]] || continue
-  find "$dir" -xdev -type f -atime +30 -delete 2>/dev/null || true
-  find "$dir" -xdev -mindepth 1 -type d -empty -delete 2>/dev/null || true
+  # Bazel makes its output read-only, rm cannot empty those directories
+  chmod -R u+w "$dir" 2>/dev/null || true
+  rm -rf "$dir" || echo "removing $dir failed"
 done
 
 after=$(free_gb)
