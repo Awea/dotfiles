@@ -21,3 +21,29 @@ sudo rm -f /etc/systemd/network/00-enp3s0.network
 
 sudo systemctl enable --now NetworkManager
 sudo systemctl reload NetworkManager
+
+# systemd-networkd removes routing rules that it did not create when it
+# starts or reloads. zerotier-systemd-manager reloads it, so keep the rules
+# of NetworkManager below.
+sudo mkdir -p /etc/systemd/networkd.conf.d
+sudo tee /etc/systemd/networkd.conf.d/00-foreign-rules.conf > /dev/null <<'CONF'
+[Network]
+ManageForeignRoutingPolicyRules=no
+CONF
+
+# Replies to inbound connections on the LAN address (the gateway forward
+# 2222 -> 22 of ssh-server) leave through the ethernet link, also with the
+# VPN up. Without the priority 100 rule they follow the VPN default route
+# into the tunnel. Outbound VPN traffic uses the tunnel address, so it stays
+# on the VPN. The priority 99 rules keep the replies to Docker and ZeroTier
+# on the main table. Needs the DHCP reservation for 192.168.1.199.
+# ipv4.routes replaces all the static routes of the profile.
+connection=$(nmcli -g GENERAL.CONNECTION device show enp3s0)
+if [[ -z "$connection" ]]; then
+  echo "enp3s0 has no NetworkManager connection. Connect it, then run this script again." >&2
+  exit 1
+fi
+sudo nmcli connection modify "$connection" \
+  ipv4.routing-rules "priority 99 from 192.168.1.199 to 172.16.0.0/12 table 254, priority 99 from 192.168.1.199 to 192.168.192.0/24 table 254, priority 100 from 192.168.1.199 table 100" \
+  ipv4.routes "0.0.0.0/0 192.168.1.1 table=100, 192.168.1.0/24 table=100"
+sudo nmcli device reapply enp3s0
