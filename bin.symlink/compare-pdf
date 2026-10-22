@@ -1,0 +1,110 @@
+#!/usr/bin/env bash
+
+# Compare two PDF files: page boxes, fonts, text and pixels of each page.
+#
+#   Usage: compare-pdf <a.pdf> <b.pdf> [out-dir]
+#
+# The reports and the page images go to out-dir. The default is a new temporary
+# folder. In diff-N.png, the changed pixels are red. DPI sets the render
+# resolution (default 100). FUZZ sets the color difference that two pixels can
+# have and still count as equal (default 5%), so anti-aliasing is not noise.
+# Needs poppler (pdfinfo, pdffonts, pdftotext, pdftoppm) and ImageMagick.
+
+set -euo pipefail
+
+usage() {
+  echo "Compare two PDF files: page boxes, fonts, text and pixels of each page."
+  echo "  Usage: compare-pdf <a.pdf> <b.pdf> [out-dir]"
+  exit 1
+}
+
+if [[ $# -lt 2 || "$1" == "-h" ]]; then
+  usage
+fi
+
+a="$1"
+b="$2"
+out="${3:-$(mktemp -d "${TMPDIR:-/tmp}/compare-pdf.XXXXXX")}"
+dpi="${DPI:-100}"
+fuzz="${FUZZ:-5%}"
+
+for f in "$a" "$b"; do
+  if [[ ! -f "$f" ]]; then
+    echo "Not a file: $f" >&2
+    exit 1
+  fi
+done
+
+# ImageMagick 7 (Homebrew) has magick, ImageMagick 6 (apt) has compare only
+if command -v magick >/dev/null; then
+  compare=(magick compare)
+else
+  compare=(compare)
+fi
+
+mkdir -p "$out"
+
+# The dates and the file size are always different, so they are not compared
+info() {
+  pdfinfo -box "$1" | grep -Ev '^(CreationDate|ModDate|File size):'
+}
+
+# Remove the subset prefix (ABCDEF+) and the object IDs, which change at each export
+fonts() {
+  pdffonts "$1" | tail -n +3 | sed -E 's/^[A-Z]{6}\+//; s/ +[0-9]+ +[0-9]+ *$//' | sort -u
+}
+
+echo "== Info (page count, boxes, producer)"
+if diff <(info "$a") <(info "$b") > "$out/info.diff"; then
+  echo "same"
+else
+  cat "$out/info.diff"
+fi
+
+echo
+echo "== Fonts (name, type, encoding, embedded, subset, unicode)"
+if diff <(fonts "$a") <(fonts "$b") > "$out/fonts.diff"; then
+  echo "same"
+else
+  cat "$out/fonts.diff"
+fi
+
+echo
+echo "== Text"
+pdftotext -layout "$a" "$out/a.txt"
+pdftotext -layout "$b" "$out/b.txt"
+if diff -u "$out/a.txt" "$out/b.txt" > "$out/text.diff"; then
+  echo "same"
+else
+  echo "$(grep -c '^[-+][^-+]' "$out/text.diff" || true) changed line(s), see $out/text.diff"
+fi
+
+echo
+echo "== Pixels at $dpi DPI, fuzz $fuzz"
+pages_a=$(pdfinfo "$a" | awk '/^Pages:/ { print $2 }')
+pages_b=$(pdfinfo "$b" | awk '/^Pages:/ { print $2 }')
+
+for ((n = 1; n <= (pages_a > pages_b ? pages_a : pages_b); n++)); do
+  if ((n > pages_a)); then
+    echo "page $n: missing in $a"
+    continue
+  fi
+  if ((n > pages_b)); then
+    echo "page $n: missing in $b"
+    continue
+  fi
+  # One page at a time, because pdftoppm pads the page number to the page count
+  pdftoppm -r "$dpi" -png -f "$n" -l "$n" -singlefile "$a" "$out/a-$n"
+  pdftoppm -r "$dpi" -png -f "$n" -l "$n" -singlefile "$b" "$out/b-$n"
+  # compare exits 1 when the images differ and 2 on error, and writes the metric to stderr
+  status=0
+  pixels=$("${compare[@]}" -metric AE -fuzz "$fuzz" "$out/a-$n.png" "$out/b-$n.png" "$out/diff-$n.png" 2>&1) || status=$?
+  case "$status" in
+    0) echo "page $n: same" ;;
+    1) echo "page $n: $pixels pixel(s) changed, see $out/diff-$n.png" ;;
+    *) echo "page $n: cannot compare, $pixels" ;;
+  esac
+done
+
+echo
+echo "Reports and images in $out"
