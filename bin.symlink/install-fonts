@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+
+# Install the OTF and TTF fonts found in a folder, for the current user.
+#
+#   Usage: install-fonts <folder>...
+#
+# Each folder is searched recursively. Its fonts go to a subfolder with the
+# same name in FONT_DIR. The default is ~/Library/Fonts on macOS, which loads
+# new fonts by itself, and ~/.local/share/fonts on Linux, where the fontconfig
+# cache is rebuilt.
+
+set -euo pipefail
+
+usage() {
+  echo "Install the OTF and TTF fonts found in a folder, for the current user."
+  echo "  Usage: install-fonts <folder>..."
+  exit 1
+}
+
+if [[ $# -eq 0 || "$1" == "-h" ]]; then
+  usage
+fi
+
+if [[ "$(uname)" == "Darwin" ]]; then
+  font_dir="${FONT_DIR:-$HOME/Library/Fonts}"
+else
+  font_dir="${FONT_DIR:-$HOME/.local/share/fonts}"
+fi
+
+for src in "$@"; do
+  if [[ ! -d "$src" ]]; then
+    echo "Not a folder: $src" >&2
+    exit 1
+  fi
+
+  # realpath is missing before macOS 13
+  dest="$font_dir/$(basename "$(cd "$src" && pwd)")"
+  mkdir -p "$dest"
+
+  count=0
+  while IFS= read -r -d '' font; do
+    cp "$font" "$dest/"
+    count=$((count + 1))
+  done < <(find "$src" -type f \( -iname '*.otf' -o -iname '*.ttf' \) -print0)
+
+  echo "$count font(s) from $src installed in $dest"
+done
+
+if [[ "$(uname)" != "Darwin" ]]; then
+  fc-cache -f "$font_dir"
+fi

@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+
+# Convert InDesign files (.indd, .indt, .idml) to DesignCraft files.
+#
+#   Usage: indd2designcraft [-f] <file>...
+#
+# Each file.designcraft goes next to its source. An existing file.designcraft
+# is kept, unless -f is given. The fonts in a "Document Fonts" folder next to
+# the source load first. The conversion warnings are printed.
+# Needs designcraft-cli (installed with DesignCraft).
+
+set -euo pipefail
+
+usage() {
+  echo "Convert InDesign files (.indd, .indt, .idml) to DesignCraft files."
+  echo "  Usage: indd2designcraft [-f] <file>..."
+  exit 1
+}
+
+force=false
+if [[ "${1:-}" == "-f" ]]; then
+  force=true
+  shift
+fi
+
+if [[ $# -eq 0 || "$1" == "-h" ]]; then
+  usage
+fi
+
+# A JSON string, for the parameters of designcraft-cli
+json_string() {
+  local s="${1//\\/\\\\}"
+  printf '"%s"' "${s//\"/\\\"}"
+}
+
+# The case of the extension does not matter
+shopt -s nocasematch
+
+for src in "$@"; do
+  case "$src" in
+    *.indd | *.indt | *.idml) ;;
+    *)
+      echo "Not an InDesign file: $src" >&2
+      exit 1
+      ;;
+  esac
+  if [[ ! -f "$src" ]]; then
+    echo "Not a file: $src" >&2
+    exit 1
+  fi
+
+  # realpath is missing before macOS 13
+  src="$(cd "$(dirname "$src")" && pwd)/$(basename "$src")"
+  dest="${src%.*}.designcraft"
+  if [[ -e "$dest" && "$force" == false ]]; then
+    echo "Already exists, use -f to replace it: $dest" >&2
+    exit 1
+  fi
+
+  out=$(designcraft-cli run \
+    --cmd "file.open={\"path\":$(json_string "$src")}" \
+    --cmd "file.save={\"path\":$(json_string "$dest")}")
+  # The first line is the result of file.open, with its warnings
+  opened="${out%%$'\n'*}"
+
+  if [[ "$opened" != *'"warnings":[]'* ]]; then
+    echo "Warnings for $src: $opened" >&2
+  fi
+  echo "$src -> $dest"
+done

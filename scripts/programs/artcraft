@@ -1,0 +1,21 @@
+#!/bin/zsh
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+# ArtCraft Launcher - installs the ArtCraft apps (PhotoCraft, FigCraft, PdfCraft...)
+# and keeps them up to date
+# https://getartcraft.com/apps
+artcraft_vsn=0.6.1
+deb="artcraft-launcher-${artcraft_vsn}-linux-x86_64.deb"
+release_url="https://github.com/storytold/craft-launcher/releases/download/v${artcraft_vsn}"
+tmp_dir="$(mktemp -d)"
+trap 'rm -rf "$tmp_dir"' EXIT
+# Let the _apt user read the .deb, else apt warns and installs it unsandboxed as root
+chmod 755 "$tmp_dir"
+
+curl -fL "$release_url/$deb" -o "$tmp_dir/$deb"
+curl -fL "$release_url/SHA256SUMS.txt" -o "$tmp_dir/SHA256SUMS.txt"
+(cd "$tmp_dir" && sha256sum --check --ignore-missing SHA256SUMS.txt)
+sudo apt install -y "$tmp_dir/$deb"
