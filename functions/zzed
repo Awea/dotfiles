@@ -4,5 +4,6 @@
 ## Repository: https://github.com/rupa/z
 zzed() {
   local target=$([ "$1" != "." ] && echo "$(z -e $1)" || echo "$1")
-  /opt/homebrew/bin/zed $target
+  # `command` skips the zed function of zsh (the zsh line editor for files)
+  command zed "$target"
 }
