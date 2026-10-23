@@ -32,9 +32,11 @@ setup() {
 # a pause, so that the code is ready to read it. Set status to the exit code of the
 # code, and output to the terminal output.
 run_in_tty() {
+  local cmd=(script -qec 'bash -c "$TTY_CODE"' /dev/null)
+  [ "$(uname -s)" != Darwin ] || cmd=(script -q /dev/null bash -c "$1")
   export TTY_CODE="$1"
   shift
-  run script -qec 'bash -c "$TTY_CODE"' /dev/null < <(
+  run "${cmd[@]}" < <(
     for keys in "$@"; do
       sleep 0.3
       printf "$keys"
