@@ -236,6 +236,20 @@ run_in_tty() {
   [ ! -s "$BATS_TEST_TMPDIR/line" ]
 }
 
+@test "read_line joins the lines of a paste" {
+  run_in_tty "source '$PLUGIN_DIR/lib.sh'; read_line 'Prompt: ' >'$BATS_TEST_TMPDIR/line'" \
+    'fix: ' '\x1b[200~one\r\ntwo\nthree\x1b[201~' ' end\r'
+  [ "$status" -eq 0 ]
+  [ "$(cat "$BATS_TEST_TMPDIR/line")" = 'fix: one two three end' ]
+}
+
+@test "read_line cancels on Esc after a paste" {
+  run_in_tty "source '$PLUGIN_DIR/lib.sh'; read_line 'Prompt: ' >'$BATS_TEST_TMPDIR/line'" \
+    'fix: ' '\x1b[200~one\ntwo\x1b[201~' '\x1b'
+  [ "$status" -eq 1 ]
+  [ ! -s "$BATS_TEST_TMPDIR/line" ]
+}
+
 @test "read_effort cancels on Esc" {
   run bash -c 'source "$1/lib.sh"; read_effort 2>/dev/null' _ "$PLUGIN_DIR" < <(printf '\x1b')
   [ "$status" -eq 1 ]

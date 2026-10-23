@@ -68,9 +68,23 @@ read_escape() {
   return 0
 }
 
+# Insert a paste in the readline line. readline runs this function on the start
+# of a bracketed paste. The function reads the text up to the paste end marker. It
+# turns each newline into a space and inserts the text at the cursor.
+read_paste() {
+  local text
+  IFS= read -r -d $'\e' text
+  IFS= read -r -n 5 _
+  text=${text//$'\r\n'/ }
+  text=${text//[$'\r\n']/ }
+  READLINE_LINE=${READLINE_LINE:0:READLINE_POINT}$text${READLINE_LINE:READLINE_POINT}
+  READLINE_POINT=$((READLINE_POINT + ${#text}))
+}
+
 # Print PROMPT, read a line with readline, and print the line. Enter confirms. The
 # readline keys edit the line, for example ctrl+w and alt+backspace delete a word.
-# Return 1 on Esc and at the end of the input.
+# Return 1 on Esc and at the end of the input. A newline in a paste becomes a space,
+# so only Enter confirms.
 # Esc alone sends USR1 to this shell. readline waits 50 ms for the rest of an escape
 # sequence, so the arrow keys and the alt keys still work.
 read_line() {
@@ -79,6 +93,7 @@ read_line() {
   bind 'set keyseq-timeout 50' 2>/dev/null
   # shellcheck disable=SC2016 # readline runs the command, so $BASHPID expands then.
   bind -x '"\e": kill -USR1 $BASHPID' 2>/dev/null
+  bind -x '"\e[200~": read_paste' 2>/dev/null
   IFS= read -r -e -p "$1" line || { trap - USR1; return 1; }
   trap - USR1
   printf '%s\n' "$line"

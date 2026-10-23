@@ -40,7 +40,8 @@ not do this. Its new tab stays in the folder of the old claude.
 
 The prompt line uses readline, so the shell keys edit the text. For example, `ctrl+w`
 and `alt+backspace` delete a word, `ctrl+u` deletes the line, and the arrow keys move
-the cursor. The focus line of the handoff popup uses the same keys.
+the cursor. A newline in a pasted text becomes a space, so only Enter sends the prompt.
+The focus line of the handoff popup uses the same keys.
 
 Claude gives the session a title after the first prompt. The plugin uses this title as the
 agent name in the sidebar, as a slug of 30 characters or less. If claude gives no title in 60 seconds,
