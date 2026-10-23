@@ -1,9 +1,35 @@
 {
   "env": {
-    "CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-5-5"
+    "CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-5-5",
+    "FORCE_HYPERLINK": "1"
   },
+  "model": "opus",
   "includeCoAuthoredBy": false,
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
   "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 $HOME/.claude/skills/ste-writing/hooks/ste-gate.py"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash $HOME/.claude/skills/ste-writing/hooks/ste-inject.sh"
+          }
+        ]
+      }
+    ],
     "SessionStart": [
       {
         "matcher": "^(startup|resume|clear|compact|fork)$",
@@ -47,5 +73,9 @@
       "effortLevel": "high"
     }
   },
-  "tui": "fullscreen"
+  "tui": "fullscreen",
+  "preferredNotifChannel": "notifications_disabled",
+  "remoteControlAtStartup": false,
+  "inputNeededNotifEnabled": false,
+  "agentPushNotifEnabled": false
 }
