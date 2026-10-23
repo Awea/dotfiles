@@ -21,3 +21,9 @@ sudo rm -f /etc/systemd/network/00-enp3s0.network
 
 sudo systemctl enable --now NetworkManager
 sudo systemctl reload NetworkManager
+
+# By default, NetworkManager marks the link online with only IPv6. Then
+# zerotier-one starts before the DHCPv4 lease and never binds to IPv4.
+# The connection name depends on the locale, so read it from the device.
+connection=$(nmcli -g GENERAL.CONNECTION device show enp3s0)
+sudo nmcli connection modify "$connection" ipv4.may-fail no
