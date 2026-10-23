@@ -4,6 +4,9 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+# Linux only: NetworkManager and systemd-networkd.
+[[ "$(uname)" == Linux ]] || { echo "Skip: Linux only"; exit 0; }
+
 # NetworkManager manages the ethernet link, systemd-networkd manages ZeroTier.
 # Proton VPN needs NetworkManager on the uplink: NetworkManager routes the
 # VPN server through that link. Without that route, the tunnel loops into

@@ -4,6 +4,9 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+# Linux only. On macOS, the Brewfile installs the zerotier-one cask.
+[[ "$(uname)" == Linux ]] || { echo "Skip: Linux only"; exit 0; }
+
 zerotier_systemd_manager_vsn=0.4.0
 
 # anarcho.tech network. The zt link name (ztgxfhjjdm) comes from this id.
