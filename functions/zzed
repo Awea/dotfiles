@@ -5,5 +5,5 @@
 zzed() {
   local target=$([ "$1" != "." ] && echo "$(z -e $1)" || echo "$1")
   # `command` skips the zed function of zsh (the zsh line editor for files)
-  command zed "$target"
+  command zed ${target:+"$target"}
 }
