@@ -29,6 +29,12 @@ fi
 # of an action when the action ends. Under setsid, Sublime Text does not start. So
 # start subl as a systemd user unit. subl exits at once, and systemd then stops the
 # processes of the unit: KillMode=process keeps Sublime Text. AGENT_TABS_LAUNCHER
-# replaces systemd-run, for the tests.
-"${AGENT_TABS_LAUNCHER:-systemd-run}" --user --collect --quiet -p KillMode=process \
+# replaces systemd-run, for the tests. macOS has no systemd-run: there, subl starts
+# Sublime Text through LaunchServices, not as a child, so subl runs directly.
+launcher="${AGENT_TABS_LAUNCHER:-systemd-run}"
+if command -v "$launcher" >/dev/null; then
+  "$launcher" --user --collect --quiet -p KillMode=process \
+    "${AGENT_TABS_EDITOR:-subl}" "$path${line:+:$line}" </dev/null
+else
   "${AGENT_TABS_EDITOR:-subl}" "$path${line:+:$line}" </dev/null
+fi

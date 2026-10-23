@@ -779,6 +779,15 @@ make_worktree() {
   done
 }
 
+@test "open-file runs the editor directly without systemd-run (macOS)" {
+  export AGENT_TABS_EDITOR="$BATS_TEST_DIRNAME/fake-herdr"
+  export AGENT_TABS_LAUNCHER="$BATS_TEST_TMPDIR/no-systemd-run"
+  touch "$BATS_TEST_TMPDIR/x.ex"
+  HERDR_PLUGIN_CLICKED_URL="file://$BATS_TEST_TMPDIR/x.ex:3" run bash "$PLUGIN_DIR/open-file.sh"
+  [ "$status" -eq 0 ]
+  grep -qx "$BATS_TEST_TMPDIR/x.ex:3" "$FAKE_LOG"
+}
+
 @test "open-file shows a notification when the file does not exist" {
   export AGENT_TABS_EDITOR="$BATS_TEST_DIRNAME/fake-herdr"
   HERDR_PLUGIN_CLICKED_URL="file:///no/such/file.md" run bash "$PLUGIN_DIR/open-file.sh"
