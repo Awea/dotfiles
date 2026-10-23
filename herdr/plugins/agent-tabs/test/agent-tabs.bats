@@ -518,24 +518,6 @@ panes_json() {
   printf '{"result":{"panes":[%s]}}\n' "$items"
 }
 
-@test "reviewr opens a zoomed split right of the agent for the worktree root" {
-  export HERDR_ENV=1
-  root=$(make_repo)
-  run bash "$PLUGIN_DIR/reviewr.sh" "$root/src"
-  [ "$status" -eq 0 ]
-  grep -qx "plugin | pane | open | --plugin | persiyanov.reviewr | --entrypoint | pane | --placement | zoomed | --target-pane | w1:p1 | --direction | right | --cwd | $root | --focus" "$FAKE_LOG"
-  [[ "$output" == *"w1:p8"*"$root"* ]]
-}
-
-@test "reviewr uses the current folder without an argument" {
-  export HERDR_ENV=1
-  root=$(make_repo)
-  cd "$root/src"
-  run bash "$PLUGIN_DIR/reviewr.sh"
-  [ "$status" -eq 0 ]
-  grep -q "^plugin | pane | open | .* | --cwd | $root | --focus$" "$FAKE_LOG"
-}
-
 # Make a commit in the repo and add the worktree repo-wt next to it. Print its root.
 make_worktree() {
   git -C "$BATS_TEST_TMPDIR/repo" -c user.name=t -c user.email=t@t -c commit.gpgsign=false commit -q --allow-empty -m init
@@ -544,70 +526,336 @@ make_worktree() {
   git -C "$BATS_TEST_TMPDIR/repo-wt" rev-parse --show-toplevel
 }
 
-@test "reviewr uses the linked worktree of the folder, not the current folder" {
-  export HERDR_ENV=1
+# Print the worktree file of pane w1:p1.
+wt_file() {
+  printf '%s\n' "$HOME/.local/state/herdr/plugins/awea.agent-tabs/worktrees/w1_p1"
+}
+
+# Write folder $1 as the recorded worktree of pane w1:p1.
+record_worktree() {
+  mkdir -p "$(dirname "$(wt_file)")"
+  printf '%s\n' "$1" >"$(wt_file)"
+}
+
+@test "reviewr opens a zoomed split right of the pane for the worktree root of the pane cwd" {
+  root=$(make_repo)
+  export FAKE_CWD="$root/src"
+  run bash "$PLUGIN_DIR/reviewr.sh"
+  [ "$status" -eq 0 ]
+  grep -qx "plugin | pane | open | --plugin | persiyanov.reviewr | --entrypoint | pane | --placement | zoomed | --target-pane | w1:p1 | --direction | right | --cwd | $root | --focus" "$FAKE_LOG"
+  [[ "$output" == *"w1:p8"*"$root"* ]]
+}
+
+@test "reviewr uses the recorded worktree of the pane, not the pane cwd" {
   root=$(make_repo)
   worktree=$(make_worktree)
-  cd "$root"
-  run bash "$PLUGIN_DIR/reviewr.sh" "$worktree/src"
+  record_worktree "$worktree"
+  export FAKE_CWD="$root"
+  run bash "$PLUGIN_DIR/reviewr.sh"
   [ "$status" -eq 0 ]
   grep -q "^plugin | pane | open | .* | --cwd | $worktree | --focus$" "$FAKE_LOG"
 }
 
-@test "reviewr opens nothing outside Herdr" {
-  unset HERDR_ENV
-  run bash "$PLUGIN_DIR/reviewr.sh" "$BATS_TEST_TMPDIR"
+@test "reviewr uses the pane cwd when the recorded folder no longer exists" {
+  root=$(make_repo)
+  record_worktree "$BATS_TEST_TMPDIR/gone"
+  export FAKE_CWD="$root/src"
+  run bash "$PLUGIN_DIR/reviewr.sh"
+  [ "$status" -eq 0 ]
+  grep -q "^plugin | pane | open | .* | --cwd | $root | --focus$" "$FAKE_LOG"
+}
+
+@test "reviewr opens nothing when no pane has focus" {
+  unset HERDR_PANE_ID
+  run bash "$PLUGIN_DIR/reviewr.sh"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"Herdr pane"* ]]
-  [ ! -s "$FAKE_LOG" ]
+  grep -q '^notification | show' "$FAKE_LOG"
+  [ "$(grep -c '^plugin | pane | open' "$FAKE_LOG")" -eq 0 ]
 }
 
 @test "reviewr opens nothing outside a git repo" {
-  export HERDR_ENV=1
   mkdir -p "$BATS_TEST_TMPDIR/plain"
-  run bash "$PLUGIN_DIR/reviewr.sh" "$BATS_TEST_TMPDIR/plain"
+  export FAKE_CWD="$BATS_TEST_TMPDIR/plain"
+  run bash "$PLUGIN_DIR/reviewr.sh"
   [ "$status" -eq 1 ]
   [[ "$output" == *"not in a git repo"* ]]
+  grep -q '^notification | show' "$FAKE_LOG"
   [ "$(grep -c '^plugin | pane | open' "$FAKE_LOG")" -eq 0 ]
 }
 
 @test "reviewr keeps the reviewr of the same worktree in the same tab" {
-  export HERDR_ENV=1
   root=$(make_repo)
-  export FAKE_PANES_JSON FAKE_REVIEWR_PANES="w1:p4"
+  export FAKE_CWD="$root" FAKE_PANES_JSON FAKE_REVIEWR_PANES="w1:p4"
   FAKE_PANES_JSON=$(panes_json "w1:p4 w1:t1 $root")
-  run bash "$PLUGIN_DIR/reviewr.sh" "$root"
+  run bash "$PLUGIN_DIR/reviewr.sh"
   [ "$status" -eq 0 ]
   [[ "$output" == *"w1:p4"* ]]
+  grep -qx 'pane | zoom | w1:p4 | --on' "$FAKE_LOG"
+  [ "$(grep -c '^plugin | pane | open' "$FAKE_LOG")" -eq 0 ]
+}
+
+@test "reviewr opens nothing when the focused pane is a reviewr" {
+  root=$(make_repo)
+  export FAKE_CWD="$root" FAKE_REVIEWR_PANES="w1:p1"
+  run bash "$PLUGIN_DIR/reviewr.sh"
+  [ "$status" -eq 0 ]
   [ "$(grep -c '^plugin | pane | open' "$FAKE_LOG")" -eq 0 ]
 }
 
 @test "reviewr opens when the other reviewr is in another tab or for another worktree" {
-  export HERDR_ENV=1
   root=$(make_repo)
-  export FAKE_PANES_JSON FAKE_REVIEWR_PANES="w1:p4 w1:p5"
+  export FAKE_CWD="$root" FAKE_PANES_JSON FAKE_REVIEWR_PANES="w1:p4 w1:p5"
   FAKE_PANES_JSON=$(panes_json "w1:p4 w1:t2 $root" "w1:p5 w1:t1 /other/worktree")
-  run bash "$PLUGIN_DIR/reviewr.sh" "$root"
+  run bash "$PLUGIN_DIR/reviewr.sh"
   [ "$status" -eq 0 ]
   grep -q '^plugin | pane | open' "$FAKE_LOG"
 }
 
 @test "reviewr does not count a pane in the worktree that is not reviewr" {
-  export HERDR_ENV=1
   root=$(make_repo)
-  export FAKE_PANES_JSON
+  export FAKE_CWD="$root" FAKE_PANES_JSON
   FAKE_PANES_JSON=$(panes_json "w1:p4 w1:t1 $root")
-  run bash "$PLUGIN_DIR/reviewr.sh" "$root"
+  run bash "$PLUGIN_DIR/reviewr.sh"
   [ "$status" -eq 0 ]
   grep -q '^plugin | pane | open' "$FAKE_LOG"
 }
 
 @test "reviewr shows the cause when Herdr does not open the pane" {
-  export HERDR_ENV=1 FAKE_PLUGIN_OPEN_FAIL=1
   root=$(make_repo)
-  run bash "$PLUGIN_DIR/reviewr.sh" "$root"
+  export FAKE_CWD="$root" FAKE_PLUGIN_OPEN_FAIL=1
+  run bash "$PLUGIN_DIR/reviewr.sh"
   [ "$status" -eq 1 ]
   [[ "$output" == *"plugin_not_found"* ]]
+}
+
+# Run the worktree hook in mode $1 with the hook JSON $2 on stdin.
+# Set CLAUDE_PROJECT_DIR to the repo first.
+track() {
+  run bash "$PLUGIN_DIR/track-worktree.sh" "$1" <<<"$2"
+}
+
+# Print the hook JSON for tool $1 with the tool input $2 and the cwd $3.
+tool_json() {
+  jq -cn --arg tool "$1" --argjson input "$2" --arg cwd "$3" \
+    '{hook_event_name: "PostToolUse", cwd: $cwd, tool_name: $tool, tool_input: $input}'
+}
+
+# Print the hook JSON for a Bash command $1 with the cwd $2.
+bash_json() {
+  tool_json Bash "$(jq -cn --arg c "$1" '{command: $c}')" "$2"
+}
+
+@test "track-worktree records the linked worktree of an Edit" {
+  export HERDR_ENV=1 CLAUDE_PROJECT_DIR
+  CLAUDE_PROJECT_DIR=$(make_repo)
+  worktree=$(make_worktree)
+  track tool "$(tool_json Edit "{\"file_path\":\"$worktree/src/a.txt\"}" "$CLAUDE_PROJECT_DIR")"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ "$(cat "$(wt_file)")" = "$worktree" ]
+}
+
+@test "track-worktree records the folder of a NotebookEdit" {
+  export HERDR_ENV=1 CLAUDE_PROJECT_DIR
+  CLAUDE_PROJECT_DIR=$(make_repo)
+  worktree=$(make_worktree)
+  track tool "$(tool_json NotebookEdit "{\"notebook_path\":\"$worktree/n.ipynb\"}" "$CLAUDE_PROJECT_DIR")"
+  [ "$(cat "$(wt_file)")" = "$worktree" ]
+}
+
+@test "track-worktree uses the nearest existing parent of a deleted file" {
+  export HERDR_ENV=1 CLAUDE_PROJECT_DIR
+  CLAUDE_PROJECT_DIR=$(make_repo)
+  worktree=$(make_worktree)
+  track tool "$(tool_json Write "{\"file_path\":\"$worktree/gone/deep/a.txt\"}" "$CLAUDE_PROJECT_DIR")"
+  [ "$(cat "$(wt_file)")" = "$worktree" ]
+}
+
+@test "track-worktree records the cd target of a Bash command" {
+  export HERDR_ENV=1 CLAUDE_PROJECT_DIR
+  CLAUDE_PROJECT_DIR=$(make_repo)
+  worktree=$(make_worktree)
+  track tool "$(bash_json "cd $worktree && git commit -m x" "$CLAUDE_PROJECT_DIR")"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$(wt_file)")" = "$worktree" ]
+}
+
+@test "track-worktree records a git -C target in quotes" {
+  export HERDR_ENV=1 CLAUDE_PROJECT_DIR
+  CLAUDE_PROJECT_DIR=$(make_repo)
+  worktree=$(make_worktree)
+  track tool "$(bash_json "git -C \"$worktree/src\" status" "$CLAUDE_PROJECT_DIR")"
+  [ "$(cat "$(wt_file)")" = "$worktree" ]
+}
+
+@test "track-worktree resolves a relative and a home target" {
+  export HERDR_ENV=1 CLAUDE_PROJECT_DIR
+  CLAUDE_PROJECT_DIR=$(make_repo)
+  worktree=$(make_worktree)
+  track tool "$(bash_json "cd ../repo-wt/src && ls" "$CLAUDE_PROJECT_DIR")"
+  [ "$(cat "$(wt_file)")" = "$worktree" ]
+  mkdir -p "$HOME"
+  ln -s "$worktree" "$HOME/wt"
+  rm "$(wt_file)"
+  track tool "$(bash_json "git -C ~/wt log" "$CLAUDE_PROJECT_DIR")"
+  [ "$(cat "$(wt_file)")" = "$worktree" ]
+}
+
+@test "track-worktree takes the last valid target and skips other repos and plain folders" {
+  export HERDR_ENV=1 CLAUDE_PROJECT_DIR
+  CLAUDE_PROJECT_DIR=$(make_repo)
+  worktree=$(make_worktree)
+  git init -q "$BATS_TEST_TMPDIR/other"
+  mkdir -p "$BATS_TEST_TMPDIR/plain"
+  track tool "$(bash_json "cd $CLAUDE_PROJECT_DIR && cd $worktree && git -C $BATS_TEST_TMPDIR/other log; cd '$BATS_TEST_TMPDIR/plain'; cd \$X; cd /no/such" "$CLAUDE_PROJECT_DIR")"
+  [ "$(cat "$(wt_file)")" = "$worktree" ]
+}
+
+@test "track-worktree keeps the old file for a Bash command without a target in the project" {
+  export HERDR_ENV=1 CLAUDE_PROJECT_DIR
+  CLAUDE_PROJECT_DIR=$(make_repo)
+  worktree=$(make_worktree)
+  record_worktree "$worktree"
+  track tool "$(bash_json "git status" "$CLAUDE_PROJECT_DIR")"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$(wt_file)")" = "$worktree" ]
+}
+
+@test "track-worktree records the hook cwd when it differs from the project" {
+  export HERDR_ENV=1 CLAUDE_PROJECT_DIR
+  CLAUDE_PROJECT_DIR=$(make_repo)
+  worktree=$(make_worktree)
+  track tool "$(bash_json "git status" "$worktree/src")"
+  [ "$(cat "$(wt_file)")" = "$worktree" ]
+}
+
+@test "track-worktree writes nothing outside Herdr" {
+  unset HERDR_ENV
+  export CLAUDE_PROJECT_DIR
+  CLAUDE_PROJECT_DIR=$(make_repo)
+  track tool "$(tool_json Edit "{\"file_path\":\"$CLAUDE_PROJECT_DIR/a\"}" "$CLAUDE_PROJECT_DIR")"
+  [ "$status" -eq 0 ]
+  [ ! -e "$(wt_file)" ]
+}
+
+@test "track-worktree start deletes the file of the pane" {
+  export HERDR_ENV=1
+  record_worktree /old
+  track start '{"hook_event_name":"SessionStart"}'
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ ! -e "$(wt_file)" ]
+}
+
+@test "track-worktree start keeps the file on compact and resume" {
+  export HERDR_ENV=1
+  record_worktree /old
+  track start '{"hook_event_name":"SessionStart","source":"compact"}'
+  [ -e "$(wt_file)" ]
+  track start '{"hook_event_name":"SessionStart","source":"resume"}'
+  [ -e "$(wt_file)" ]
+  track start '{"hook_event_name":"SessionStart","source":"fork"}'
+  [ -e "$(wt_file)" ]
+  track start '{"hook_event_name":"SessionStart","source":"clear"}'
+  [ ! -e "$(wt_file)" ]
+}
+
+@test "track-worktree end deletes the file of the pane" {
+  export HERDR_ENV=1
+  record_worktree /old
+  track end '{"hook_event_name":"SessionEnd"}'
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ ! -e "$(wt_file)" ]
+}
+
+@test "track-worktree uses HOME and not XDG_STATE_HOME" {
+  export HERDR_ENV=1 CLAUDE_PROJECT_DIR XDG_STATE_HOME="$BATS_TEST_TMPDIR/xdg"
+  CLAUDE_PROJECT_DIR=$(make_repo)
+  worktree=$(make_worktree)
+  track tool "$(tool_json Edit "{\"file_path\":\"$worktree/a\"}" "$CLAUDE_PROJECT_DIR")"
+  [ "$(cat "$(wt_file)")" = "$worktree" ]
+}
+
+@test "track-worktree resolves a relative target against the previous cd" {
+  export HERDR_ENV=1 CLAUDE_PROJECT_DIR
+  CLAUDE_PROJECT_DIR=$(make_repo)
+  worktree=$(make_worktree)
+  track tool "$(bash_json "cd $worktree && cd src && ls" "$CLAUDE_PROJECT_DIR")"
+  [ "$(cat "$(wt_file)")" = "$worktree" ]
+  rm "$(wt_file)"
+  track tool "$(bash_json "cd $worktree && git -C src status" "$CLAUDE_PROJECT_DIR")"
+  [ "$(cat "$(wt_file)")" = "$worktree" ]
+}
+
+@test "track-worktree ignores cd in heredocs, quoted strings and comments" {
+  export HERDR_ENV=1 CLAUDE_PROJECT_DIR
+  CLAUDE_PROJECT_DIR=$(make_repo)
+  worktree=$(make_worktree)
+  root=$CLAUDE_PROJECT_DIR
+  for cmd in \
+    "cd $worktree && git commit -m \"\$(cat <<'EOF'
+fix: x; cd $root
+EOF
+)\"" \
+    "cd $worktree && cat > notes <<EOF
+x; cd $root
+EOF" \
+    "cd $worktree; echo 'x; cd $root now'" \
+    "cd $worktree && git commit -m \"a && cd $root now\"" \
+    "cd $worktree # ; cd $root" \
+    "cd $root && cat > notes <<-EOF
+	x; cd $root
+	EOF
+cd $worktree" \
+    "echo \"x \\\"; cd $root; \\\" y\" && cd $worktree" \
+    "cd $root && echo \"a \\\" b\" && cd $worktree" \
+    "cd $root; echo it\\'s; cd $worktree" \
+    "cd $root && echo \$'it\\'s' && cd $worktree" \
+    "cd $root && cat <<< \"text\"
+cd $worktree"; do
+    rm -f "$(wt_file)"
+    track tool "$(bash_json "$cmd" "$root")"
+    [ "$(cat "$(wt_file)")" = "$worktree" ] || { echo "failed: $cmd"; false; }
+  done
+}
+
+@test "track-worktree accepts a tab, cd --, and git options before -C" {
+  export HERDR_ENV=1 CLAUDE_PROJECT_DIR
+  CLAUDE_PROJECT_DIR=$(make_repo)
+  worktree=$(make_worktree)
+  for cmd in "ls &&	cd $worktree" "cd -- $worktree" "git --no-pager -C $worktree log" "git -c a.b=c -C $worktree log"; do
+    rm -f "$(wt_file)"
+    track tool "$(bash_json "$cmd" "$CLAUDE_PROJECT_DIR")"
+    [ "$(cat "$(wt_file)")" = "$worktree" ]
+  done
+}
+
+@test "track-worktree keeps the old file for a command in a subfolder of the project" {
+  export HERDR_ENV=1 CLAUDE_PROJECT_DIR
+  CLAUDE_PROJECT_DIR=$(make_repo)
+  worktree=$(make_worktree)
+  record_worktree "$worktree"
+  track tool "$(bash_json "ls" "$CLAUDE_PROJECT_DIR/src")"
+  [ "$(cat "$(wt_file)")" = "$worktree" ]
+}
+
+@test "track-worktree uses the hook cwd when no target is valid" {
+  export HERDR_ENV=1 CLAUDE_PROJECT_DIR
+  CLAUDE_PROJECT_DIR=$(make_repo)
+  worktree=$(make_worktree)
+  track tool "$(bash_json "cd \$X && ls" "$worktree/src")"
+  [ "$(cat "$(wt_file)")" = "$worktree" ]
+}
+
+@test "track-worktree exits 0 with empty stdout on bad JSON" {
+  export HERDR_ENV=1
+  run bash -c 'bash "$1" tool <<<"not json{" 2>/dev/null' _ "$PLUGIN_DIR/track-worktree.sh"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  run bash -c 'bash "$1" start </dev/null 2>/dev/null' _ "$PLUGIN_DIR/track-worktree.sh"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
 }
 
 @test "new-tab worker starts claude in the main worktree root from a linked worktree" {

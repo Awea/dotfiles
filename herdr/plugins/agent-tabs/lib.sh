@@ -22,6 +22,13 @@ pane_cwd() {
   printf '%s\n' "${cwd:-$HOME}"
 }
 
+# Print the path of the file that holds the worktree of the most recent work of the
+# claude in pane $1. track-worktree.sh writes it and reviewr.sh reads it. The path
+# uses only HOME, because a Herdr action runs with a small environment.
+worktree_file() {
+  printf '%s\n' "$HOME/.local/state/herdr/plugins/awea.agent-tabs/worktrees/${1//:/_}"
+}
+
 # Print the folder for a new tab from folder $1. In a linked git worktree, print the
 # root of the main worktree. git lists the main worktree first. Else print $1: in the
 # main worktree, outside a git repo, in a bare repo (it has no main worktree) and when

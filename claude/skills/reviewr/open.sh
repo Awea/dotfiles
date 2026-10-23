@@ -1,1 +1,0 @@
-../../../herdr/plugins/agent-tabs/reviewr.sh

@@ -5,7 +5,7 @@ Claude starts a conversation with your prompt, or it continues the focused conve
 with a `/handoff` document.
 
 The plugin also gives each claude in Herdr its session title as agent name, and changes
-the name after `/rename`. The `/reviewr` command of claude opens reviewr next to claude.
+the name after `/rename`. The shortcut `ctrl+b` `d` opens reviewr next to claude.
 
 ## Shortcuts
 
@@ -16,6 +16,7 @@ The prefix is the Herdr default, `ctrl+b`.
 | `ctrl+b` `a` | `awea.agent-tabs.new-tab` | Asks for a prompt, an effort level and the tab focus, then starts claude with them in a new tab. In a linked git worktree, claude starts in the root of the main worktree of the repo. Else, claude starts in the folder of the focused pane. The tab opens in the background by default. The sidebar shows the session title of claude as the agent name. An empty prompt opens a clean claude tab. |
 | `ctrl+b` `shift+a` | `awea.agent-tabs.handoff` | Moves the focused claude conversation to a new tab with `/handoff`. |
 | `ctrl+b` `c` | `awea.agent-tabs.new-shell-tab` | Opens a shell tab without claude and gives it the focus. The tab starts in the same folder as the `ctrl+b` `a` tab. |
+| `ctrl+b` `d` | `awea.agent-tabs.reviewr` | Opens reviewr right of the focused pane, for the git worktree of the most recent work of claude in that pane. |
 
 The key bindings are in `herdr/config.toml`.
 
@@ -113,28 +114,37 @@ handler. Claude writes a bare path as plain text, which is not a link.
 
 ## Open reviewr next to claude
 
-In claude, type `/reviewr`. A [reviewr](https://github.com/persiyanov/herdr-reviewr) pane
-opens to the right of the claude pane and gets the focus. The tab zooms on reviewr. To see
-claude again, turn off the zoom. Claude gives the git worktree for reviewr in this order:
+1. Focus the claude pane.
+2. Press `ctrl+b` `d`.
 
-1. The folder that you give: `/reviewr ../infrastructure-pds`.
-2. The worktree of the most recent work of claude in the session. This can be a different
-   worktree than the current folder of claude.
-3. The current folder of claude.
+A [reviewr](https://github.com/persiyanov/herdr-reviewr) pane opens to the right of the
+pane and gets the focus. The tab zooms on reviewr. To see claude again, turn off the zoom.
+The action does not use a claude turn.
 
-Claude knows the worktree where it works, so the skill tells claude to give the folder to
-`open.sh`. This costs one claude turn. A script that reads the session transcript gives the
-wrong worktree when claude works with Bash commands, for example
-`cd ../objkt-com-web-2426 && git commit`.
+The action uses the git worktree of the most recent work of claude in the pane. The
+Claude Code hook `track-worktree.sh` records this worktree after each Edit, Write,
+MultiEdit, NotebookEdit and Bash tool call, also for subagents. A new session or
+`/clear` deletes the old record, and so does the end of the session. A compact or a
+resume keeps it. Without a record, the action uses the folder of the pane.
 
-- If the tab already has a reviewr for the same worktree, the command opens nothing and
-  shows the pane ID of that reviewr.
-- A reviewr in another tab, or for another worktree, does not stop the command.
-- Outside Herdr or outside a git repo, the command shows the cause and opens nothing.
+The hook takes the folder of the edited file. For a Bash command, it takes the last
+`cd` or `git -C` target, for example `cd ../objkt-com-web-2426 && git commit`. A relative
+target starts from the folder of the previous `cd`. The hook ignores `cd` in heredocs,
+in quoted text and in `#` comments. Claude Code puts the Bash folder back to the project
+folder after a `cd` out of the project. So a Bash command without a valid target uses the
+folder where the command runs (the hook cwd) only when it is not in the worktree of the
+project folder. The hook keeps only folders in the same repo as the session. A note in
+the vault or a file in `/tmp` does not change the record.
+
+- If the tab already has a reviewr for the same worktree, the action zooms on that
+  reviewr and opens nothing. Herdr cannot focus a pane by ID.
+- If the focused pane is a reviewr, the action does nothing.
+- A reviewr in another tab, or for another worktree, does not stop the action.
+- Outside a git repo, the action opens nothing.
+- The action writes each result to the plugin log. In debug, it also shows a toast.
 
 The reviewr action `open` is different: it opens one reviewr for each workspace, for the
-focused pane. The skill is in `claude/skills/reviewr/SKILL.md`. Its `open.sh` is a link to
-`reviewr.sh`.
+focused pane.
 
 ## Hand off a conversation
 
@@ -178,15 +188,33 @@ and shows the path. This does not open a new tab. The skill is in
 Run these commands from the root of the dotfiles:
 
 ```bash
-make links           # links herdr/config.toml, the /handoff and /reviewr skills, the name hook
+make links           # links herdr/config.toml, the /handoff skill, the name and worktree hooks
 make herdr-plugins   # registers the agent-tabs plugin in Herdr
 herdr server reload-config
 ```
 
-`~/.claude/settings.json` is not in the dotfiles. Add the hook to the `SessionStart` hooks:
+`~/.claude/settings.json` is not in the dotfiles. Add these hooks to the `SessionStart` hooks:
 
 ```json
-{ "type": "command", "command": "bash $HOME/.claude/hooks/herdr-agent-name.sh start", "timeout": 10 }
+{ "type": "command", "command": "bash $HOME/.claude/hooks/herdr-agent-name.sh start", "timeout": 10 },
+{ "type": "command", "command": "bash $HOME/.claude/hooks/herdr-worktree.sh start", "timeout": 10 }
+```
+
+Add this hook to the `SessionEnd` hooks:
+
+```json
+{ "type": "command", "command": "bash $HOME/.claude/hooks/herdr-worktree.sh end", "timeout": 10 }
+```
+
+Add this entry to the `PostToolUse` hooks:
+
+```json
+{
+  "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash",
+  "hooks": [
+    { "type": "command", "command": "bash $HOME/.claude/hooks/herdr-worktree.sh tool", "timeout": 10 }
+  ]
+}
 ```
 
 The plugin needs `bash`, `jq` in `/usr/bin` or `/bin`, `setsid` and `flock` (Linux only).
@@ -195,15 +223,16 @@ The plugin needs `bash`, `jq` in `/usr/bin` or `/bin`, `setsid` and `flock` (Lin
 
 | File | Use |
 |---|---|
-| `herdr-plugin.toml` | Manifest: the actions `new-tab`, `handoff`, `new-shell-tab`, `focus-link` and `open-file`, the link handlers `herdr-link` and `file-link`, and the popup panes `new-tab-prompt` and `handoff-prompt`. |
-| `lib.sh` | Shared helpers: `notify` (log, and a toast in debug), `read_effort`, `read_focus`, `pane_cwd`, `main_worktree`, `start_claude`, `open_claude_tab`, `name_agent`, `rename_agent`, `sync_agent_name`. The workspaces plugin also uses this file. |
+| `herdr-plugin.toml` | Manifest: the actions `new-tab`, `handoff`, `new-shell-tab`, `focus-link`, `open-file` and `reviewr`, the link handlers `herdr-link` and `file-link`, and the popup panes `new-tab-prompt` and `handoff-prompt`. |
+| `lib.sh` | Shared helpers: `notify` (log, and a toast in debug), `read_effort`, `read_focus`, `pane_cwd`, `worktree_file`, `main_worktree`, `start_claude`, `open_claude_tab`, `name_agent`, `rename_agent`, `sync_agent_name`. The workspaces plugin also uses this file. |
 | `new-agent-tab.sh` | The `new-tab` action in three modes: `open` (opens the popup), `prompt` (popup), `worker` (background). |
 | `new-shell-tab.sh` | The `new-shell-tab` action: opens a shell tab with the focus, in one step, without a popup. |
 | `handoff.sh` | The `handoff` action in three modes: `open` (checks the agent), `prompt` (popup), `worker` (background). |
 | `sync-name.sh` | The SessionStart hook in two modes: `start` (hook) and `loop` (background). `make links` links it as `~/.claude/hooks/herdr-agent-name.sh`. |
 | `focus-link.sh` | The `focus-link` action: focuses the pane or the tab of a clicked Herdr link. |
 | `open-file.sh` | The `open-file` action: opens the file of a clicked file link in Sublime Text. |
-| `reviewr.sh` | The `/reviewr` command: opens reviewr right of the claude pane, for the worktree of the folder that claude gives. |
+| `reviewr.sh` | The `reviewr` action: opens reviewr right of the focused pane, for the recorded worktree or the folder of the pane. |
+| `track-worktree.sh` | The Claude Code hook in three modes: `start` (SessionStart, deletes the record), `end` (SessionEnd, deletes the record) and `tool` (PostToolUse, records the worktree). `make links` links it as `~/.claude/hooks/herdr-worktree.sh`. |
 | `test/agent-tabs.bats` | Tests. |
 | `test/fake-herdr` | A fake `herdr` for the tests. It logs each call and gives fixed JSON. |
 
