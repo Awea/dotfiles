@@ -21,6 +21,8 @@ in
     jq
     uv
     codex
+    # Apt has tmux 3.2a, too old for OSC 8 hyperlinks (tmux 3.4+).
+    tmux
   ] ++ [
     inputs.hunk.packages.${system}.default
   ];

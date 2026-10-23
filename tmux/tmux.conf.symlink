@@ -1,6 +1,14 @@
 # Activate mouse control
 set -g mouse on
 
+# Ghostty does the terminal features. tmux only passes them through.
+# OSC 8 hyperlinks (needs tmux 3.4 or later)
+set -as terminal-features ",*:hyperlinks"
+# Programs in tmux can set the Ghostty clipboard (OSC 52)
+set -g set-clipboard on
+# Programs in tmux can send escape sequences to Ghostty (notifications, images)
+set -g allow-passthrough on
+
 # Keep same directory on split-window
 bind '"' split-window -c "#{pane_current_path}"
 bind % split-window -h -c "#{pane_current_path}"
