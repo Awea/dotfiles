@@ -40,6 +40,12 @@ command = "awea.agent-tabs.new-shell-tab"
 description = "new tab in the main worktree"
 
 [[keys.command]]
+key = "prefix+d"
+type = "plugin_action"
+command = "awea.agent-tabs.reviewr"
+description = "open reviewr next to the pane"
+
+[[keys.command]]
 key = "prefix+shift+n"
 type = "plugin_action"
 command = "awea.workspaces.new"

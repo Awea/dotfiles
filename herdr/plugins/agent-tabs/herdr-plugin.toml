@@ -35,6 +35,12 @@ title = "agent-tabs: open a file link in Sublime Text"
 contexts = ["pane"]
 command = ["bash", "open-file.sh"]
 
+[[actions]]
+id = "reviewr"
+title = "agent-tabs: open reviewr next to the pane"
+contexts = ["pane"]
+command = ["bash", "reviewr.sh"]
+
 [[link_handlers]]
 id = "herdr-link"
 title = "Focus the Herdr pane or tab"
