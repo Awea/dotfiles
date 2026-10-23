@@ -138,10 +138,10 @@
       },
     },
     "Elixir": {
-      "format_on_save": "off",
+      "format_on_save": "on",
       "show_edit_predictions": true,
       "language_servers": [
-        "!elixir-ls",
+        "elixir-ls",
         "!expert",
         "!next-ls",
         "!lexical",
