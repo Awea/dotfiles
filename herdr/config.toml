@@ -17,6 +17,9 @@ auto_switch = false
 # Free prefix+shift+n for awea.workspaces.new. The built-in binding wins over keys.command.
 [keys]
 new_workspace = []
+# tmux split keys
+split_vertical = "prefix+%"
+split_horizontal = "prefix+\""
 
 [[keys.command]]
 key = "prefix+a"
