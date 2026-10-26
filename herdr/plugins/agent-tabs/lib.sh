@@ -29,6 +29,12 @@ worktree_file() {
   printf '%s\n' "$HOME/.local/state/herdr/plugins/awea.agent-tabs/worktrees/${1//:/_}"
 }
 
+# Print the path of the file that holds the turn start of the claude in pane $1: one
+# "ROOT<TAB>TREE" line for each worktree of the turn. track-worktree.sh writes it.
+turn_file() {
+  printf '%s\n' "$HOME/.local/state/herdr/plugins/awea.agent-tabs/turns/${1//:/_}"
+}
+
 # Print the folder for a new tab from folder $1. In a linked git worktree, print the
 # root of the main worktree. git lists the main worktree first. Else print $1: in the
 # main worktree, outside a git repo, in a bare repo (it has no main worktree) and when

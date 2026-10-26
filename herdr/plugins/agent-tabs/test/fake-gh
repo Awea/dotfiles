@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Fake gh for the tests. It logs each call and its folder to $FAKE_LOG. It prints
+# $FAKE_GH_BASE as the base branch of the pull request. Without it, it fails as gh does
+# for a branch without a pull request.
+args=$(printf '%s | ' "$@")
+printf 'gh | %s | in %s\n' "${args% | }" "$PWD" >>"$FAKE_LOG"
+if [ -z "${FAKE_GH_BASE:-}" ]; then
+  printf 'no pull requests found for branch\n' >&2
+  exit 1
+fi
+printf '%s\n' "$FAKE_GH_BASE"

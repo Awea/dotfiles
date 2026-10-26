@@ -16,7 +16,7 @@ The prefix is the Herdr default, `ctrl+b`.
 | `ctrl+b` `a` | `awea.agent-tabs.new-tab` | Asks for a prompt, an effort level and the tab focus, then starts claude with them in a new tab. In a linked git worktree, claude starts in the root of the main worktree of the repo. Else, claude starts in the folder of the focused pane. The tab opens in the background by default. The sidebar shows the session title of claude as the agent name. An empty prompt opens a clean claude tab. |
 | `ctrl+b` `shift+a` | `awea.agent-tabs.handoff` | Moves the focused claude conversation to a new tab with `/handoff`. |
 | `ctrl+b` `c` | `awea.agent-tabs.new-shell-tab` | Opens a shell tab without claude and gives it the focus. The tab starts in the same folder as the `ctrl+b` `a` tab. |
-| `ctrl+b` `d` | `awea.agent-tabs.reviewr` | Opens reviewr right of the focused pane, for the git worktree of the most recent work of claude in that pane. |
+| `ctrl+b` `d` | `awea.agent-tabs.reviewr` | Opens reviewr right of the focused pane, for the git worktree of the most recent work of claude in that pane. reviewr shows the last claude turn and diffs against the target branch of the pull request. |
 
 The key bindings are in `herdr/config.toml`.
 
@@ -119,7 +119,8 @@ handler. Claude writes a bare path as plain text, which is not a link.
 
 A [reviewr](https://github.com/persiyanov/herdr-reviewr) pane opens to the right of the
 pane and gets the focus. The tab zooms on reviewr. To see claude again, turn off the zoom.
-The action does not use a claude turn.
+reviewr opens in the scope "last turn": the changes of the most recent claude turn.
+`herdr/reviewr.toml` sets this scope for all reviewr panes.
 
 The action uses the git worktree of the most recent work of claude in the pane. The
 Claude Code hook `track-worktree.sh` records this worktree after each Edit, Write,
@@ -137,11 +138,53 @@ project folder. The hook keeps only folders in the same repo as the session. A n
 the vault or a file in `/tmp` does not change the record.
 
 - If the tab already has a reviewr for the same worktree, the action zooms on that
-  reviewr and opens nothing. Herdr cannot focus a pane by ID.
+  reviewr and opens nothing. Herdr cannot focus a pane by ID. The worker does not
+  start, so a target that you chose in that reviewr stays.
+- The action never closes a reviewr: reviewr keeps the comments that it did not send
+  only in its memory.
+- A reviewr follows the turns of a claude in its worktree. For a claude in another
+  worktree, the reviewr reads the turn start only when its pane starts. The action
+  records the turn start of each pane that it opens. When the turn start changed, the
+  zoom shows the toast "reviewr shows an older turn. Close it, then press ctrl+b d to
+  see the new turn.", also without debug.
 - If the focused pane is a reviewr, the action does nothing.
 - A reviewr in another tab, or for another worktree, does not stop the action.
 - Outside a git repo, the action opens nothing.
 - The action writes each result to the plugin log. In debug, it also shows a toast.
+
+reviewr diffs against a target branch. The action sets it in this order:
+
+1. The base branch of the pull request. After a new pane opens, a background worker runs
+   `gh pr view` in the worktree, with a time limit of 15 seconds. reviewr reads the
+   target again at each refresh, so the change shows some seconds later. This target
+   replaces a target from the reflog and a target that you chose in reviewr.
+2. The branch that the worktree branch started from, in the reflog. The action writes
+   it before the pane opens, only when the worktree has no target yet. It skips a
+   branch made from `HEAD` or from a commit ID.
+3. The reviewr default: the default branch of the repo (`origin/HEAD`).
+
+The action stores the target in the ref `refs/worktree/reviewr/base-pick`, as the
+reviewr picker does. For the default branch, it deletes the ref. Without a pull
+request, or when `gh` fails, the worker changes nothing.
+
+reviewr records the start of a turn only while a reviewr pane is open. So the hooks
+record it too, and a pane that you open after the turn shows the turn:
+
+1. When you send a prompt, the `prompt` hook makes a snapshot of the recorded worktree
+   and of the worktree of the hook cwd. A snapshot is a tree object of all the files. It
+   does not change the index, the files or a ref.
+2. Before each tool call, the `pre` hook adds a snapshot of a worktree that the turn
+   moves to.
+3. When claude stops, the `stop` hook makes the snapshots again. For each worktree that
+   changed, it writes the turn start as `refs/worktree/reviewr/turn-base`. A turn that
+   changes no file keeps the old turn start, as in reviewr. Then the hook deletes the
+   turn file, so a second Stop in the same turn does nothing.
+
+Claude Code runs no Stop hook after an Esc. So when the turn file is still there, the
+`prompt` hook first ends that turn as the `stop` hook does, then records the new turn.
+
+A new session, `/clear` and the end of the session delete the turn file. A compact or a
+resume keeps it.
 
 The reviewr action `open` is different: it opens one reviewr for each workspace, for the
 focused pane.
@@ -181,14 +224,14 @@ and shows the path. This does not open a new tab. The skill is in
   `touch "$(herdr plugin config-dir awea.agent-tabs)/debug"`.
   To turn it off, remove that file.
 - To see the background logs, run
-  `find ~/.config/herdr ~/.local/state -name 'handoff.log' -o -name 'new-tab.log' -o -name 'sync-name.log'`.
+  `find ~/.config/herdr ~/.local/state -name 'handoff.log' -o -name 'new-tab.log' -o -name 'sync-name.log' -o -name 'reviewr.log'`.
 
 ## Install on a new machine
 
 Run these commands from the root of the dotfiles:
 
 ```bash
-make links           # links herdr/config.toml, the /handoff skill, the name and worktree hooks
+make links           # links herdr/config.toml, the reviewr config, the /handoff skill, the name and worktree hooks
 make herdr-plugins   # registers the agent-tabs plugin in Herdr
 herdr server reload-config
 ```
@@ -206,6 +249,29 @@ Add this hook to the `SessionEnd` hooks:
 { "type": "command", "command": "bash $HOME/.claude/hooks/herdr-worktree.sh end", "timeout": 10 }
 ```
 
+Add this hook to the `UserPromptSubmit` hooks:
+
+```json
+{ "type": "command", "command": "bash $HOME/.claude/hooks/herdr-worktree.sh prompt", "timeout": 10 }
+```
+
+Add this hook to the `Stop` hooks:
+
+```json
+{ "type": "command", "command": "bash $HOME/.claude/hooks/herdr-worktree.sh stop", "timeout": 10 }
+```
+
+Add this entry to the `PreToolUse` hooks:
+
+```json
+{
+  "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash",
+  "hooks": [
+    { "type": "command", "command": "bash $HOME/.claude/hooks/herdr-worktree.sh pre", "timeout": 10 }
+  ]
+}
+```
+
 Add this entry to the `PostToolUse` hooks:
 
 ```json
@@ -218,29 +284,32 @@ Add this entry to the `PostToolUse` hooks:
 ```
 
 The plugin needs `bash`, `jq` in `/usr/bin` or `/bin`, `setsid` and `flock` (Linux only).
+The reviewr target of a pull request needs `gh` and `timeout`.
 
 ## Files
 
 | File | Use |
 |---|---|
 | `herdr-plugin.toml` | Manifest: the actions `new-tab`, `handoff`, `new-shell-tab`, `focus-link`, `open-file` and `reviewr`, the link handlers `herdr-link` and `file-link`, and the popup panes `new-tab-prompt` and `handoff-prompt`. |
-| `lib.sh` | Shared helpers: `notify` (log, and a toast in debug), `read_effort`, `read_focus`, `pane_cwd`, `worktree_file`, `main_worktree`, `start_claude`, `open_claude_tab`, `name_agent`, `rename_agent`, `sync_agent_name`. The workspaces plugin also uses this file. |
+| `lib.sh` | Shared helpers: `notify` (log, and a toast in debug), `read_effort`, `read_focus`, `pane_cwd`, `worktree_file`, `turn_file`, `main_worktree`, `start_claude`, `open_claude_tab`, `name_agent`, `rename_agent`, `sync_agent_name`. The workspaces plugin also uses this file. |
 | `new-agent-tab.sh` | The `new-tab` action in three modes: `open` (opens the popup), `prompt` (popup), `worker` (background). |
 | `new-shell-tab.sh` | The `new-shell-tab` action: opens a shell tab with the focus, in one step, without a popup. |
 | `handoff.sh` | The `handoff` action in three modes: `open` (checks the agent), `prompt` (popup), `worker` (background). |
 | `sync-name.sh` | The SessionStart hook in two modes: `start` (hook) and `loop` (background). `make links` links it as `~/.claude/hooks/herdr-agent-name.sh`. |
 | `focus-link.sh` | The `focus-link` action: focuses the pane or the tab of a clicked Herdr link. |
 | `open-file.sh` | The `open-file` action: opens the file of a clicked file link in Sublime Text. |
-| `reviewr.sh` | The `reviewr` action: opens reviewr right of the focused pane, for the recorded worktree or the folder of the pane. |
-| `track-worktree.sh` | The Claude Code hook in three modes: `start` (SessionStart, deletes the record), `end` (SessionEnd, deletes the record) and `tool` (PostToolUse, records the worktree). `make links` links it as `~/.claude/hooks/herdr-worktree.sh`. |
+| `reviewr.sh` | The `reviewr` action in two modes: the action (opens reviewr right of the focused pane, for the recorded worktree or the folder of the pane, and writes the target from the reflog) and `base` (background, writes the target from the pull request). |
+| `track-worktree.sh` | The Claude Code hook in six modes: `start` (SessionStart, deletes the record and the turn file), `end` (SessionEnd, the same), `tool` (PostToolUse, records the worktree), `prompt` (UserPromptSubmit, writes the turn file), `pre` (PreToolUse, adds a worktree to the turn file) and `stop` (Stop, writes the reviewr turn base). `make links` links it as `~/.claude/hooks/herdr-worktree.sh`. |
 | `test/agent-tabs.bats` | Tests. |
 | `test/fake-herdr` | A fake `herdr` for the tests. It logs each call and gives fixed JSON. |
+| `test/fake-gh` | A fake `gh` for the tests. It logs each call and gives the base branch of a pull request. |
+| `../../reviewr.toml` | The reviewr config: the scope "last turn". `make links` links it as `~/.config/herdr/plugins/config/persiyanov.reviewr/config.toml`. |
 
 ## Tests
 
 ```bash
 bats herdr/plugins/agent-tabs/test/agent-tabs.bats
-shellcheck -x herdr/plugins/agent-tabs/*.sh herdr/plugins/agent-tabs/test/fake-herdr
+shellcheck -x herdr/plugins/agent-tabs/*.sh herdr/plugins/agent-tabs/test/fake-herdr herdr/plugins/agent-tabs/test/fake-gh
 ```
 
 With asdf, set the versions first:
