@@ -13,6 +13,9 @@ setup() {
   export HERDR_PLUGIN_CONFIG_DIR="$BATS_TEST_TMPDIR/config"
   export AGENT_TABS_LAUNCHER="$BATS_TEST_DIRNAME/fake-systemd-run"
   export AGENT_TABS_TITLE_TIMEOUT=0
+  export AGENT_TABS_GH="$BATS_TEST_DIRNAME/fake-gh"
+  export HERDR_PLUGIN_STATE_DIR="$BATS_TEST_TMPDIR/state"
+  mkdir -p "$HERDR_PLUGIN_STATE_DIR"
   mkdir -p "$HERDR_PLUGIN_CONFIG_DIR"
   touch "$HERDR_PLUGIN_CONFIG_DIR/debug"
   : >"$FAKE_LOG"
@@ -583,10 +586,18 @@ record_worktree() {
   [ "$(grep -c '^plugin | pane | open' "$FAKE_LOG")" -eq 0 ]
 }
 
+# Write the turn base $2 (empty for no ref) as the record of the reviewr pane $1.
+record_reviewr() {
+  local file="$HOME/.local/state/herdr/plugins/awea.agent-tabs/reviewr/${1//:/_}"
+  mkdir -p "$(dirname "$file")"
+  printf '%s\n' "$2" >"$file"
+}
+
 @test "reviewr keeps the reviewr of the same worktree in the same tab" {
   root=$(make_repo)
   export FAKE_CWD="$root" FAKE_PANES_JSON FAKE_REVIEWR_PANES="w1:p4"
   FAKE_PANES_JSON=$(panes_json "w1:p4 w1:t1 $root")
+  record_reviewr w1:p4 ""
   run bash "$PLUGIN_DIR/reviewr.sh"
   [ "$status" -eq 0 ]
   [[ "$output" == *"w1:p4"* ]]
@@ -1017,4 +1028,369 @@ cd $worktree"; do
     [ "$status" -eq 1 ]
     [[ "$output" == *"agent-tabs: Not a file link: $url"* ]]
   done
+}
+
+# Run git in folder $1 with the arguments $2... and a fixed author, without signatures.
+tgit() {
+  local dir="$1"
+  shift
+  git -C "$dir" -c user.name=t -c user.email=t@t -c commit.gpgsign=false "$@"
+}
+
+# Make the repo with one commit on master, and the branch dev. Print its root.
+make_base_repo() {
+  git init -q -b master "$BATS_TEST_TMPDIR/repo"
+  tgit "$BATS_TEST_TMPDIR/repo" commit -q --allow-empty -m init
+  tgit "$BATS_TEST_TMPDIR/repo" branch dev
+  git -C "$BATS_TEST_TMPDIR/repo" rev-parse --show-toplevel
+}
+
+# Make the branch $1 from the start point $2 and the worktree repo-$1 for it. Print its root.
+make_branch_worktree() {
+  tgit "$BATS_TEST_TMPDIR/repo" branch "$1" "$2"
+  git -C "$BATS_TEST_TMPDIR/repo" worktree add -q "$BATS_TEST_TMPDIR/repo-$1" "$1"
+  git -C "$BATS_TEST_TMPDIR/repo-$1" rev-parse --show-toplevel
+}
+
+# Print the reviewr base pick of worktree $1, or nothing without a pick.
+base_pick() {
+  git -C "$1" cat-file blob refs/worktree/reviewr/base-pick 2>/dev/null || true
+}
+
+@test "reviewr writes the base pick from the branch reflog before the pane opens" {
+  make_base_repo >/dev/null
+  worktree=$(make_branch_worktree feat dev)
+  export FAKE_CWD="$worktree"
+  run bash "$PLUGIN_DIR/reviewr.sh"
+  [ "$status" -eq 0 ]
+  [ "$(base_pick "$worktree")" = dev ]
+}
+
+@test "reviewr strips origin/ from the reflog base" {
+  root=$(make_base_repo)
+  tgit "$root" update-ref refs/remotes/origin/dev dev
+  worktree=$(make_branch_worktree feat origin/dev)
+  export FAKE_CWD="$worktree"
+  run bash "$PLUGIN_DIR/reviewr.sh"
+  [ "$(base_pick "$worktree")" = dev ]
+}
+
+@test "reviewr keeps a base pick that exists" {
+  make_base_repo >/dev/null
+  worktree=$(make_branch_worktree feat dev)
+  blob=$(printf 'other' | git -C "$worktree" hash-object -w --stdin)
+  git -C "$worktree" update-ref refs/worktree/reviewr/base-pick "$blob"
+  export FAKE_CWD="$worktree"
+  run bash "$PLUGIN_DIR/reviewr.sh"
+  [ "$status" -eq 0 ]
+  [ "$(base_pick "$worktree")" = other ]
+}
+
+@test "reviewr writes no base pick for a branch created from HEAD" {
+  root=$(make_base_repo)
+  git -C "$root" worktree add -q -b feat "$BATS_TEST_TMPDIR/repo-feat"
+  git -C "$root" reflog show --format=%gs refs/heads/feat | grep -qx 'branch: Created from HEAD'
+  export FAKE_CWD="$BATS_TEST_TMPDIR/repo-feat"
+  run bash "$PLUGIN_DIR/reviewr.sh"
+  [ "$status" -eq 0 ]
+  [ -z "$(base_pick "$BATS_TEST_TMPDIR/repo-feat")" ]
+}
+
+@test "reviewr writes no base pick for a branch created from the default branch" {
+  make_base_repo >/dev/null
+  worktree=$(make_branch_worktree feat master)
+  export FAKE_CWD="$worktree"
+  run bash "$PLUGIN_DIR/reviewr.sh"
+  [ "$status" -eq 0 ]
+  [ -z "$(base_pick "$worktree")" ]
+}
+
+@test "reviewr starts the base worker for the worktree" {
+  make_base_repo >/dev/null
+  worktree=$(make_branch_worktree feat dev)
+  export FAKE_CWD="$worktree"
+  run bash "$PLUGIN_DIR/reviewr.sh"
+  [ "$status" -eq 0 ]
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    grep -q "^gh | pr | view | .* | in $worktree$" "$FAKE_LOG" && break
+    sleep 0.2
+  done
+  grep -q "^gh | pr | view | --json | baseRefName | -q | .baseRefName | in $worktree$" "$FAKE_LOG"
+}
+
+@test "reviewr base writes the base branch of the pull request" {
+  make_base_repo >/dev/null
+  worktree=$(make_branch_worktree feat master)
+  export FAKE_GH_BASE=dev
+  run bash "$PLUGIN_DIR/reviewr.sh" base "$worktree"
+  [ "$status" -eq 0 ]
+  [ "$(base_pick "$worktree")" = dev ]
+}
+
+@test "reviewr base deletes the pick when the pull request targets the default branch" {
+  make_base_repo >/dev/null
+  worktree=$(make_branch_worktree feat dev)
+  blob=$(printf 'dev' | git -C "$worktree" hash-object -w --stdin)
+  git -C "$worktree" update-ref refs/worktree/reviewr/base-pick "$blob"
+  export FAKE_GH_BASE=master
+  run bash "$PLUGIN_DIR/reviewr.sh" base "$worktree"
+  [ "$status" -eq 0 ]
+  ! git -C "$worktree" rev-parse --verify -q refs/worktree/reviewr/base-pick
+}
+
+@test "reviewr base changes nothing without a pull request" {
+  make_base_repo >/dev/null
+  worktree=$(make_branch_worktree feat dev)
+  blob=$(printf 'dev' | git -C "$worktree" hash-object -w --stdin)
+  git -C "$worktree" update-ref refs/worktree/reviewr/base-pick "$blob"
+  run bash "$PLUGIN_DIR/reviewr.sh" base "$worktree"
+  [ "$status" -eq 0 ]
+  [ "$(base_pick "$worktree")" = dev ]
+}
+
+# Print the turn file of pane w1:p1.
+turn_file() {
+  printf '%s\n' "$HOME/.local/state/herdr/plugins/awea.agent-tabs/turns/w1_p1"
+}
+
+# Print the hook JSON for event $1 with the cwd $2.
+event_json() {
+  jq -cn --arg event "$1" --arg cwd "$2" '{hook_event_name: $event, cwd: $cwd}'
+}
+
+# Print the tree of the files in worktree $1, as a snapshot sees it.
+tree_of() {
+  local index="$BATS_TEST_TMPDIR/check-index"
+  rm -f "$index"
+  GIT_INDEX_FILE=$index git -C "$1" add -A
+  GIT_INDEX_FILE=$index git -C "$1" write-tree
+  rm -f "$index"
+}
+
+@test "track-worktree prompt writes a snapshot of the recorded worktree and the cwd worktree" {
+  export HERDR_ENV=1 CLAUDE_PROJECT_DIR
+  CLAUDE_PROJECT_DIR=$(make_repo)
+  worktree=$(make_worktree)
+  echo a >"$worktree/src/a.txt"
+  record_worktree "$worktree"
+  track prompt "$(event_json UserPromptSubmit "$CLAUDE_PROJECT_DIR/src")"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ "$(cat "$(turn_file)")" = "$(printf '%s\t%s\n%s\t%s' "$worktree" "$(tree_of "$worktree")" \
+    "$CLAUDE_PROJECT_DIR" "$(tree_of "$CLAUDE_PROJECT_DIR")")" ]
+  track prompt "$(event_json UserPromptSubmit "$worktree")"
+  [ "$(wc -l <"$(turn_file)")" -eq 1 ]
+}
+
+@test "track-worktree prompt leaves the real index and the git dir as they were" {
+  export HERDR_ENV=1 CLAUDE_PROJECT_DIR
+  CLAUDE_PROJECT_DIR=$(make_repo)
+  echo a >"$CLAUDE_PROJECT_DIR/a.txt"
+  git -C "$CLAUDE_PROJECT_DIR" add a.txt
+  echo b >"$CLAUDE_PROJECT_DIR/b.txt"
+  before=$(git -C "$CLAUDE_PROJECT_DIR" ls-files --stage)
+  files=$(ls -A "$CLAUDE_PROJECT_DIR/.git")
+  track prompt "$(event_json UserPromptSubmit "$CLAUDE_PROJECT_DIR")"
+  [ "$status" -eq 0 ]
+  [ -s "$(turn_file)" ]
+  [ "$(git -C "$CLAUDE_PROJECT_DIR" ls-files --stage)" = "$before" ]
+  [ "$(ls -A "$CLAUDE_PROJECT_DIR/.git")" = "$files" ]
+}
+
+@test "track-worktree pre appends the snapshot of a second worktree once" {
+  export HERDR_ENV=1 CLAUDE_PROJECT_DIR
+  CLAUDE_PROJECT_DIR=$(make_repo)
+  worktree=$(make_worktree)
+  track prompt "$(event_json UserPromptSubmit "$CLAUDE_PROJECT_DIR")"
+  [ "$(wc -l <"$(turn_file)")" -eq 1 ]
+  track pre "$(tool_json Edit "{\"file_path\":\"$worktree/src/a.txt\"}" "$CLAUDE_PROJECT_DIR")"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ "$(sed -n 2p "$(turn_file)")" = "$(printf '%s\t%s' "$worktree" "$(tree_of "$worktree")")" ]
+  echo a >"$worktree/src/a.txt"
+  track pre "$(bash_json "cd $worktree && ls" "$CLAUDE_PROJECT_DIR")"
+  [ "$(wc -l <"$(turn_file)")" -eq 2 ]
+  [ ! -e "$(wt_file)" ]
+}
+
+@test "track-worktree stop writes the turn base when the turn changed the worktree" {
+  export HERDR_ENV=1 CLAUDE_PROJECT_DIR
+  CLAUDE_PROJECT_DIR=$(make_repo)
+  track prompt "$(event_json UserPromptSubmit "$CLAUDE_PROJECT_DIR")"
+  start=$(tree_of "$CLAUDE_PROJECT_DIR")
+  echo a >"$CLAUDE_PROJECT_DIR/src/a.txt"
+  track stop "$(event_json Stop "$CLAUDE_PROJECT_DIR")"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ "$(git -C "$CLAUDE_PROJECT_DIR" rev-parse refs/worktree/reviewr/turn-base)" = "$start" ]
+  [ ! -e "$(turn_file)" ]
+}
+
+@test "track-worktree stop keeps the old turn base when the turn changed nothing" {
+  export HERDR_ENV=1 CLAUDE_PROJECT_DIR
+  CLAUDE_PROJECT_DIR=$(make_repo)
+  old=$(git -C "$CLAUDE_PROJECT_DIR" mktree </dev/null)
+  git -C "$CLAUDE_PROJECT_DIR" update-ref refs/worktree/reviewr/turn-base "$old"
+  echo a >"$CLAUDE_PROJECT_DIR/src/a.txt"
+  track prompt "$(event_json UserPromptSubmit "$CLAUDE_PROJECT_DIR")"
+  track stop "$(event_json Stop "$CLAUDE_PROJECT_DIR")"
+  [ "$status" -eq 0 ]
+  [ "$(git -C "$CLAUDE_PROJECT_DIR" rev-parse refs/worktree/reviewr/turn-base)" = "$old" ]
+}
+
+@test "track-worktree start and end delete the turn file" {
+  export HERDR_ENV=1
+  mkdir -p "$(dirname "$(turn_file)")"
+  echo x >"$(turn_file)"
+  track start '{"hook_event_name":"SessionStart","source":"resume"}'
+  [ -e "$(turn_file)" ]
+  track start '{"hook_event_name":"SessionStart","source":"startup"}'
+  [ ! -e "$(turn_file)" ]
+  echo x >"$(turn_file)"
+  track end '{"hook_event_name":"SessionEnd"}'
+  [ ! -e "$(turn_file)" ]
+}
+
+@test "track-worktree turn modes write nothing outside Herdr" {
+  unset HERDR_ENV
+  export CLAUDE_PROJECT_DIR
+  CLAUDE_PROJECT_DIR=$(make_repo)
+  track prompt "$(event_json UserPromptSubmit "$CLAUDE_PROJECT_DIR")"
+  [ "$status" -eq 0 ]
+  [ ! -e "$(turn_file)" ]
+}
+
+@test "reviewr records the turn base of the worktree for the new pane" {
+  root=$(make_repo)
+  tree=$(git -C "$root" mktree </dev/null)
+  git -C "$root" update-ref refs/worktree/reviewr/turn-base "$tree"
+  export FAKE_CWD="$root"
+  run bash "$PLUGIN_DIR/reviewr.sh"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$HOME/.local/state/herdr/plugins/awea.agent-tabs/reviewr/w1_p8")" = "$tree" ]
+}
+
+@test "reviewr base uses the origin branch at the commit of a plain origin/HEAD" {
+  root=$(make_base_repo)
+  tgit "$root" update-ref refs/remotes/origin/dev dev
+  tgit "$root" commit -q --allow-empty -m two
+  tgit "$root" update-ref refs/remotes/origin/trunk master
+  tgit "$root" update-ref refs/remotes/origin/HEAD master
+  worktree=$(make_branch_worktree feat dev)
+  blob=$(printf 'dev' | git -C "$worktree" hash-object -w --stdin)
+  git -C "$worktree" update-ref refs/worktree/reviewr/base-pick "$blob"
+  export FAKE_GH_BASE=trunk
+  run bash "$PLUGIN_DIR/reviewr.sh" base "$worktree"
+  [ "$status" -eq 0 ]
+  ! git -C "$worktree" rev-parse --verify -q refs/worktree/reviewr/base-pick
+}
+
+@test "track-worktree stop uses only the first line of a worktree" {
+  export HERDR_ENV=1 CLAUDE_PROJECT_DIR
+  CLAUDE_PROJECT_DIR=$(make_repo)
+  start=$(tree_of "$CLAUDE_PROJECT_DIR")
+  echo a >"$CLAUDE_PROJECT_DIR/src/a.txt"
+  later=$(tree_of "$CLAUDE_PROJECT_DIR")
+  echo b >"$CLAUDE_PROJECT_DIR/src/b.txt"
+  mkdir -p "$(dirname "$(turn_file)")"
+  printf '%s\t%s\n%s\t%s\n' "$CLAUDE_PROJECT_DIR" "$start" "$CLAUDE_PROJECT_DIR" "$later" >"$(turn_file)"
+  track stop "$(event_json Stop "$CLAUDE_PROJECT_DIR")"
+  [ "$(git -C "$CLAUDE_PROJECT_DIR" rev-parse refs/worktree/reviewr/turn-base)" = "$start" ]
+}
+
+@test "track-worktree prompt ends the old turn first, as after an Esc" {
+  export HERDR_ENV=1 CLAUDE_PROJECT_DIR
+  CLAUDE_PROJECT_DIR=$(make_repo)
+  track prompt "$(event_json UserPromptSubmit "$CLAUDE_PROJECT_DIR")"
+  start=$(tree_of "$CLAUDE_PROJECT_DIR")
+  echo a >"$CLAUDE_PROJECT_DIR/src/a.txt"
+  track prompt "$(event_json UserPromptSubmit "$CLAUDE_PROJECT_DIR")"
+  [ "$status" -eq 0 ]
+  [ "$(git -C "$CLAUDE_PROJECT_DIR" rev-parse refs/worktree/reviewr/turn-base)" = "$start" ]
+  [ "$(cut -f 2 "$(turn_file)")" = "$(tree_of "$CLAUDE_PROJECT_DIR")" ]
+}
+
+# Make a reviewr pane w1:p4 in the tab for the linked worktree, with an old turn base
+# record. Record the linked worktree as the work of claude. Print the worktree root.
+stale_reviewr() {
+  local worktree
+  make_repo >/dev/null
+  worktree=$(make_worktree)
+  git -C "$worktree" update-ref refs/worktree/reviewr/turn-base "$(git -C "$worktree" mktree </dev/null)"
+  record_worktree "$worktree"
+  record_reviewr w1:p4 ""
+  printf '%s\n' "$worktree"
+}
+
+@test "reviewr zooms on an old reviewr and shows a toast when claude works in another worktree" {
+  rm "$HERDR_PLUGIN_CONFIG_DIR/debug"
+  worktree=$(stale_reviewr)
+  export FAKE_CWD="$BATS_TEST_TMPDIR/repo" FAKE_PANES_JSON FAKE_REVIEWR_PANES="w1:p4"
+  FAKE_PANES_JSON=$(panes_json "w1:p4 w1:t1 $worktree")
+  run bash "$PLUGIN_DIR/reviewr.sh"
+  [ "$status" -eq 0 ]
+  grep -qx 'pane | zoom | w1:p4 | --on' "$FAKE_LOG"
+  grep -q '^notification | show | Agent tabs | --body | .*older turn' "$FAKE_LOG"
+  [ "$(grep -c '^pane | close' "$FAKE_LOG")" -eq 0 ]
+  [ "$(grep -c '^plugin | pane | open' "$FAKE_LOG")" -eq 0 ]
+}
+
+@test "reviewr shows no toast for an old reviewr when claude works in its worktree" {
+  rm "$HERDR_PLUGIN_CONFIG_DIR/debug"
+  worktree=$(stale_reviewr)
+  export FAKE_CWD="$worktree/src" FAKE_PANES_JSON FAKE_REVIEWR_PANES="w1:p4"
+  FAKE_PANES_JSON=$(panes_json "w1:p4 w1:t1 $worktree")
+  run bash "$PLUGIN_DIR/reviewr.sh"
+  [ "$status" -eq 0 ]
+  grep -qx 'pane | zoom | w1:p4 | --on' "$FAKE_LOG"
+  [ "$(grep -c '^notification' "$FAKE_LOG")" -eq 0 ]
+}
+
+@test "reviewr shows no toast when the record of the reviewr is current" {
+  rm "$HERDR_PLUGIN_CONFIG_DIR/debug"
+  worktree=$(stale_reviewr)
+  record_reviewr w1:p4 "$(git -C "$worktree" rev-parse refs/worktree/reviewr/turn-base)"
+  export FAKE_CWD="$BATS_TEST_TMPDIR/repo" FAKE_PANES_JSON FAKE_REVIEWR_PANES="w1:p4"
+  FAKE_PANES_JSON=$(panes_json "w1:p4 w1:t1 $worktree")
+  run bash "$PLUGIN_DIR/reviewr.sh"
+  [ "$status" -eq 0 ]
+  grep -qx 'pane | zoom | w1:p4 | --on' "$FAKE_LOG"
+  [ "$(grep -c '^notification' "$FAKE_LOG")" -eq 0 ]
+}
+
+@test "reviewr starts no base worker when it zooms on a reviewr" {
+  root=$(make_repo)
+  export FAKE_CWD="$root" FAKE_PANES_JSON FAKE_REVIEWR_PANES="w1:p4"
+  FAKE_PANES_JSON=$(panes_json "w1:p4 w1:t1 $root")
+  record_reviewr w1:p4 ""
+  run bash "$PLUGIN_DIR/reviewr.sh"
+  [ "$status" -eq 0 ]
+  sleep 1
+  [ "$(grep -c '^gh' "$FAKE_LOG")" -eq 0 ]
+}
+
+@test "reviewr base falls back to master when origin/HEAD points to no branch" {
+  root=$(make_base_repo)
+  git -C "$root" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/gone
+  worktree=$(make_branch_worktree feat dev)
+  blob=$(printf 'dev' | git -C "$worktree" hash-object -w --stdin)
+  git -C "$worktree" update-ref refs/worktree/reviewr/base-pick "$blob"
+  export FAKE_GH_BASE=master
+  run bash "$PLUGIN_DIR/reviewr.sh" base "$worktree"
+  [ "$status" -eq 0 ]
+  ! git -C "$worktree" rev-parse --verify -q refs/worktree/reviewr/base-pick
+}
+
+@test "track-worktree prompt after a stop keeps the turn base" {
+  export HERDR_ENV=1 CLAUDE_PROJECT_DIR
+  CLAUDE_PROJECT_DIR=$(make_repo)
+  track prompt "$(event_json UserPromptSubmit "$CLAUDE_PROJECT_DIR")"
+  echo a >"$CLAUDE_PROJECT_DIR/src/a.txt"
+  track stop "$(event_json Stop "$CLAUDE_PROJECT_DIR")"
+  # An open reviewr writes its own turn base after the stop.
+  base=$(tree_of "$CLAUDE_PROJECT_DIR")
+  git -C "$CLAUDE_PROJECT_DIR" update-ref refs/worktree/reviewr/turn-base "$base"
+  echo b >"$CLAUDE_PROJECT_DIR/src/b.txt"
+  track prompt "$(event_json UserPromptSubmit "$CLAUDE_PROJECT_DIR")"
+  [ "$(git -C "$CLAUDE_PROJECT_DIR" rev-parse refs/worktree/reviewr/turn-base)" = "$base" ]
 }

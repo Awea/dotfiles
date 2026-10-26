@@ -1,0 +1,2 @@
+# reviewr opens each pane in the scope of the last claude turn.
+default_scope = "last-turn"
