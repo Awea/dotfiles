@@ -10,6 +10,12 @@
 # Canonical copy: the ep01 kit, ste-writing/hooks/ste-inject.sh
 set -euo pipefail
 
+# A repo that ships its own ste hooks gives its own card. Two cards and two
+# gates on one reply would only repeat each other.
+if [ -d "${CLAUDE_PROJECT_DIR:-}/.claude/skills/ste/hooks" ]; then
+  exit 0
+fi
+
 PAYLOAD="$(cat)"
 SESSION="$(printf '%s' "$PAYLOAD" | jq -r '.session_id // "none"')"
 KEY="$(printf '%s' "$SESSION" | shasum | cut -c1-16)"

@@ -169,6 +169,11 @@ def strip_noise(text):
 # --- main ------------------------------------------------------------------
 
 def main():
+    # A repo that ships its own ste hooks runs its own gate. Two gates on one
+    # reply would block it two times.
+    project = os.environ.get("CLAUDE_PROJECT_DIR") or ""
+    if project and os.path.isdir(os.path.join(project, ".claude", "skills", "ste", "hooks")):
+        return 0
     try:
         payload = json.load(sys.stdin)
     except Exception:
