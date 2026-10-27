@@ -12,7 +12,8 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}"
 # shellcheck disable=SC2016 # The other bash expands BASH_VERSINFO.
 if [ "${BASH_VERSINFO[0]}" -lt 4 ] && [ "${BASH_SOURCE[1]:-}" = "$0" ] &&
   "$(command -v bash)" -c '[ "${BASH_VERSINFO[0]}" -ge 4 ]' 2>/dev/null; then
-  exec "$(command -v bash)" "$0" "$@"
+  # ${1+"$@"}: bash 3.2 with set -u stops on "$@" when there is no argument.
+  exec "$(command -v bash)" "$0" ${1+"$@"}
 fi
 
 H="${HERDR_BIN_PATH:-herdr}"
