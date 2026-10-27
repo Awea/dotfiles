@@ -1,0 +1,5 @@
+// macOS only. Sublime Text reads this file after Preferences.sublime-settings.
+{
+	"font_size": 16,
+	"update_check": true,
+}

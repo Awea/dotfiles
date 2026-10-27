@@ -4,6 +4,9 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+# Linux only. On macOS, the Brewfile installs fzf.
+[[ "$(uname)" == Linux ]] || { echo "Skip: Linux only"; exit 0; }
+
 # Navi require fzf to works
 # https://github.com/junegunn/fzf
 sudo apt install -y fzf

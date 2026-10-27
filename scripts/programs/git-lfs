@@ -4,6 +4,9 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+# Linux only. On macOS, the Brewfile installs git-lfs.
+[[ "$(uname)" == Linux ]] || { echo "Skip: Linux only"; exit 0; }
+
 # Git LFS
 # https://git-lfs.github.com/
 curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | sudo bash

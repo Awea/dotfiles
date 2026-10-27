@@ -9,9 +9,21 @@ symlink_paths := $(addprefix $(HOME)/., $(symlinks))
 # Documentation: https://www.gnu.org/software/make/manual/html_node/General-Search.html
 VPATH = $(shell dirname $(files_to_symlink))
 
+# Sublime Text/Merge keep their user packages in ~/Library on macOS
+ifeq ($(shell uname),Darwin)
+os := macos
+sublime_links := sublime-links
+# Antibody is archived and gone from Homebrew; antidote reads the same plugin list
+bundle_plugins := zsh -c 'source $$(brew --prefix antidote)/share/antidote/antidote.zsh && antidote bundle'
+else
+os := linux
+sublime_links := $(HOME)/.config/sublime-merge/Packages/User $(HOME)/.config/sublime-text/Packages/User
+bundle_plugins := antibody bundle
+endif
+
 ## Create symbolic links for files/folders with a .symlink suffix
 .PHONY: links
-links: $(symlink_paths) $(HOME)/.config/sublime-merge/Packages/User $(HOME)/.config/sublime-text/Packages/User antibody/zsh_plugins.sh $(HOME)/.config/direnv $(HOME)/.config/nix $(HOME)/.config/zed/settings.json $(HOME)/.config/zed/keymap.json $(HOME)/.claude/CLAUDE.md $(HOME)/.config/herdr/config.toml $(HOME)/.config/herdr/plugins/config/persiyanov.reviewr/config.toml $(HOME)/.config/ghostty/config.ghostty $(HOME)/.claude/skills/handoff $(HOME)/.claude/hooks/herdr-agent-name.sh $(HOME)/.claude/hooks/herdr-worktree.sh $(HOME)/.claude/skills/ste-writing
+links: $(symlink_paths) $(sublime_links) antibody/zsh_plugins.sh $(HOME)/.config/direnv $(HOME)/.config/nix $(HOME)/.config/zed/settings.json $(HOME)/.config/zed/keymap.json $(HOME)/.claude/CLAUDE.md $(HOME)/.claude/settings.json $(HOME)/.config/herdr/config.toml $(HOME)/.config/herdr/plugins/config/persiyanov.reviewr/config.toml $(HOME)/.config/ghostty/config.ghostty $(HOME)/.config/ghostty/os.ghostty $(HOME)/.claude/skills/handoff $(HOME)/.claude/hooks/herdr-agent-name.sh $(HOME)/.claude/hooks/herdr-worktree.sh $(HOME)/.claude/skills/ste-writing
 
 # Create all symlink
 # Documentation: https://www.gnu.org/software/make/manual/html_node/Automatic-Variables.html#Automatic-Variables
@@ -24,6 +36,12 @@ $(HOME)/.config/sublime-merge/Packages/User:
 $(HOME)/.config/sublime-text/Packages/User:
 	ln -s $(PWD)/sublime-text-3 $@
 
+# macOS: the scripts replace the default User folder with a link to this repo
+.PHONY: sublime-links
+sublime-links:
+	./scripts/symlinks/sublime-merge
+	./scripts/symlinks/sublime-text
+
 $(HOME)/.config/zed/settings.json:
 	ln -s $(PWD)/zed/settings.json $@
 
@@ -33,6 +51,10 @@ $(HOME)/.config/zed/keymap.json:
 $(HOME)/.claude/CLAUDE.md:
 	@mkdir -p $(dir $@)
 	ln -s $(PWD)/claude/CLAUDE.md $@
+
+$(HOME)/.claude/settings.json:
+	@mkdir -p $(dir $@)
+	ln -s $(PWD)/claude/settings.json $@
 
 $(HOME)/.config/herdr/config.toml:
 	@mkdir -p $(dir $@)
@@ -45,6 +67,11 @@ $(HOME)/.config/herdr/plugins/config/persiyanov.reviewr/config.toml:
 $(HOME)/.config/ghostty/config.ghostty:
 	@mkdir -p $(dir $@)
 	ln -s $(PWD)/ghostty/config.ghostty $@
+
+# config.ghostty reads os.ghostty: the settings of this OS only, such as the font size
+$(HOME)/.config/ghostty/os.ghostty:
+	@mkdir -p $(dir $@)
+	ln -s $(PWD)/ghostty/$(os).ghostty $@
 
 $(HOME)/.claude/skills/handoff:
 	@mkdir -p $(dir $@)
@@ -64,15 +91,27 @@ $(HOME)/.claude/skills/ste-writing:
 
 ## Register the local Herdr plugins
 .PHONY: herdr-plugins
-herdr-plugins:
+herdr-plugins: herdr-hook
 	herdr plugin link $(PWD)/herdr/plugins/agent-tabs
 	herdr plugin link $(PWD)/herdr/plugins/workspaces
+
+# herdr integration install also adds its hook to ~/.claude/settings.json, with the
+# absolute path of the home folder. That file links to claude/settings.json, which runs
+# the hook with $HOME already. So install into a temporary home and copy only the hook.
+## Install or update the Herdr hook that reports the Claude state
+.PHONY: herdr-hook
+herdr-hook:
+	@mkdir -p $(HOME)/.claude/hooks
+	tmp=$$(mktemp -d) && trap 'rm -rf "$$tmp"' EXIT && \
+		mkdir $$tmp/.claude && \
+		HOME=$$tmp herdr integration install claude >/dev/null && \
+		cp $$tmp/.claude/hooks/herdr-agent-state.sh $(HOME)/.claude/hooks/
 
 $(HOME)/.config/%:
 	ln -s $(PWD)/config/$* $@
 
 antibody/zsh_plugins.sh: antibody/zsh_plugins.txt
-	antibody bundle < $< > $@
+	$(bundle_plugins) < $< > $@
 
 define primary
 \033[38;2;166;204;112;1m$(1)\033[0m
@@ -103,23 +142,23 @@ help:
 			} \
 		}\
 		\
-		if ($$0 ~ /^.PHONY: [a-zA-Z0-9]+$$/) { \
+		if ($$0 ~ /^.PHONY: [a-zA-Z0-9_-]+$$/) { \
 			helpCommand = substr($$0, index($$0, ":") + 2); \
 			if (helpMessage) { \
-				printf "    $(call primary,%-8s)%s\n", \
+				printf "    $(call primary,%-14s)%s\n", \
 					helpCommand, helpMessage; \
 				helpMessage = ""; \
 			} \
 		} else if ($$0 ~ /^[a-zA-Z\-\_0-9.]+:/) { \
 			helpCommand = substr($$0, 0, index($$0, ":")); \
 			if (helpMessage) { \
-				printf "    $(call primary,%-8s)%s\n", \
+				printf "    $(call primary,%-14s)%s\n", \
 					helpCommand, helpMessage; \
 				helpMessage = ""; \
 			} \
 		} else if ($$0 ~ /^##/) { \
 			if (helpMessage) { \
-				helpMessage = helpMessage "\n            " substr($$0, 3); \
+				helpMessage = helpMessage "\n                  " substr($$0, 3); \
 			} else { \
 				helpMessage = substr($$0, 3); \
 			} \

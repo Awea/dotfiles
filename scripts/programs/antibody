@@ -4,6 +4,10 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+# Linux only. Antibody is gone from Homebrew: on macOS, the Brewfile installs
+# antidote, and the Makefile bundles the plugins with it.
+[[ "$(uname)" == Linux ]] || { echo "Skip: Linux only"; exit 0; }
+
 # Antibody
 # https://getantibody.github.io/
 curl -sfL git.io/antibody | sudo sh -s - -b /usr/local/bin

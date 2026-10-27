@@ -15,8 +15,9 @@
 # and the focus, as the agent-tabs new-tab action does, then starts claude in the
 # workspace. The claude helpers come from the agent-tabs plugin.
 set -euo pipefail
-# Herdr runs plugin commands with a small PATH. Add the system paths for fzf.
-export PATH="${PATH:-}:/usr/bin:/bin"
+# Herdr runs plugin commands with a small PATH. Add the system paths for fzf. On macOS,
+# Homebrew puts fzf in /opt/homebrew/bin (Apple silicon) or /usr/local/bin.
+export PATH="${PATH:-}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
 
 H="${HERDR_BIN_PATH:-herdr}"
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -43,7 +44,10 @@ case "${1:-}" in
         ' "${_Z_DATA:-$HOME/.z}" | sort -t'|' -k1,1nr | cut -d'|' -f2-
       fi
     } | awk '!seen[$0]++' | while IFS= read -r dir; do
-      if [ -d "$dir" ]; then printf '%s\n' "${dir/#$HOME/\~}"; fi
+      [ -d "$dir" ] || continue
+      # Not ${dir/#$HOME/\~}: bash 3.2 (/bin/bash on macOS) keeps the backslash.
+      case "$dir" in "$HOME" | "$HOME"/*) dir="~${dir#"$HOME"}" ;; esac
+      printf '%s\n' "$dir"
     done
     ;;
   pick)
@@ -66,7 +70,7 @@ case "${1:-}" in
     effort=$(read_effort) || exit 0
     focus=$(read_focus) || exit 0
     log="${HERDR_PLUGIN_STATE_DIR:-/tmp}/new-workspace.log"
-    setsid -f bash "$here/new-workspace.sh" worker "$dir" "$prompt" "$effort" "$focus" \
+    detach bash "$here/new-workspace.sh" worker "$dir" "$prompt" "$effort" "$focus" \
       </dev/null >>"$log" 2>&1
     ;;
   worker)

@@ -4,6 +4,9 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+# Linux only. On macOS, the Brewfile installs Ghostty.
+[[ "$(uname)" == Linux ]] || { echo "Skip: Linux only"; exit 0; }
+
 # [Ghostty](https://ghostty.org) - A fast, GPU-accelerated terminal emulator
 # Pop!_OS 22.04 ships GTK 4.6, too old for a native Ghostty build. The classic snap
 # brings its own GTK. setup runs this script before scripts/programs/snap, so install

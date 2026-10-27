@@ -232,66 +232,41 @@ Run these commands from the root of the dotfiles:
 
 ```bash
 make links           # links herdr/config.toml, the reviewr config, the /handoff skill, the name and worktree hooks
-make herdr-plugins   # registers the agent-tabs plugin in Herdr
+make herdr-plugins   # installs the Herdr state hook, registers the agent-tabs plugin in Herdr
 herdr server reload-config
 ```
 
-`~/.claude/settings.json` is not in the dotfiles. Add these hooks to the `SessionStart` hooks:
+`make links` also links `claude/settings.json` as `~/.claude/settings.json`. That file
+has the hooks: `herdr-agent-name.sh start`, and `herdr-worktree.sh` with the modes `start`
+(`SessionStart`), `end` (`SessionEnd`), `prompt` (`UserPromptSubmit`), `stop` (`Stop`), `pre`
+(`PreToolUse`) and `tool` (`PostToolUse`). The tool hooks use the matcher
+`Edit|Write|MultiEdit|NotebookEdit|Bash`. It also runs `herdr-agent-state.sh session`, the
+hook of the Herdr integration for Claude.
 
-```json
-{ "type": "command", "command": "bash $HOME/.claude/hooks/herdr-agent-name.sh start", "timeout": 10 },
-{ "type": "command", "command": "bash $HOME/.claude/hooks/herdr-worktree.sh start", "timeout": 10 }
+`make herdr-hook` installs or updates `~/.claude/hooks/herdr-agent-state.sh`. Do not run
+`herdr integration install claude`: it adds a second copy of the hook to
+`claude/settings.json`, with the absolute path of the home folder. Run `make herdr-hook`
+after each `herdr update`, for example from topgrade, in `~/.config/topgrade.toml`:
+
+```toml
+[commands]
+"Herdr" = "herdr update && make -C ~/.workspace/dotfiles herdr-hook"
 ```
 
-Add this hook to the `SessionEnd` hooks:
-
-```json
-{ "type": "command", "command": "bash $HOME/.claude/hooks/herdr-worktree.sh end", "timeout": 10 }
-```
-
-Add this hook to the `UserPromptSubmit` hooks:
-
-```json
-{ "type": "command", "command": "bash $HOME/.claude/hooks/herdr-worktree.sh prompt", "timeout": 10 }
-```
-
-Add this hook to the `Stop` hooks:
-
-```json
-{ "type": "command", "command": "bash $HOME/.claude/hooks/herdr-worktree.sh stop", "timeout": 10 }
-```
-
-Add this entry to the `PreToolUse` hooks:
-
-```json
-{
-  "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash",
-  "hooks": [
-    { "type": "command", "command": "bash $HOME/.claude/hooks/herdr-worktree.sh pre", "timeout": 10 }
-  ]
-}
-```
-
-Add this entry to the `PostToolUse` hooks:
-
-```json
-{
-  "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash",
-  "hooks": [
-    { "type": "command", "command": "bash $HOME/.claude/hooks/herdr-worktree.sh tool", "timeout": 10 }
-  ]
-}
-```
-
-The plugin needs `bash`, `jq` in `/usr/bin` or `/bin`, `setsid` and `flock` (Linux only).
-The reviewr target of a pull request needs `gh` and `timeout`.
+The plugin needs `bash` 4 or later and `jq`, in `/opt/homebrew/bin`, `/usr/local/bin`,
+`/usr/bin` or `/bin`. On macOS, `/bin/bash` is bash 3.2: install bash with Homebrew. The
+scripts then run again with that bash. The scripts use `setsid` and `flock` when they
+exist (Linux). Without them (macOS), a subshell that ignores SIGHUP starts the background
+workers and a lock folder keeps one name loop for each pane.
+The reviewr target of a pull request needs `gh`, and `timeout` (Linux) or `gtimeout` (macOS,
+from the Homebrew `coreutils`).
 
 ## Files
 
 | File | Use |
 |---|---|
 | `herdr-plugin.toml` | Manifest: the actions `new-tab`, `handoff`, `new-shell-tab`, `focus-link`, `open-file` and `reviewr`, the link handlers `herdr-link` and `file-link`, and the popup panes `new-tab-prompt` and `handoff-prompt`. |
-| `lib.sh` | Shared helpers: `notify` (log, and a toast in debug), `read_effort`, `read_focus`, `pane_cwd`, `worktree_file`, `turn_file`, `main_worktree`, `start_claude`, `open_claude_tab`, `name_agent`, `rename_agent`, `sync_agent_name`. The workspaces plugin also uses this file. |
+| `lib.sh` | Shared helpers: `notify` (log, and a toast in debug), `detach`, `read_effort`, `read_focus`, `pane_cwd`, `worktree_file`, `turn_file`, `main_worktree`, `start_claude`, `open_claude_tab`, `name_agent`, `rename_agent`, `sync_agent_name`. The workspaces plugin also uses this file. |
 | `new-agent-tab.sh` | The `new-tab` action in three modes: `open` (opens the popup), `prompt` (popup), `worker` (background). |
 | `new-shell-tab.sh` | The `new-shell-tab` action: opens a shell tab with the focus, in one step, without a popup. |
 | `handoff.sh` | The `handoff` action in three modes: `open` (checks the agent), `prompt` (popup), `worker` (background). |

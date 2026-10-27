@@ -1,0 +1,9 @@
+#!/bin/bash
+
+if test ! -L $HOME/Library/Application\ Support/Sublime\ Merge/Packages/User; then
+  smerge
+  pkill "sublime_merge"
+  rm -rf $HOME/Library/Application\ Support/Sublime\ Merge/Packages/User
+  ln -fs $PWD/sublime-merge $HOME/Library/Application\ Support/Sublime\ Merge/Packages/User
+  echo "🔗 Symbolic link for Sublime Merge is created"
+fi

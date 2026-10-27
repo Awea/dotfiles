@@ -17,9 +17,24 @@ borg_repo=rsync.net:borg-repos/awea
 export VERBOSE_FLAG=""
 command=remote_backup
 
+#############
+# FUNCTIONS #
+#############
+
+# Defined before the option parsing below, which calls it. Without that, bash
+# runs its own `help` builtin.
+function help() {
+  echo "usage: $(basename $0) [--restore|--break|--help] [--verbose]"
+}
+
 ## Parse options
-# Require gnu-getopt
-OPTIONS=$(getopt -n "$0" -o rhbv --long "restore,help,break,verbose" -- "$@")
+# Require gnu-getopt. macOS ships BSD getopt (no --long): use Homebrew's
+# keg-only gnu-getopt.
+getopt=getopt
+if [[ "$(uname -s)" == Darwin ]]; then
+  getopt="$(brew --prefix gnu-getopt 2>/dev/null || echo /opt/homebrew/opt/gnu-getopt)/bin/getopt"
+fi
+OPTIONS=$("$getopt" -n "$0" -o rhbv --long "restore,help,break,verbose" -- "$@")
 eval set -- "$OPTIONS"
 
 while true ; do
@@ -39,14 +54,6 @@ while true ; do
     *) help; exit 1;;
 esac
 done
-
-#############
-# FUNCTIONS #
-#############
-
-function help() {
-  echo "usage: $(basename $0) [--remote|--help] [--verbose]"
-}
 
 function get_password() {
   # Get borg backup passphrase

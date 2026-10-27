@@ -64,7 +64,8 @@ herdr server reload-config
 
 The plugin needs `bash`, `fzf` and z with its data file. The `ctrl+a` flow also needs
 the agent-tabs plugin next to this plugin, because it uses `../agent-tabs/lib.sh`. It
-also needs `jq` and `setsid`.
+also needs `jq`. The `detach` helper of `lib.sh` starts the worker: with `setsid` on
+Linux, and with a subshell that ignores SIGHUP on macOS.
 
 ## Files
 

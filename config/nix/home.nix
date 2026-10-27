@@ -1,4 +1,4 @@
-{ pkgs, lib, inputs, ... }:
+{ config, pkgs, lib, inputs, ... }:
 
 let
   inherit (pkgs.stdenv.hostPlatform) isDarwin isLinux system;
@@ -52,6 +52,26 @@ in
         RandomizedDelaySec = "1h";
       };
       Install.WantedBy = [ "timers.target" ];
+    };
+  };
+
+  # macOS: the same job as a launchd user agent (~/Library/LaunchAgents).
+  # Logs go to ~/Library/Logs, there is no journal.
+  launchd.agents = lib.mkIf isDarwin {
+    # Same schedule as the systemd timer: daily at midnight. launchd runs a
+    # missed run on wake, like Persistent=true. Nice + LowPriorityIO match
+    # Nice=19 and IOSchedulingClass=idle.
+    prune-disk = {
+      enable = true;
+      config = {
+        ProgramArguments = [ "${config.home.homeDirectory}/.bin/prune-disk" ];
+        StartCalendarInterval = [ { Hour = 0; Minute = 0; } ];
+        ProcessType = "Background";
+        Nice = 19;
+        LowPriorityIO = true;
+        StandardOutPath = "${config.home.homeDirectory}/Library/Logs/prune-disk.log";
+        StandardErrorPath = "${config.home.homeDirectory}/Library/Logs/prune-disk.log";
+      };
     };
   };
 }

@@ -1,15 +1,16 @@
 # borgmatic configuration
 # See https://torsion.org/borgmatic/docs/reference/configuration/
 location:
-  # List of source directories to backup. Globs are expanded.
+  # List of source directories to backup. Globs are expanded, and so is ~
+  # (os.path.expanduser), so this works for /home/awea and /Users/awea.
   source_directories:
-    - /home/awea/.workspace
-    - /home/awea/.ssh
-    - /home/awea/.gnupg
-    - /home/awea/.password-store
-    - /home/awea/.z
-    - /home/awea/.zsh_history
-    - /home/awea/Dropbox/documents
+    - ~/.workspace
+    - ~/.ssh
+    - ~/.gnupg
+    - ~/.password-store
+    - ~/.z
+    - ~/.zsh_history
+    - ~/Dropbox/documents
 
   # Paths to local or remote repositories.
   repositories:

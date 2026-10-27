@@ -31,7 +31,7 @@ case "${1:-}" in
     effort=$(read_effort) || exit 0
     tab_focus=$(read_focus) || exit 0
     log="${HERDR_PLUGIN_STATE_DIR:-/tmp}/handoff.log"
-    setsid -f bash "$here/handoff.sh" worker "$AGENT_TABS_PANE" "$AGENT_TABS_WORKSPACE" "$focus" "$effort" "$tab_focus" \
+    detach bash "$here/handoff.sh" worker "$AGENT_TABS_PANE" "$AGENT_TABS_WORKSPACE" "$focus" "$effort" "$tab_focus" \
       </dev/null >>"$log" 2>&1
     ;;
   worker)

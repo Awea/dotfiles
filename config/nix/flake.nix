@@ -39,6 +39,6 @@
     in {
       # scripts/programs/nix-home-manager picks one from `uname`.
       homeConfigurations."awea" = mkHome "x86_64-linux";
-      homeConfigurations."awea-darwin" = mkHome "aarch64-darwin";
+      homeConfigurations."awea@mac" = mkHome "aarch64-darwin";
     };
 }

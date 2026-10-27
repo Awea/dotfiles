@@ -4,6 +4,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+[[ "$(uname)" == Linux ]] || { echo "Skip: Linux only"; exit 0; }
+
 # Network File System
 # https://fr.wikipedia.org/wiki/Network_File_System
 sudo apt install -y nfs-kernel-server

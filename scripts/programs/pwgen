@@ -4,4 +4,6 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+[[ "$(uname)" == Linux ]] || { echo "Skip: Linux only"; exit 0; }
+
 sudo apt install pwgen

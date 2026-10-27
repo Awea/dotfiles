@@ -31,7 +31,7 @@ case "${1:-}" in
     effort=$(read_effort) || exit 0
     focus=$(read_focus) || exit 0
     log="${HERDR_PLUGIN_STATE_DIR:-/tmp}/new-tab.log"
-    setsid -f bash "$here/new-agent-tab.sh" worker "$AGENT_TABS_PANE" "$AGENT_TABS_WORKSPACE" "$prompt" "$effort" "$focus" \
+    detach bash "$here/new-agent-tab.sh" worker "$AGENT_TABS_PANE" "$AGENT_TABS_WORKSPACE" "$prompt" "$effort" "$focus" \
       </dev/null >>"$log" 2>&1
     ;;
   worker)
