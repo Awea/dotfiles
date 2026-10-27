@@ -45,7 +45,7 @@ turn_base() {
 # Start the worker that writes the target branch of worktree $1. Return at once.
 start_worker() {
   mkdir -p "$(dirname "$log")" 2>/dev/null || true
-  setsid -f bash "$here/reviewr.sh" base "$1" </dev/null >>"$log" 2>&1
+  detach bash "$here/reviewr.sh" base "$1" </dev/null >>"$log" 2>&1
 }
 
 # Print the default branch of the repo of folder $1, as reviewr finds it: the target of
@@ -93,7 +93,9 @@ write_pick() {
 if [ "${1:-}" = base ]; then
   root="$2"
   cd "$root" || exit 1
-  if ! base=$(timeout 15 "${AGENT_TABS_GH:-gh}" pr view --json baseRefName -q .baseRefName 2>/dev/null) ||
+  # macOS has no timeout. The Homebrew coreutils install it as gtimeout.
+  limit=$(command -v timeout || command -v gtimeout)
+  if ! base=$("$limit" 15 "${AGENT_TABS_GH:-gh}" pr view --json baseRefName -q .baseRefName 2>/dev/null) ||
     [ -z "$base" ]; then
     notify "reviewr: no pull request for $root. The target branch stays."
     exit 0

@@ -1,6 +1,8 @@
 #! /usr/bin/env zsh
 
-# MAKEFLAGS to define make default flags:
-# - `-j 4` number of simultaned jobs
+# MAKEFLAGS to define make default flags, on macOS only:
+# - `-j 8` number of simultaned jobs
 # - `--no-print-directory` obviously
-# export MAKEFLAGS='-j 4 --no-print-directory' # -s'
+if [[ "$(uname)" == Darwin ]]; then
+  export MAKEFLAGS='-j 8 --no-print-directory' # -s'
+fi

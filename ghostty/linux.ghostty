@@ -1,0 +1,2 @@
+# Linux only, read by config.ghostty through ~/.config/ghostty/os.ghostty.
+font-size = 14

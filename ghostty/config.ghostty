@@ -1,6 +1,8 @@
 # Copied from the GNOME Terminal profile: the font and the GNOME palette.
 font-family = Fira Code
-font-size = 14
+# The font size differs on each OS: os.ghostty is macos.ghostty or linux.ghostty,
+# linked by `make links`. The ? skips a missing file.
+config-file = ?os.ghostty
 
 palette = 0=#171421
 palette = 1=#c01c28
@@ -24,3 +26,7 @@ copy-on-select = clipboard
 
 # One line per wheel notch. The default of 3 scrolls too far.
 mouse-scroll-multiplier = precision:1,discrete:1
+
+# macOS: left Option sends Alt (e.g. Alt-b/Alt-f in the shell). Right Option
+# still types layout characters such as @, #, { and [ on AZERTY. Ignored on Linux.
+macos-option-as-alt = left

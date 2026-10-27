@@ -4,5 +4,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+# Linux only. On macOS, the Brewfile installs the zed cask.
+[[ "$(uname)" == Linux ]] || { echo "Skip: Linux only"; exit 0; }
+
 # https://zed.dev/
 curl -f https://zed.dev/install.sh | sh

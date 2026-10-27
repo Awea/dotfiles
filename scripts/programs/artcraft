@@ -4,6 +4,9 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+# Linux only. On macOS, the Brewfile installs the artcraft-launcher cask.
+[[ "$(uname)" == Linux ]] || { echo "Skip: Linux only"; exit 0; }
+
 # ArtCraft Launcher - installs the ArtCraft apps (PhotoCraft, FigCraft, PdfCraft...)
 # and keeps them up to date
 # https://getartcraft.com/apps

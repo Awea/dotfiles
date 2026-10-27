@@ -6,24 +6,30 @@
 #
 # Does nothing while / has MIN_FREE_GB or more free (default: 100). Below that,
 # it removes:
-#   - Nix generations older than 14 days, then all unused store paths
+#   - Nix generations older than 14 days, then all unused store paths, then
+#     duplicate store files (hard-linked: replaces auto-optimise-store, see
+#     config/nix/nix.conf)
 #   - Docker images, containers and build cache unused for 7 days
 #   - anonymous Docker volumes that no container uses (named volumes stay)
 #   - caches that rebuild themselves, listed in rebuildable_caches below
+#   - on macOS, files in ~/Library/Caches not read for 30 days
 #
 # The caches go whole: / is mounted noatime, so a file's access time does not
 # tell whether a tool still reads it. Other tools keep data in ~/.cache, such as
 # antibody plugins and the iex history, so only the listed caches are removed.
 #
 # --force runs the cleanup whatever the free space is.
-# A systemd user timer runs this script every day, see config/nix/home.nix.
+# A systemd user timer (Linux) or a launchd agent (macOS) runs this script every
+# day, see config/nix/home.nix.
 
 set -euo pipefail
 
 min_free_gb="${MIN_FREE_GB:-100}"
-export PATH="/nix/var/nix/profiles/default/bin:$HOME/.nix-profile/bin:/usr/bin:/bin:$PATH"
+# launchd gives a bare PATH: add Nix, and Homebrew/Docker Desktop on macOS.
+export PATH="/nix/var/nix/profiles/default/bin:$HOME/.nix-profile/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
-free_gb() { df --output=avail -B1G / | tail -1 | tr -d ' '; }
+# POSIX df (GNU and BSD): available 1K blocks, rounded down to GiB.
+free_gb() { df -Pk / | awk 'NR==2{print int($4/1048576)}'; }
 
 before=$(free_gb)
 if [[ "${1:-}" != "--force" && "$before" -ge "$min_free_gb" ]]; then
@@ -35,6 +41,7 @@ echo "${before}G free on /, threshold is ${min_free_gb}G: pruning"
 
 echo "==> nix"
 nix-collect-garbage --delete-older-than 14d || echo "nix gc failed"
+nix-store --optimise || echo "nix optimise failed"
 
 if command -v docker >/dev/null && docker info >/dev/null 2>&1; then
   echo "==> docker"
@@ -62,9 +69,21 @@ for dir in "${rebuildable_caches[@]}"; do
   rm -rf "$dir" || echo "removing $dir failed"
 done
 
+# macOS apps keep their caches there, and recreate them when they are missing.
+if [[ "$(uname -s)" == Darwin ]]; then
+  find "$HOME/Library/Caches" -xdev -type f -atime +30 -delete 2>/dev/null || true
+  find "$HOME/Library/Caches" -xdev -mindepth 1 -type d -empty -delete 2>/dev/null || true
+fi
+
 after=$(free_gb)
 message="Freed $((after - before))G, ${after}G free on /"
 echo "$message"
-if [[ "$after" -lt "$min_free_gb" ]] && command -v notify-send >/dev/null; then
-  notify-send --urgency=critical "prune-disk" "$message. Still under ${min_free_gb}G, run ncdu -x / to find the rest."
+if [[ "$after" -lt "$min_free_gb" ]]; then
+  alert="$message. Still under ${min_free_gb}G, run ncdu -x / to find the rest."
+  if command -v notify-send >/dev/null; then
+    notify-send --urgency=critical "prune-disk" "$alert"
+  elif command -v osascript >/dev/null; then
+    # Pass the text as an argument, so quotes in it cannot break the script.
+    osascript -e 'on run argv' -e 'display notification (item 1 of argv) with title "prune-disk"' -e 'end run' "$alert"
+  fi
 fi
