@@ -13,11 +13,11 @@ if test -f $HOME/Library/Application\ Support/Sublime\ Text/Installed\ Packages/
 else
   subl
   read -p "✋ Install Package Control in Sublime Text then hit enter"
-  pkill "Sublime Text"
+  osascript -e 'quit app "Sublime Text"'
   sublime-text-symlink
   subl
   read -p "⏳ Sublime Text is currently completing packages installation, hit enter when it is done"
-  pkill "Sublime Text"
+  osascript -e 'quit app "Sublime Text"'
   smerge .
   read -p "✋ Discard unwanted changes on Preferences.sublime-settings then hit enter"
 fi

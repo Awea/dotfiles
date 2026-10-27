@@ -3,8 +3,8 @@ alias ll='ls -l'
 # exa - https://github.com/ogham/exa
 alias la="exa -abghl --git --color=automatic"
 
-## Copy to clipboard (pbcopy because I member it from OS X times)
-alias pbcopy="xsel -ib"
+## Copy to clipboard (pbcopy because I member it from OS X times). macOS has its own.
+(( $+commands[pbcopy] )) || alias pbcopy="xsel -ib"
 
 ## Vagrant aliases
 alias vdf="vagrant destroy -f"

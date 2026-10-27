@@ -19,6 +19,14 @@ set -euo pipefail
 # Homebrew puts fzf in /opt/homebrew/bin (Apple silicon) or /usr/local/bin.
 export PATH="${PATH:-}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
 
+# /bin/bash on macOS is bash 3.2. Run the script again with the Homebrew bash before the
+# popup, else lib.sh does it after fzf and fzf opens a second time.
+if [ "${BASH_VERSINFO[0]}" -lt 4 ]; then
+  for bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+    [ ! -x "$bash" ] || exec "$bash" "$0" ${1+"$@"}
+  done
+fi
+
 H="${HERDR_BIN_PATH:-herdr}"
 here="$(cd "$(dirname "$0")" && pwd)"
 agent_tabs="$here/../agent-tabs"

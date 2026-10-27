@@ -37,6 +37,9 @@ $(HOME)/.config/sublime-text/Packages/User:
 	ln -s $(PWD)/sublime-text-3 $@
 
 # macOS: the scripts replace the default User folder with a link to this repo
+# They wait for the user with read, and make -j (MAKEFLAGS on macOS) gives the input
+# to one job only: run all recipes one at a time.
+.NOTPARALLEL:
 .PHONY: sublime-links
 sublime-links:
 	./scripts/symlinks/sublime-merge
@@ -48,9 +51,11 @@ config/nix/os.conf:
 	ln -s $(os).conf $@
 
 $(HOME)/.config/zed/settings.json:
+	@mkdir -p $(dir $@)
 	ln -s $(PWD)/zed/settings.json $@
 
 $(HOME)/.config/zed/keymap.json:
+	@mkdir -p $(dir $@)
 	ln -s $(PWD)/zed/keymap.json $@
 
 $(HOME)/.claude/CLAUDE.md:
@@ -129,6 +134,7 @@ herdr-hook:
 		cp $$tmp/.claude/hooks/herdr-agent-state.sh $(HOME)/.claude/hooks/
 
 $(HOME)/.config/%:
+	@mkdir -p $(dir $@)
 	ln -s $(PWD)/config/$* $@
 
 antibody/zsh_plugins.sh: antibody/zsh_plugins.txt
