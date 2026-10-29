@@ -1,2 +1,5 @@
 # reviewr opens each pane in the scope of the last claude turn.
 default_scope = "last-turn"
+# reviewr opens only on request: the prefix+d key or the open action. A new worktree
+# workspace, such as the workspace of a board worker, gets no reviewr.
+auto_open = false
