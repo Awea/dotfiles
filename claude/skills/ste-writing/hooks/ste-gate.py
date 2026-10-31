@@ -16,8 +16,9 @@ Version 2 keeps three bands:
   TARGET < score <= BLOCK_AT         warn, no block, no duplicate reply
   score > BLOCK_AT                   block one time for this user turn
 
-A warn goes to a per-session file. The UserPromptSubmit hook reads that file on
-the next turn, shows the score, then deletes it. The model learns without a
+A warn goes to a per-session file. On the next prompt, the inject hook reads
+that file, shows the rule card and the score, then deletes it. Without a warn
+file, the card comes only at SessionStart. The model learns without a
 second reply on screen.
 
 The real fix is in the skill: lint the draft before you send it. Then the gate
@@ -184,7 +185,12 @@ def main():
         return 0
 
     sweep()
+    # Claude Code can run Stop before it writes the reply to the transcript.
+    # Then the transcript holds no reply or an earlier one, so the hook input
+    # gives the text. An empty string is a turn with no text: lint nothing.
     text, turn = scan(path)
+    if "last_assistant_message" in payload:
+        text = payload["last_assistant_message"]
     if not text:
         return 0
     prose = strip_noise(text)
@@ -231,7 +237,6 @@ def main():
             "second copy costs them twice. Rewrite it tight."
         ).format(score, BLOCK_AT, hits, shape, samples[:6],
                  report.get("longest_sentence_words", 0)),
-        "systemMessage": "STE gate: {:.2f}/100w over the {} ceiling. Rewriting one time.".format(score, BLOCK_AT),
     }))
     return 0
 

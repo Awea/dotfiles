@@ -5,7 +5,14 @@ import re, sys, json, glob, os
 # banned list, adds a noun-train marker and a --strict mode. The episode's
 # published numbers were measured with score v1 (this file's git history at the
 # episode date); v1 and v2 totals are close but not directly comparable.
-SCORE_VERSION = 2
+#
+# Score v3: text in quotation marks stays out of the score. A quote is text
+# the reply cites (the original phrase in a review, an error string, a user's
+# words), not text the writer wrote. v2 counted it, so a review that quoted
+# ten violations scored as ten violations and the Stop gate blocked it. Use
+# --count-quotes for the v2 behavior. A list item and a heading also start
+# their own paragraph now, so a list no longer counts as one long paragraph.
+SCORE_VERSION = 3
 
 # Shape v1: the Layer 2 checks (skill 2.0). These count the ORDER of a reply to
 # a person, not the words. They are reported apart from the score and never
@@ -59,18 +66,99 @@ SOFTENER = ["uh oh","oh no","there seems to be a problem","there seems to be an 
     "unfortunately","i apologize","apologies","my apologies","sorry about that"]
 
 def strip_code(t):
-    t = re.sub(r"```.*?```", " ", t, flags=re.S)
+    t = re.sub(r"```.*?```", "\n\n", t, flags=re.S)
     t = re.sub(r"`[^`]*`", " ", t)
     return t
 
+
+# A quoted span stays on one line, so a stray quote mark cannot swallow a
+# paragraph. A single quote opens only after a non-word character and closes
+# only before one, so a contraction or a possessive never opens or closes it.
+QUOTE_SPANS = [
+    r'"[^"\n]+"',
+    r"\u201c[^\u201d\n]+\u201d",
+    r"(?<![\w'])'(?=\S)(?:[^'\n]|(?<=\w)'(?=\w))+?(?<=\S)'(?!\w)",
+    r"\u2018(?=\S)(?:[^\u2018\u2019\n]|(?<=\w)\u2019(?=\w))+?(?<=\S)\u2019(?!\w)",
+]
+
+
+def strip_quotes(t):
+    for pattern in QUOTE_SPANS:
+        t = re.sub(pattern, " ", t)
+    return t
+
+
+def strip_front_matter(text):
+    return re.sub(r"\A\ufeff?---[ \t]*\r?\n.*?^(?:---|\.\.\.)[ \t]*(?:\r?\n|\Z)",
+                  "", text, count=1, flags=re.S | re.M)
+
+
+def strip_emphasis(text):
+    pattern = r"(?<![\\\w])(\*{1,3}|_{1,3})(?=[^\s*_])(.+?)(?<=[^\s\\*_])\1(?!\w)"
+    while True:
+        stripped = re.sub(pattern, r"\2", text, flags=re.S)
+        if stripped == text:
+            return text
+        text = stripped
+
+
+def prose_blocks(text):
+    blocks = []
+    pending = []
+    quote_depth = 0
+
+    def flush():
+        if pending:
+            blocks.append(" ".join(pending))
+            pending.clear()
+
+    for line in strip_emphasis(text).splitlines():
+        s = line.strip()
+        quote = re.match(r"^(?:>[ \t]*)+", s)
+        depth = quote.group().count(">") if quote else 0
+        if depth != quote_depth:
+            flush()
+            quote_depth = depth
+        if quote:
+            s = s[quote.end():]
+        if not s or re.fullmatch(r"(?:[-*_][ \t]*){3,}|=+", s):
+            flush()
+            continue
+        heading = re.match(r"^#{1,6}\s+", s)
+        item = re.match(r"^(?:[-*+]|\d+[.)])\s+", s)
+        if heading or s.startswith("|"):
+            flush()
+            blocks.append(s[heading.end():] if heading else s)
+        else:
+            if item:
+                flush()
+                s = s[item.end():]
+            pending.append(s)
+    flush()
+    return blocks
+
+
+def paragraphs(raw):
+    """Split into paragraphs AFTER the fenced blocks are gone.
+
+    A code block that holds a blank line used to be split first, which left two
+    fragments with one fence each. strip_code matches a PAIR, so it removed
+    neither, and every line of code then counted as a sentence. A config block
+    with 9 blank lines scored 9 long paragraphs against 50 words of prose.
+    A fence becomes a paragraph break, so the real paragraphs stay apart.
+    """
+    t = re.sub(r"```.*?```", "\n\n", raw, flags=re.S)
+    t = re.sub(r"^[ \t]*```.*$", "\n", t, flags=re.M)   # a fence with no partner
+    t = re.sub(r"`[^`]*`", " ", t)
+    # A list item and a heading start their own block. A list is not a
+    # paragraph, so eight one-line items must not count as one paragraph of
+    # eight sentences. One item that runs past six sentences still counts.
+    t = re.sub(r"\n(?=[ \t]*(?:(?:[-*+]|\d+[.)])[ \t]|#{1,6}[ \t]))", "\n\n", t)
+    return [p for p in re.split(r"\n\s*\n", t) if p.strip()]
+
 def sentences(text):
     out = []
-    for line in text.split("\n"):
-        s = line.strip()
-        if not s: continue
-        s = re.sub(r"^\s*#{1,6}\s*", "", s)
-        s = re.sub(r"^\s*(?:[-*+]|\d+[.)])\s+", "", s)
-        if not s: continue
+    for s in prose_blocks(text):
         parts = re.split(r"(?<=[.!?:])\s+(?=[A-Z0-9\"'\-])", s)
         for p in parts:
             p = p.strip()
@@ -130,9 +218,10 @@ def long_lists(raw):
     return n
 
 
-def shape(raw):
+def shape(raw, count_quotes=False):
     """Layer 2 counts. Applies to a reply to a person, not to a reference doc."""
-    text = strip_code(raw).replace("’", "'")
+    body = strip_code(raw) if count_quotes else strip_quotes(strip_code(raw))
+    text = "\n\n".join(prose_blocks(body)).replace("’", "'")
     sents = sentences(text)
     s = {}
     s["preamble_opener"] = count_in(sents[0], OPENERS)[0] if sents else 0
@@ -145,16 +234,20 @@ def shape(raw):
     return s, list(dict.fromkeys(ch + rh + hh + vh + sh))[:6]
 
 
-def lint(text, strict=False):
-    raw = text
-    text = strip_code(text)
+def lint(text, strict=False, count_quotes=False):
+    raw = strip_front_matter(text)
+    if not count_quotes:
+        raw = strip_quotes(raw)
+    text = "\n\n".join(prose_blocks(strip_code(raw)))
     sents = sentences(text)
     words = sum(wc(s) for s in sents) or 1
     v = {}
     longs = [(wc(s), s) for s in sents if wc(s) > 20]
     v["long_sentence(>20w)"] = len(longs)
     v["semicolon"] = text.count(";")
-    v["contraction"] = len(re.findall(r"\b\w+['’](?:t|re|ve|ll|d|s|m)\b", text))
+    v["contraction"] = len(re.findall(
+        r"\b(?:\w+['’](?:t|re|ve|ll|d|m)|(?:it|he|she|that|what|who|where|when|why|how|there|here|let)['’]s)\b",
+        text, re.I))
     passive_parts = re.findall(rf"\b{BE}\s+(\w+ed|{PP_IRREG})\b", text, re.I)
     v["passive_voice"] = sum(1 for p in passive_parts if not re.fullmatch(STATIVE, p, re.I)) \
         + len(re.findall(rf"\b{BE}\s+{STATIVE}\s+by\b", text, re.I))
@@ -167,8 +260,7 @@ def lint(text, strict=False):
     v["banned_word"], bh = count_ci(text, BANNED)
     v["marketing_adjective"], mh = count_ci(text, MARKETING)
     v["modal_hedge"], _ = count_ci(text, MODAL_HEDGE)
-    paras = [p for p in re.split(r"\n\s*\n", raw) if p.strip()]
-    v["long_paragraph(>6s)"] = sum(1 for p in paras if len(sentences(strip_code(p))) > 6)
+    v["long_paragraph(>6s)"] = sum(1 for p in paragraphs(raw) if len(sentences(p)) > 6)
     em = raw.count("—") + raw.count("–")
     trains = noun_trains(text)
     if strict:
@@ -178,7 +270,7 @@ def lint(text, strict=False):
         v["strict_banned_word"] = n_strict
         v["em_dash"] = em
     total = sum(v.values())
-    sh, sh_samples = shape(raw)
+    sh, sh_samples = shape(raw, count_quotes=True)
     return {
         "score_version": SCORE_VERSION,
         "shape_version": SHAPE_VERSION,
@@ -194,6 +286,8 @@ def lint(text, strict=False):
         "sample_marketing": list(dict.fromkeys(mh))[:6],
         "sample_banned": list(dict.fromkeys(bh))[:6],
         "sample_noun_train": trains[:3],
+        "sample_long_sentence": ["{}w: {}".format(n, s[:70]) for n, s in
+                                 sorted(longs, key=lambda x: -x[0])[:2]],
     }
 
 if __name__ == "__main__":
@@ -201,6 +295,7 @@ if __name__ == "__main__":
     strict = "--strict" in args
     as_json = "--json" in args
     show_shape = "--shape" in args
+    count_quotes = "--count-quotes" in args
     fail_over = None
     fail_shape = None
     for flag in ("--fail-over", "--fail-shape"):
@@ -210,20 +305,36 @@ if __name__ == "__main__":
             if flag == "--fail-over": fail_over = value
             else: fail_shape = value
             del args[i:i + 2]
-    files = [a for a in args if a not in ("--strict", "--json", "--shape")]
+    files = [a for a in args if a not in ("--strict", "--json", "--shape", "--count-quotes")]
     worst = 0.0
     worst_shape = 0
+    read_error = False
     if not files:
         sys.stdin.reconfigure(encoding="utf-8")
-        r = lint(sys.stdin.read(), strict=strict)
+        r = lint(sys.stdin.read(), strict=strict, count_quotes=count_quotes)
         print(json.dumps(r, indent=2))
         worst = r["total_per100w"]
         worst_shape = r["shape_total"]
     else:
         exp = []
-        for f in files: exp += sorted(glob.glob(f)) if any(c in f for c in "*?[") else [f]
+        for f in files:
+            if any(c in f for c in "*?["):
+                matches = sorted(glob.glob(f))
+                if not matches:
+                    print(f"ste-lint: {f}: No files match the pattern.", file=sys.stderr)
+                    read_error = True
+                exp += matches
+            else:
+                exp.append(f)
         for f in exp:
-            with open(f, encoding="utf-8") as fh: r = lint(fh.read(), strict=strict)
+            try:
+                with open(f, encoding="utf-8") as fh:
+                    source = fh.read()
+            except (OSError, UnicodeError) as error:
+                print(f"ste-lint: {f}: {error}", file=sys.stderr)
+                read_error = True
+                continue
+            r = lint(source, strict=strict, count_quotes=count_quotes)
             worst = max(worst, r["total_per100w"])
             worst_shape = max(worst_shape, r["shape_total"])
             if as_json:
@@ -231,7 +342,7 @@ if __name__ == "__main__":
             else:
                 tail = f" shape={r['shape_total']:2d}" if show_shape else ""
                 print(f"{os.path.basename(f):32} words={r['words']:4d} total={r['total']:3d} per100w={r['total_per100w']:6.2f} em_dash={r['em_dash(slop-marker)']:2d}{tail}")
-    if fail_over is not None and worst > fail_over:
+    if read_error or (fail_over is not None and worst > fail_over):
         sys.exit(1)
     if fail_shape is not None and worst_shape > fail_shape:
         sys.exit(1)
