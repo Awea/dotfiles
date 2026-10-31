@@ -58,6 +58,11 @@
             "type": "command",
             "command": "bash $HOME/.claude/hooks/herdr-worktree.sh start",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "bash $HOME/.claude/skills/ste-writing/hooks/ste-inject.sh",
+            "timeout": 10
           }
         ]
       }

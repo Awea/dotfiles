@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# UserPromptSubmit hook for the ste-writing skill. Two jobs:
+# SessionStart and UserPromptSubmit hook for the ste-writing skill.
 #
-#   1. Put the rule card into context on every turn, so the discipline does not
+#   1. SessionStart puts the rule card into context, so the discipline does not
 #      depend on the model remembering to load the skill.
-#   2. Show the score of the last reply, when the Stop hook wrote a warning
-#      instead of blocking. That is the feedback path that costs no second copy
-#      of the reply on screen.
+#   2. UserPromptSubmit stays silent unless the Stop hook wrote a warning for
+#      the last reply. Then it gives the card again and the score. A card on
+#      every prompt costs context and the model learns nothing new from it.
+#      The warning is the feedback path that costs no second copy of the reply
+#      on screen.
 #
 # Canonical copy: the ep01 kit, ste-writing/hooks/ste-inject.sh
 set -euo pipefail
@@ -18,6 +20,7 @@ fi
 
 PAYLOAD="$(cat)"
 SESSION="$(printf '%s' "$PAYLOAD" | jq -r '.session_id // "none"')"
+EVENT="$(printf '%s' "$PAYLOAD" | jq -r '.hook_event_name // "UserPromptSubmit"')"
 KEY="$(printf '%s' "$SESSION" | shasum | cut -c1-16)"
 WARN="$HOME/.claude/ste-gate/${KEY}.warn.json"
 
@@ -54,5 +57,9 @@ emit_feedback() {
   rm -f "$WARN"
 }
 
+if [ "$EVENT" != "SessionStart" ] && [ ! -f "$WARN" ]; then
+  exit 0
+fi
+
 { emit_card; emit_feedback; } |
-  jq -Rs '{hookSpecificOutput:{hookEventName:"UserPromptSubmit",additionalContext:.},suppressOutput:true}'
+  jq -Rs --arg event "$EVENT" '{hookSpecificOutput:{hookEventName:$event,additionalContext:.},suppressOutput:true}'

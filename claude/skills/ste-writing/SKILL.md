@@ -1,10 +1,9 @@
 ---
 name: ste-writing
-description: ASD-STE100 Simplified Technical English, and the reply shape a reader with ADHD can act on. A standing style rule, not an on-request tool. Layer 1 governs the words of every text a human reads — chat replies, docs, READMEs, commit messages, PR text, code comments, error messages, release notes, tool descriptions, task trackers, wiki pages. Layer 2 governs the order of a reply to a person — the next action first, numbered steps, real time estimates, no preamble and no closer. Neither layer touches code, identifiers, or command syntax. Load it before you write prose, and also when asked to remove "AI slop", make writing clear or plain, enforce a controlled style, or review text for STE violations. Two word modes — strict (procedures, runbooks, safety text, error messages) and STE-flavored (general prose, the default).
+description: Standing style rule, not an on-request tool. Layer 1 sets ASD-STE100 words for all text a human reads. Layer 2 sets the reply shape for a reader with ADHD - next action first, numbered steps, real time estimates, no preamble or closer. Not for code. Strict and STE-flavored modes. Also load it to remove AI slop, make text plain or clear, or review text for STE.
 metadata:
   version: "2.0"
   spec: ASD-STE100 Issue 9 (January 2025)
-  replaces: i-have-adhd
 ---
 
 <!-- Source: https://github.com/woosal1337/blog/tree/main/videos/ep01-the-cure-for-ai-slop -->
@@ -17,8 +16,6 @@ Two layers. Both are always on.
 - **Layer 2 — shape.** It sets the order of a reply to a person. The reader has ADHD.
 
 Layer 1 makes a sentence readable. Layer 2 makes a reply usable. The two failures are different. A text can pass the linter and still fail the reader, because the answer sat in paragraph four.
-
-Version 2.0 holds what the separate `i-have-adhd` skill held. That skill is gone. Do not look for it.
 
 ## Scope
 
@@ -40,20 +37,20 @@ Layer 1 strips voice on purpose. Text that needs a voice is out of scope for bot
 Numbers in parentheses are rule numbers in ASD-STE100 Issue 9.
 
 WORDS
-- Use one name for one thing (1.11, 9.4). Do not rotate check / verify / validate / confirm for the same action — pick one and reuse it. Certified STE uses "make sure" or "examine".
+- Use one name for one thing (1.11, 9.4). Do not rotate check / verify / validate / confirm for the same action — pick one and reuse it.
 - Use the short common word: start (not begin/commence/initiate), use (not utilize/leverage), help (not facilitate), make sure (not ensure/verify), do (not perform/conduct), give or supply (not provide), before (not prior to), after (not subsequent to), about (not regarding/concerning), get (not obtain/acquire), show (not demonstrate), also (not additionally/furthermore/moreover).
 - Give each word one meaning (1.3). "fall" means to move down, not to decrease.
-- No marketing adjectives: seamless, robust, powerful, cutting-edge, effortless, world-class, next-generation, revolutionary.
+- No marketing adjectives: seamless, robust, powerful, cutting-edge, effortless, world-class, next-generation, revolutionary, elegant.
 - American spelling (1.14).
 
 VERBS
 - Active voice. "the parser reads the file", not "the file is read by the parser". Procedures: always. Descriptive text: passive is permitted only when the actor is unknown or irrelevant (3.6).
 - A past participle used as an adjective is not passive and is correct (3.3): "the valve is closed", "the field is required".
 - Only simple tenses (3.2): infinitive, imperative, simple present, simple past, simple future. No present perfect: "we received the report", never "we have received the report".
-- No stacked auxiliaries (3.4). Not "it is important to note that this may help to improve". Write "this improves X".
+- No stacked auxiliaries (3.4). Not "it is important to note that this may help to improve". Write "this improves X". Do not write "this can improve X" without data that supports it.
 - Use a verb for an action (3.7): "analyze the log", not "perform an analysis of the log".
 - No "-ing" main verb where a simple tense works (3.5).
-- No phrasal verbs (9.3): spin up, dive into, kick off, roll out.
+- No phrasal verbs (9.3): spin up, dive into, kick off, roll out, reach out.
 
 SENTENCES
 - One instruction per sentence, unless two actions happen at the same time (5.2). Max 20 words (instruction, 5.1), max 25 (descriptive, 6.3).
@@ -67,7 +64,7 @@ NOUNS
 - Define an abbreviation at first use, then use the abbreviation.
 
 PUNCTUATION
-- No semicolons (8.1). Write two sentences. (Note: the em dash is not banned by STE, only the semicolon is — add "no em dash" yourself if you want it gone.)
+- No semicolons (8.1). Write two sentences.
 
 STRUCTURE
 - One topic per paragraph (6.5), max six sentences (6.6). For steps, use a numbered vertical list, one action per item, imperative form. Put a condition before its command.
@@ -76,7 +73,7 @@ STRUCTURE
 
 ## Word modes
 
-- **strict** — procedures, runbooks, safety text, error messages: apply every rule and both length caps, plus the strict word set: but (not however), because (not since, for causes), can (not may), must (not should/shall), use or with (not using), obey (not follow, for instructions), push (not press, for physical controls). The spec's own list of the 39 most frequent writer errors is in [ste-recurring-errors.md](ste-recurring-errors.md).
+- **strict** — procedures, runbooks, safety text, error messages: apply every rule and both length caps, plus the strict word set: but (not however), because (not since, for causes), can (not may), must (not should/shall), use or with (not using), obey (not follow, for instructions), push (not press, for physical controls). The spec's own list of the 39 most frequent writer errors is in [ste-recurring-errors.md](${CLAUDE_SKILL_DIR}/ste-recurring-errors.md).
 - **STE-flavored** — general prose (READMEs, PR descriptions, docs): apply the sentence, paragraph, tense, active-voice, noun-cluster, and no-phrasal-verb discipline. Relax the 875-word dictionary lockdown and the strict word set, so the text keeps enough range to read naturally.
 
 Flavored is the default.
@@ -100,7 +97,7 @@ Five facts about the reader drive every rule here:
 > Bad: "Let us think about this. Your auth flow has a few moving pieces..."
 > Good: "Run `npm install jsonwebtoken`, then edit `src/auth.ts:42`."
 
-A command, a path, or a snippet goes first. Prose comes after, if at all.
+A command, a path, or a snippet goes first. Prose comes after, if at all, with plain connectors (4.4).
 
 **Number a multi-step task.** Each step is one bounded action. No step holds "and then" two times.
 
@@ -124,7 +121,9 @@ A command, a path, or a snippet goes first. Prose comes after, if at all.
 
 Start with the answer. Stop when the answer is done.
 
-**Cap an action list at five items.** If the list grows past five, split it into "do now" and "later", or into "must" and "nice to have". Five ranked items beat ten unranked ones. The cap covers things the reader must act on. It does not cover a reference table, a rule list, or a file listing.
+**Cap an action list at five items.** If the list grows past five, split it into "do now" and "later", or into "must" and "nice to have". Five ranked items beat ten unranked ones. The cap covers things the reader must act on. It does not cover a reference table, a rule list, a file listing, or a review table.
+
+**Cut a hedge that carries no fact.** Cut "perhaps", "arguably", and "it could possibly". Keep a qualifier that bounds a claim: "on macOS only", "measured one time", "n=6". A cut qualifier turns a bounded claim into an overclaim.
 
 **Suppress the tangent.** Finish the first issue. Then offer the second one as a separate question.
 
@@ -159,19 +158,8 @@ Override the defaults in four cases:
 
 1. The reader asks you to explain or to walk through something. Explain in full. Keep the no-preamble and no-closer rules, but let the body run as long as the topic needs. Add headers, so the reader can skim back.
 2. A destructive action comes next (`rm -rf`, a force push, a schema migration, a dropped table). Confirm before you act. Safety beats brevity.
-3. A debug spiral. If the last three turns are "still broken", stop editing code. Name the assumption that could be wrong. Ask one diagnostic question.
+3. A debug loop. If a fix failed and you have no new evidence for the next one, stop editing code. Name the assumption that can be wrong. Ask one diagnostic question, or add one measurement.
 4. Real ambiguity in the request. One short question beats a guess and a rewrite.
-
----
-
-# Where the two layers disagree
-
-Four real conflicts, and the ruling for each.
-
-1. **The article and the label.** Rule 4.5 wants an article before a noun. Layer 2 wants a terse label. Ruling: a sentence keeps its articles. A list item that is a label keeps its short form. Never expand a label into a sentence only to add an article.
-2. **The five-item cap and the review table.** Review mode outputs one row for each violation, and a rule list runs past five. Ruling: the cap covers an action list only. A reference table, a rule list, and a file listing have no cap.
-3. **The connector and the command-first rule.** Rule 4.4 wants plain connectors between related sentences. Layer 2 wants the command on line one. Ruling: the command goes first, then the connected prose follows it.
-4. **The hedge and the qualifier.** Layer 2 cuts a hedging adverb. Layer 1 guards every fact. Ruling: cut a hedge that carries no fact ("perhaps", "arguably", "it could possibly"). Keep a qualifier that bounds a claim ("on macOS only", "measured one time", "n=6"). A cut qualifier turns a bounded claim into an overclaim.
 
 ---
 
@@ -181,63 +169,28 @@ Four real conflicts, and the ruling for each.
 
 An installed gate lints each chat reply after the model sends it, at no token cost. It warns over 2.5 and blocks only over 4.0. A block makes the model send the same reply a second time. So do not lint a chat reply first: a draft file doubles the output tokens of each reply.
 
+A hook sends a short rule card at session start, and again only after a reply over the target.
+
 Before you write prose to a file (docs, commit messages, task trackers), or when the user asks for a lint:
 
 1. Write the draft to a scratch file.
-2. Run `python3 ste-lint.py --fail-over 2.5 draft.md` (installed path: `~/.claude/skills/ste-writing/ste-lint.py`).
+2. Run the linter with the command for the mode (below). Exit code 1 means the score is over the target.
 3. Fix the reported categories. Lint one more time. Two passes, no more.
 4. Send the reply one time.
 
 ```
-python3 ste-lint.py draft.md            # flavored target: under 2.5 per 100 words
-python3 ste-lint.py --strict draft.md   # strict target: under 1.5 per 100 words
-python3 ste-lint.py --shape draft.md    # add the Layer 2 counts
+python3 ~/.claude/skills/ste-writing/ste-lint.py --fail-over 2.5 draft.md            # flavored target: under 2.5 per 100 words
+python3 ~/.claude/skills/ste-writing/ste-lint.py --strict --fail-over 1.5 draft.md   # strict target: under 1.5 per 100 words
+python3 ~/.claude/skills/ste-writing/ste-lint.py --shape --fail-over 2.5 --fail-shape 1 draft.md   # add the Layer 2 counts: over 1 hit fails
 ```
 
-Report the final score with the text. Do not present text as clean without a lint run.
+Do not present text in a file as clean without a lint run.
 
 If the gate blocks you anyway, send the corrected reply and nothing else. Add no apology, no note about the gate, and no summary of what changed. Keep every fact from the first draft.
 
-## Score and shape are separate numbers
-
-`total_per100w` counts Layer 1 only. The Layer 2 counts report under `shape` and stay out of the total, so the score keeps one meaning across versions.
-
-## The checklist, if you cannot run commands
-
-Layer 1:
-
-1. Any instruction over 20 words, or any other sentence over 25? Split it.
-2. Any semicolon? Replace it with a period.
-3. Any contraction? Expand it.
-4. Any present perfect ("has received") or modal stack? Use a simple tense.
-5. Any passive voice with a known actor? Make it active.
-6. Any "-ing" main verb, nominalization ("perform an analysis"), or phrasal verb ("spin up")? Use a plain verb.
-7. Any multi-word noun of four or more words? Unpack it.
-8. Any dropped article ("Remove bolts from panel")? Restore it.
-9. Same thing named two ways? Pick one name.
-10. Any label expanded into a sentence only to add an article? Make it a label again.
-
-Layer 2:
-
-1. Does the first line hold an action, a command, or a path? If not, move one there.
-2. Does the first sentence announce what you are about to do? Delete it.
-3. Does the last sentence ask "anything else?" or recap the work? Delete it.
-4. Is there a "by the way" sidebar? Move it to a separate question.
-5. Is any estimate vague ("some work", "a while")? Give minutes, hours, or days.
-6. Does an action list run past five items? Split it into "do now" and "later".
-7. Is the state of multi-turn work restated? Add "step N of M".
-
-Then read the first line and the last line alone. Do they tell the reader what to do next, and what just happened? If yes, send.
+If you cannot run the linter, use [the checklist](${CLAUDE_SKILL_DIR}/checklist.md).
 
 ---
-
-# Guards
-
-- Never drop a fact, number, condition, or scope qualifier to satisfy a length cap or the five-item cap. Keep the longer sentence and flag it.
-- Preserve code identifiers, part numbers, units, error strings, and safety wording exactly.
-- Change the smallest span that fixes a violation. Do not restyle text a rule does not touch.
-- If the input already complies, return it unchanged and say so.
-- Write only the requested text. No preamble, no summary, no closing remarks.
 
 # Three ways to use Layer 1
 
@@ -245,10 +198,10 @@ Then read the first line and the last line alone. Do they tell the reader what t
 - **rewrite** — convert existing text to STE. Keep every fact.
 - **review** — do not rewrite. Output a table (`Rule | Original | Simplified`), one row for each violation. Then add one line about anything you left alone, and why.
 
-# Scope of the claim
+For rewrite and review:
 
-The mechanical rules above are lintable, and they are what removes slop. Full STE also needs human judgment — the right technical noun, and whether a sentence "makes good sense". A checker cannot certify that, and slop is not about that. This skill fixes the FORM of slop. It cannot make a hollow paragraph true.
-
-Layer 2 is not part of ASD-STE100. It comes from how an ADHD reader reads, and the standard says nothing about it.
-
-The full standard is free at https://asd-ste100.org (do not paste it in full, it is copyrighted). This skill is unofficial and not affiliated with ASD. ASD-STE100 is a registered EU trademark (No. 017966390).
+- Never drop a fact, number, condition, or scope qualifier to satisfy a length cap or the five-item cap. Keep the longer sentence, and add a note after the text.
+- Preserve code identifiers, part numbers, units, error strings, and safety wording exactly.
+- Change the smallest span that fixes a violation. Do not restyle text a rule does not touch.
+- If the input already complies, return it unchanged and say so.
+- Write only the requested text. No preamble, no summary, no closing remarks.
