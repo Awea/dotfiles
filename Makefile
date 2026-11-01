@@ -23,7 +23,7 @@ endif
 
 ## Create symbolic links for files/folders with a .symlink suffix
 .PHONY: links
-links: $(symlink_paths) $(sublime_links) antibody/zsh_plugins.sh $(HOME)/.config/direnv $(HOME)/.config/nix $(HOME)/.config/zed/settings.json $(HOME)/.config/zed/keymap.json $(HOME)/.claude/CLAUDE.md $(HOME)/.claude/settings.json $(HOME)/.config/herdr/config.toml $(HOME)/.config/herdr/plugins/config/persiyanov.reviewr/config.toml $(HOME)/.config/ghostty/config.ghostty $(HOME)/.config/ghostty/os.ghostty $(HOME)/.claude/skills/handoff $(HOME)/.claude/hooks/herdr-agent-name.sh $(HOME)/.claude/hooks/herdr-worktree.sh $(HOME)/.claude/skills/ste-writing
+links: $(symlink_paths) $(sublime_links) antibody/zsh_plugins.sh $(HOME)/.config/direnv $(HOME)/.config/nix config/nix/os.conf $(HOME)/.config/zed/settings.json $(HOME)/.config/zed/keymap.json $(HOME)/.claude/CLAUDE.md $(HOME)/.claude/settings.json $(HOME)/.config/herdr/config.toml $(HOME)/.config/herdr/plugins/config/persiyanov.reviewr/config.toml $(HOME)/.config/ghostty/config.ghostty $(HOME)/.config/ghostty/os.ghostty $(HOME)/.claude/skills/handoff $(HOME)/.claude/hooks/herdr-agent-name.sh $(HOME)/.claude/hooks/herdr-worktree.sh $(HOME)/.claude/skills/ste-writing
 
 # Create all symlink
 # Documentation: https://www.gnu.org/software/make/manual/html_node/Automatic-Variables.html#Automatic-Variables
@@ -41,6 +41,11 @@ $(HOME)/.config/sublime-text/Packages/User:
 sublime-links:
 	./scripts/symlinks/sublime-merge
 	./scripts/symlinks/sublime-text
+
+# nix.conf reads os.conf: the settings of this OS only, such as auto-optimise-store.
+# ~/.config/nix links to config/nix, so the link is in the repo (git-ignored).
+config/nix/os.conf:
+	ln -s $(os).conf $@
 
 $(HOME)/.config/zed/settings.json:
 	ln -s $(PWD)/zed/settings.json $@
