@@ -1,0 +1,49 @@
+#!/bin/zsh
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+[[ "$(uname)" == Linux ]] || { echo "Skip: Linux only"; exit 0; }
+
+# Mount the QNAP NAS share with the kernel NFS client, not with GVFS.
+# Through GVFS (nfs:// in Nautilus), some reads stall for up to 3 s. VLC
+# then gets a broken AV1 packet, dav1d stops and the image freezes. A
+# larger VLC cache does not help. The kernel client plays the same files
+# with no freeze. The automount mounts the share at the first access.
+sudo apt install -y nfs-common
+sudo mkdir -p /mnt/nas
+
+sudo tee /etc/systemd/system/mnt-nas.mount > /dev/null <<'UNIT'
+[Unit]
+Description=QNAP NAS share
+
+[Mount]
+What=192.168.1.200:/SHARE
+Where=/mnt/nas
+Type=nfs
+Options=vers=3,nolock
+TimeoutSec=15
+UNIT
+
+sudo tee /etc/systemd/system/mnt-nas.automount > /dev/null <<'UNIT'
+[Unit]
+Description=QNAP NAS share
+
+[Automount]
+Where=/mnt/nas
+TimeoutIdleSec=10min
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now mnt-nas.automount
+
+# Point the Nautilus bookmarks at the kernel mount, so a file opens from
+# /mnt/nas and not from GVFS.
+bookmarks="$HOME/.config/gtk-3.0/bookmarks"
+if [[ -f "$bookmarks" ]]; then
+  sed -i 's#^nfs://192\.168\.1\.200/SHARE\([/ ]\|$\)#file:///mnt/nas\1#' "$bookmarks"
+fi
