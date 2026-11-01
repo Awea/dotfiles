@@ -23,3 +23,6 @@ __pycache__/
 # Elixir crash dumps and Expert (Elixir LSP) logs
 erl_crash.dump
 .expert/
+
+# Nix settings of this OS: a link that make links creates
+config/nix/os.conf

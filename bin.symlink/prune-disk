@@ -7,8 +7,8 @@
 # Does nothing while / has MIN_FREE_GB or more free (default: 100). Below that,
 # it removes:
 #   - Nix generations older than 14 days, then all unused store paths, then
-#     duplicate store files (hard-linked: replaces auto-optimise-store, see
-#     config/nix/nix.conf)
+#     duplicate store files (hard-linked: on macOS this replaces
+#     auto-optimise-store, see config/nix/macos.conf)
 #   - Docker images, containers and build cache unused for 7 days
 #   - anonymous Docker volumes that no container uses (named volumes stay)
 #   - caches that rebuild themselves, listed in rebuildable_caches below
