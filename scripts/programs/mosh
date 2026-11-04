@@ -4,9 +4,16 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-# Linux only. On macOS, the Brewfile installs mosh.
+# Mosh 1.4 comes from the Nix home-manager profile (config/nix/home.nix),
+# on Linux and macOS. Run scripts/programs/nix-home-manager first.
+# https://mosh.org/
 [[ "$(uname)" == Linux ]] || { echo "Skip: Linux only"; exit 0; }
 
-# Mobile shell that supports roaming and intelligent local echo
-# https://mosh.org/
-sudo apt install -y mosh
+# Apt has mosh 1.3.2, which drops OSC 52 (the clipboard of a remote tmux).
+if dpkg-query --show --showformat='${Status}' mosh 2>/dev/null | grep -q "ok installed"; then
+  sudo apt remove -y mosh
+fi
+
+# A mosh client starts mosh-server over ssh. That shell is not interactive,
+# so its PATH has /usr/local/bin but not ~/.nix-profile/bin.
+sudo ln -sf "$HOME/.nix-profile/bin/mosh-server" /usr/local/bin/mosh-server

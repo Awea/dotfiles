@@ -23,6 +23,9 @@ in
     codex
     # Apt has tmux 3.2a, too old for OSC 8 hyperlinks (tmux 3.4+).
     tmux
+    # Apt has mosh 1.3.2, which drops OSC 52: a copy in a remote tmux does
+    # not reach the local clipboard. mosh 1.4 passes it.
+    mosh
   ] ++ [
     inputs.hunk.packages.${system}.default
   ];
