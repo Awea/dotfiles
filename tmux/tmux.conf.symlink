@@ -6,6 +6,10 @@ set -g mouse on
 set -as terminal-features ",*:hyperlinks"
 # Programs in tmux can set the Ghostty clipboard (OSC 52)
 set -g set-clipboard on
+# A copy in tmux sends OSC 52 with an empty selection, and mosh 1.4 passes
+# only the "c" selection. So an empty selection becomes "c". Ms must use %p1:
+# tmux 3.7 sends nothing when it does not.
+set -as terminal-overrides ',*:Ms=\E]52;%?%p1%l%t%p1%s%ec%;;%p2%s\007'
 # Programs in tmux can send escape sequences to Ghostty (notifications, images)
 set -g allow-passthrough on
 
