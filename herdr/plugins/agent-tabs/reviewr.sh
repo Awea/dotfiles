@@ -12,7 +12,8 @@
 # not send are only in its memory.
 #
 # The hook track-worktree.sh records the worktree of each pane. Without a record, or
-# when the recorded folder no longer exists, the action uses the cwd of the pane.
+# when the recorded folder no longer exists, the action uses the cwd of the pane. In a
+# view of a board worker, the action uses the record and the cwd of the worker.
 #
 # The reviewr action "open" allows one reviewr in each workspace and uses the cwd of the
 # focused pane. This action opens one next to the pane. When the tab already has one for
@@ -113,24 +114,21 @@ if [ -z "${HERDR_PANE_ID:-}" ]; then
   exit 1
 fi
 
-# Return 0 when pane $1 runs herdr-reviewr in the foreground. The label of a pane is
-# not a proof.
-is_reviewr() {
-  "$H" pane process-info --pane "$1" 2>/dev/null | jq -e '
-    any(.result.process_info.foreground_processes[];
-      ((.argv0 // "") | split("/") | last) == "herdr-reviewr"
-      or (((.argv // [])[0] // "") | split("/") | last) == "herdr-reviewr")
-  ' >/dev/null
-}
-
 if is_reviewr "$HERDR_PANE_ID"; then
   notify "reviewr: the focused pane is a reviewr."
   exit 0
 fi
-dir=""
-file=$(worktree_file "$HERDR_PANE_ID")
-[ ! -f "$file" ] || dir=$(head -n 1 "$file")
-[ -n "$dir" ] && [ -d "$dir" ] || dir=$(pane_cwd "$HERDR_PANE_ID")
+# A view of a board worker runs in the home folder: use the worktree of the worker.
+source_pane=$HERDR_PANE_ID source_session=$PANE_SESSION
+attach=$(view_worker "$HERDR_PANE_ID")
+[ -z "$attach" ] || read -r source_session source_pane <<<"$attach"
+# The view of a board worker is no agent while no reviewr is open next to it, and reviewr
+# sends its notes only to an agent. So report the view once the reviewr pane exists. It
+# runs detached: the key must show its result at once.
+report_view_agent() {
+  [ -z "$attach" ] || detach "$here/dispatch.sh" sync "$source_pane" >/dev/null 2>&1 </dev/null
+}
+dir=$(work_dir "$source_session" "$source_pane")
 if ! root=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null); then
   notify "reviewr: $dir is not in a git repo."
   exit 1
@@ -147,6 +145,7 @@ candidates=$(jq -r --arg me "$HERDR_PANE_ID" --arg root "$root" '
 for pane in $candidates; do
   if is_reviewr "$pane"; then
     "$H" pane zoom "$pane" --on >/dev/null 2>&1 || true
+    report_view_agent
     notify "reviewr: pane $pane already shows $root in this tab."
     # A reviewr sees the turns of a claude in its worktree. For a claude in another
     # worktree, the hooks write the turn base, and the reviewr does not read it again.
@@ -184,6 +183,7 @@ if ! opened=$("$H" plugin pane open --plugin persiyanov.reviewr --entrypoint pan
 fi
 new_pane=$(jq -r '.result.plugin_pane.pane.pane_id // empty' <<<"$opened") || new_pane=""
 notify "reviewr: opened pane ${new_pane:-?} for $root."
+report_view_agent
 if [ -n "$new_pane" ]; then
   record=$(reviewr_file "$new_pane")
   if mkdir -p "$(dirname "$record")"; then printf '%s\n' "$(turn_base "$root")" >"$record" || true; fi

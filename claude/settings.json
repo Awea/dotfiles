@@ -65,6 +65,16 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "^compact$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash $HOME/.claude/hooks/herdr-compact-orchestrator.sh",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "SessionEnd": [

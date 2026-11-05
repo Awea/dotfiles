@@ -7,6 +7,33 @@ show_agent_labels_on_pane_borders = false
 [ui.sound]
 enabled = false
 
+# The agent list. The worker views of a board orchestrator report the project as agent,
+# and their tab has the task: show the task, then the project. The workspace name
+# ("work orchestrator") is the same for all of them. Claude keeps the default layout.
+# rows_by_agent takes only built-in agent IDs, so the general rows are for the views.
+[ui.sidebar.agents]
+row_gap = 0
+rows = [
+  ["state_icon", "machine", "tab"],
+  ["agent"],
+]
+
+[ui.sidebar.agents.rows_by_agent]
+claude = [
+  ["state_icon", "machine", "workspace", "tab"],
+  ["agent"],
+]
+
+# The second line of a workspace: the git branch, or the number of workers of a board
+# orchestrator and, in yellow, the number that work (the tokens "workers" and "working"
+# of the agent-tabs plugin).
+[ui.sidebar.spaces]
+row_gap = 0
+rows = [
+  ["state_icon", "workspace"],
+  ["branch", "git_status", "$workers", { token = "$working", fg = "#f9e2af" }],
+]
+
 [ui.toast]
 delivery = "off"
 
@@ -17,9 +44,11 @@ auto_switch = false
 # Free prefix+shift+n for awea.workspaces.new. The built-in binding wins over keys.command.
 [keys]
 new_workspace = []
-# tmux split keys
-split_vertical = "prefix+%"
-split_horizontal = "prefix+\""
+# The tmux split keys run the agent-tabs split actions (keys.command below): in the view
+# of a board worker, the new pane opens in the folder of the worker. Free the built-in
+# bindings: they win over keys.command.
+split_vertical = []
+split_horizontal = []
 
 [[keys.command]]
 key = "prefix+a"
@@ -34,10 +63,34 @@ command = "awea.agent-tabs.handoff"
 description = "handoff to new claude tab"
 
 [[keys.command]]
+key = "prefix+shift+b"
+type = "plugin_action"
+command = "awea.agent-tabs.board"
+description = "run a board with an orchestrator claude"
+
+[[keys.command]]
+key = "prefix+shift+x"
+type = "plugin_action"
+command = "awea.agent-tabs.board-stop"
+description = "stop a board orchestrator"
+
+[[keys.command]]
 key = "prefix+c"
 type = "plugin_action"
 command = "awea.agent-tabs.new-shell-tab"
 description = "new tab in the main worktree"
+
+[[keys.command]]
+key = "prefix+%"
+type = "plugin_action"
+command = "awea.agent-tabs.split-right"
+description = "split right"
+
+[[keys.command]]
+key = "prefix+\""
+type = "plugin_action"
+command = "awea.agent-tabs.split-down"
+description = "split down"
 
 [[keys.command]]
 key = "prefix+d"

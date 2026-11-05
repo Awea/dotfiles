@@ -1,17 +1,100 @@
 #!/usr/bin/env bash
 # Fake herdr for the tests. It logs each call to $FAKE_LOG and prints fixed JSON.
+# It also logs each call with its session (default, or the NAME of --session NAME) to
+# $FAKE_SESSION_LOG ($FAKE_LOG.session by default).
+# A session other than default answers only when it runs: its name is in
+# FAKE_SESSION_RUNNING or in the file $FAKE_LOG.running, which the server writes.
+# The hidden server starts with a clean environment: then read FAKE_LOG from $HOME.
+[ -n "${FAKE_LOG:-}" ] || FAKE_LOG=$(cat "$HOME/.fake-log-path")
+# As herdr, without --session use HERDR_SESSION.
+session=${HERDR_SESSION:-default}
+if [ "${1:-}" = --session ]; then
+  session=$2
+  shift 2
+fi
 args=$(printf '%s | ' "$@")
 printf '%s\n' "${args% | }" >>"$FAKE_LOG"
+printf '%s | %s\n' "$session" "${args% | }" >>"${FAKE_SESSION_LOG:-$FAKE_LOG.session}"
+running() {
+  [ "$1" != "${FAKE_SESSION_STOPPED:-}" ] || [ -f "$FAKE_LOG.running" ] || return 1
+  [ "$1" = default ] || [ "$1" = "${FAKE_SESSION_RUNNING:-}" ] ||
+    { [ -f "$FAKE_LOG.running" ] && [ "$(cat "$FAKE_LOG.running")" = "$1" ]; }
+}
+if [ "${1:-}" = server ]; then
+  # Record the environment of the server. FAKE_SERVER_DEAD: the server never answers.
+  env >"$FAKE_LOG.env"
+  [ -n "${FAKE_SERVER_DEAD:-}" ] || printf '%s' "$session" >"$FAKE_LOG.running"
+  exit 0
+fi
+if ! running "$session"; then
+  printf '{"error":{"code":"server_unavailable"}}\n' >&2
+  exit 1
+fi
 
-case "$1 $2" in
-  "pane get")
-    if [ -n "${FAKE_PANE_MISSING:-}" ]; then
+case "${1:-} ${2:-}" in
+  "session list")
+    names=default
+    [ -z "${FAKE_SESSION_RUNNING:-}" ] || names="$names $FAKE_SESSION_RUNNING"
+    [ ! -f "$FAKE_LOG.running" ] || names="$names $(cat "$FAKE_LOG.running")"
+    # FAKE_SESSION_STOPPED: a session that the list shows as stopped.
+    # The socket of a session is /fake/NAME.sock.
+    # $FAKE_LOG.stopped: sessions that the list shows as stopped, one for each line.
+    # The other calls still get answers.
+    gone=""
+    [ ! -f "$FAKE_LOG.stopped" ] || gone=$(cat "$FAKE_LOG.stopped")
+    jq -cn --arg n "$names" --arg stopped "${FAKE_SESSION_STOPPED:-}" --arg gone "$gone" \
+      '($gone | split("\n")) as $g
+      | {sessions: ([$n | split(" ")[] | {name: ., running: (. as $s | $g | index([$s]) | not),
+          socket_path: "/fake/\(.).sock"}]
+        + (if $stopped == "" then [] else [{name: $stopped, running: false}] end))}'
+    ;;
+  "pane read")
+    # FAKE_SCREENS: screen files, one for each call, separated by spaces. The last one
+    # repeats. FAKE_SCREEN_FAIL: the read fails. FAKE_PANE_SCREENS: a folder with one
+    # screen file for each pane, named after the pane ID. It comes before FAKE_SCREENS.
+    if [ -n "${FAKE_SCREEN_FAIL:-}" ]; then
       printf '{"error":{"code":"pane_not_found"}}\n' >&2
       exit 1
+    fi
+    if [ -n "${FAKE_PANE_SCREENS:-}" ]; then
+      [ -f "$FAKE_PANE_SCREENS/$3" ] || { printf '{"error":{"code":"pane_not_found"}}\n' >&2; exit 1; }
+      cat "$FAKE_PANE_SCREENS/$3"
+    elif [ -n "${FAKE_SCREENS:-}" ]; then
+      read -r -a screens <<<"$FAKE_SCREENS"
+      i=$(grep -c '^pane | read' "$FAKE_LOG")
+      [ "$i" -le "${#screens[@]}" ] || i=${#screens[@]}
+      cat "${screens[$((i - 1))]}"
+    fi
+    ;;
+  "pane run")
+    # Keep the command: process-info of the pane then shows it, until FAKE_ATTACH_DEAD.
+    printf '%s' "${4:-}" >"$FAKE_LOG.run.$3"
+    printf '{"result":{}}\n'
+    ;;
+  "pane get")
+    # FAKE_HIDDEN_PANE_MISSING: no pane in another session. FAKE_VIEW_MISSING: no pane in
+    # the default session. FAKE_PANE_MISSING: no pane in any session.
+    if [ -n "${FAKE_PANE_MISSING:-}" ] ||
+      { [ "$session" != default ] && [ -n "${FAKE_HIDDEN_PANE_MISSING:-}" ]; } ||
+      { [ "$session" = default ] && [ -n "${FAKE_VIEW_MISSING:-}" ]; }; then
+      printf '{"error":{"code":"pane_not_found"}}\n' >&2
+      exit 1
+    elif [ "$session" != default ] && [ -n "${FAKE_HIDDEN_CWD:-}" ]; then
+      # FAKE_HIDDEN_CWD: the cwd of a pane in another session.
+      printf '{"result":{"pane":{"tab_id":"w1:t9","foreground_cwd":"%s"}}}\n' "$FAKE_HIDDEN_CWD"
     elif [ -n "${FAKE_CWD:-}" ]; then
       printf '{"result":{"pane":{"tab_id":"w1:t9","foreground_cwd":"%s"}}}\n' "$FAKE_CWD"
     else
-      printf '{"result":{"pane":{"tab_id":"w1:t9"}}}\n'
+      # In the default session (a view), FAKE_PANE_TAB and FAKE_PANE_FOCUSED. Else the worker tab.
+      tab=w1:t9 focused=false
+      [ "$session" != default ] || tab=${FAKE_PANE_TAB:-w1:t9} focused=${FAKE_PANE_FOCUSED:-false}
+      # FAKE_PANE_FOCUSED_CALLS: the view has the focus for that number of calls, then not.
+      if [ "$session" = default ] && [ -n "${FAKE_PANE_FOCUSED_CALLS:-}" ]; then
+        focused=false
+        [ "$(grep -c '^default | pane | get' "${FAKE_SESSION_LOG:-$FAKE_LOG.session}")" -gt "$FAKE_PANE_FOCUSED_CALLS" ] || focused=true
+      fi
+      jq -cn --arg tab "$tab" --argjson f "$focused" --arg ws "${FAKE_AGENT_WS:-w4}" \
+        '{result: {pane: {tab_id: $tab, focused: $f, workspace_id: $ws}}}'
     fi
     ;;
   "pane list")
@@ -21,10 +104,32 @@ case "$1 $2" in
       printf '{"result":{"panes":[]}}\n'
     fi
     ;;
+  "pane report-agent")
+    # FAKE_REPORT_FAIL: the report fails. FAKE_SNAPSHOT_MARKS: a marks file that the
+    # report copies, to show what the file held at the time of the report.
+    [ -z "${FAKE_SNAPSHOT_MARKS:-}" ] || cp "$FAKE_SNAPSHOT_MARKS" "$FAKE_LOG.marks-at-report" 2>/dev/null || true
+    if [ -n "${FAKE_REPORT_FAIL:-}" ]; then
+      printf '{"error":{"code":"pane_not_found"}}\n' >&2
+      exit 1
+    fi
+    printf '{"result":{}}\n'
+    ;;
   "pane process-info")
+    # FAKE_PROCESS_INFO_FAIL: the call fails.
+    if [ -n "${FAKE_PROCESS_INFO_FAIL:-}" ]; then
+      printf '{"error":{"code":"server_unavailable"}}\n' >&2
+      exit 1
+    fi
     # FAKE_REVIEWR_PANES: the panes that run herdr-reviewr, separated by spaces.
+    # FAKE_SHELL_PANES: the panes at a shell prompt.
     exe=claude
     [[ " ${FAKE_REVIEWR_PANES:-} " == *" ${4:-} "* ]] && exe=/plugin/bin/herdr-reviewr
+    [[ " ${FAKE_SHELL_PANES:-} " == *" ${4:-} "* ]] && exe=/usr/bin/zsh
+    if [ -f "$FAKE_LOG.run.${4:-}" ] && [ -z "${FAKE_ATTACH_DEAD:-}" ]; then
+      read -r -a run <"$FAKE_LOG.run.$4"
+      printf '%s\n' "${run[@]}" | jq -cRn '[inputs] as $a | {result: {process_info: {foreground_processes: [{argv0: null, argv: $a}]}}}'
+      exit 0
+    fi
     jq -cn --arg exe "$exe" '{result: {process_info: {foreground_processes: [{argv0: $exe, argv: [$exe]}]}}}'
     ;;
   "plugin pane")
@@ -39,7 +144,67 @@ case "$1 $2" in
       printf '{"error":{"code":"workspace_not_found"}}\n' >&2
       exit 1
     fi
-    printf '{"result":{"root_pane":{"pane_id":"w1:p9"},"tab":{"tab_id":"w1:t9"}}}\n'
+    # FAKE_TAB_ROOT: the root pane of a new tab in the default session.
+    root=w1:p9
+    [ "$session" != default ] || root=${FAKE_TAB_ROOT:-w1:p9}
+    jq -cn --arg p "$root" '{result: {root_pane: {pane_id: $p}, tab: {tab_id: ($p | sub(":p"; ":t"))}}}'
+    ;;
+  "workspace list")
+    # FAKE_HIDDEN_LIST_FAILS: the number of first calls in another session that fail.
+    if [ "$session" != default ] && [ -n "${FAKE_HIDDEN_LIST_FAILS:-}" ] &&
+      [ "$(grep -c "^$session | workspace | list" "${FAKE_SESSION_LOG:-$FAKE_LOG.session}")" -le "$FAKE_HIDDEN_LIST_FAILS" ]; then
+      printf '{"error":{"code":"server_unavailable"}}\n' >&2
+      exit 1
+    fi
+    # FAKE_HIDDEN_WORKSPACES_JSON: the listing of a session other than default.
+    if [ "$session" != default ] && [ -n "${FAKE_HIDDEN_WORKSPACES_JSON:-}" ]; then
+      printf '%s\n' "$FAKE_HIDDEN_WORKSPACES_JSON"
+      exit 0
+    fi
+    if [ -n "${FAKE_WORKSPACE_LIST_FAIL:-}" ]; then
+      printf '{"error":{"code":"server_unavailable"}}\n' >&2
+      exit 1
+    fi
+    # FAKE_WORKSPACES_JSON_LATER: the listing from the second call on.
+    if [ -n "${FAKE_WORKSPACES_JSON_LATER:-}" ] && [ "$(grep -c '^workspace | list' "$FAKE_LOG")" -gt 1 ]; then
+      printf '%s\n' "$FAKE_WORKSPACES_JSON_LATER"
+    elif [ -n "${FAKE_WORKSPACES_JSON:-}" ]; then
+      printf '%s\n' "$FAKE_WORKSPACES_JSON"
+    else
+      printf '{"result":{"workspaces":[]}}\n'
+    fi
+    ;;
+  "agent list")
+    # FAKE_AGENTS_JSON: the agent listing. FAKE_HIDDEN_AGENTS_JSON: the listing of a
+    # session other than default.
+    # FAKE_HIDDEN_AGENTS_FILE: a file with that listing, which can change during a test.
+    # FAKE_AGENTS_FILE: the same for the default session.
+    if [ "$session" != default ] && [ -n "${FAKE_HIDDEN_AGENTS_FILE:-}" ]; then
+      cat "$FAKE_HIDDEN_AGENTS_FILE"
+    elif [ "$session" != default ] && [ -n "${FAKE_HIDDEN_AGENTS_JSON:-}" ]; then
+      printf '%s\n' "$FAKE_HIDDEN_AGENTS_JSON"
+    elif [ "$session" = default ] && [ -n "${FAKE_AGENTS_FILE:-}" ]; then
+      cat "$FAKE_AGENTS_FILE"
+    elif [ -n "${FAKE_AGENTS_JSON:-}" ]; then
+      printf '%s\n' "$FAKE_AGENTS_JSON"
+    else
+      printf '{"result":{"agents":[]}}\n'
+    fi
+    ;;
+  "workspace create")
+    if [ -n "${FAKE_WORKSPACE_CREATE_FAIL:-}" ]; then
+      printf '{"error":{"code":"server_unavailable"}}\n' >&2
+      exit 1
+    fi
+    if [ -n "${FAKE_WORKSPACE_CREATE_NOROOT:-}" ]; then
+      printf '{"result":{"workspace":{"workspace_id":"w2"}}}\n'
+      exit 0
+    fi
+    # FAKE_DEFAULT_WS_ROOT: the root pane of a new workspace in the default session.
+    root=w2:p1
+    [ "$session" != default ] || root=${FAKE_DEFAULT_WS_ROOT:-w2:p1}
+    jq -cn --arg p "$root" '{result: {workspace: {workspace_id: ($p | split(":")[0])},
+      tab: {tab_id: ($p | sub(":p"; ":t"))}, root_pane: {pane_id: $p}}}'
     ;;
   "agent get")
     # FAKE_AGENT_GETS: the number of calls that find the agent. The next calls do not.
@@ -53,10 +218,69 @@ case "$1 $2" in
     if [ -n "${FAKE_START_NAME:-}" ] && [ "$(grep -c '^agent | get' "$FAKE_LOG")" -eq 1 ]; then
       name="$FAKE_START_NAME"
     fi
-    jq -cn --arg kind "${FAKE_AGENT_KIND:-claude}" --arg status "${FAKE_AGENT_STATUS:-idle}" \
-      --arg title "${FAKE_TITLE:-claude}" --arg name "$name" \
-      '{result: {agent: {agent: $kind, agent_status: $status, tab_id: "w1:t9", terminal_title_stripped: $title,
-        name: (if $name == "" then null else $name end)}}}'
+    # FAKE_AGENT_STATUSES and FAKE_SEQS: one value for each call, separated by spaces.
+    # The last one repeats. With no FAKE_SEQS, the agent has no state_change_seq.
+    n=$(grep -c '^agent | get' "$FAKE_LOG")
+    pick() {
+      local -a list
+      read -r -a list <<<"$1"
+      local i=$n
+      [ "$i" -le "${#list[@]}" ] || i=${#list[@]}
+      printf '%s\n' "${list[$((i - 1))]}"
+    }
+    status="${FAKE_AGENT_STATUS:-idle}"
+    [ -z "${FAKE_AGENT_STATUSES:-}" ] || status=$(pick "$FAKE_AGENT_STATUSES")
+    seq=""
+    [ -z "${FAKE_SEQS:-}" ] || seq=$(pick "$FAKE_SEQS")
+    cseq=""
+    [ -z "${FAKE_COMPLETION_SEQS:-}" ] || cseq=$(pick "$FAKE_COMPLETION_SEQS")
+    # FAKE_REPORT_AT: "N FILE". Call N writes a report to FILE.
+    if [ -n "${FAKE_REPORT_AT:-}" ] && [ "$n" -eq "${FAKE_REPORT_AT%% *}" ]; then
+      printf 'RESULT: DONE\n' >"${FAKE_REPORT_AT#* }"
+    fi
+    jq -cn --arg kind "${FAKE_AGENT_KIND:-claude}" --arg status "$status" \
+      --arg title "${FAKE_TITLE:-claude}" --arg name "$name" --arg session "${FAKE_SESSION:-}" \
+      --arg seq "$seq" --arg cseq "$cseq" --argjson focused "${FAKE_FOCUSED:-false}" --arg ws "${FAKE_AGENT_WS:-w4}" \
+      '{result: {agent: ({agent: $kind, agent_status: $status, tab_id: "w1:t9", terminal_title_stripped: $title,
+        name: (if $name == "" then null else $name end), focused: $focused, workspace_id: $ws,
+        agent_session: (if $session == "" then null else {kind: "id", value: $session} end)}
+        + (if $seq == "" then {} else {state_change_seq: ($seq | tonumber)} end)
+        + (if $cseq == "" then {} else {completion_seq: ($cseq | tonumber)} end))}}'
+    ;;
+  "workspace get")
+    if [ -n "${FAKE_WS_GET_FAIL:-}" ]; then
+      printf '{"error":{"code":"workspace_not_found"}}\n' >&2
+      exit 1
+    fi
+    # FAKE_WS_LABELS: a JSON object from workspace ID to label. Else FAKE_WS_LABEL.
+    labels='{}'
+    [ -z "${FAKE_WS_LABELS:-}" ] || labels=$FAKE_WS_LABELS
+    # FAKE_WS_ACTIVE_TAB: the active tab. FAKE_WS_FOCUSED=false: the workspace has no focus.
+    jq -cn --arg id "${3:-}" --arg l "${FAKE_WS_LABEL:-home orchestrator}" --argjson m "$labels" \
+      --arg tab "${FAKE_WS_ACTIVE_TAB:-}" --argjson f "${FAKE_WS_FOCUSED:-true}" \
+      '{result: {workspace: {workspace_id: $id, label: ($m[$id] // $l), active_tab_id: $tab, focused: $f}}}'
+    ;;
+  "tab list")
+    # FAKE_TABS_JSON: the tab listing.
+    if [ -n "${FAKE_TABS_JSON:-}" ]; then
+      printf '%s\n' "$FAKE_TABS_JSON"
+    else
+      printf '{"result":{"tabs":[]}}\n'
+    fi
+    ;;
+  "tab get")
+    # FAKE_TAB_PANES: the pane count of a tab. FAKE_VIEW_TAB_PANES: the pane count of a
+    # tab in the default session (a view tab), else FAKE_TAB_PANES.
+    n=${FAKE_TAB_PANES:-1}
+    [ "$session" != default ] || n=${FAKE_VIEW_TAB_PANES:-$n}
+    jq -cn --arg id "${3:-}" --argjson n "$n" '{result: {tab: {tab_id: $id, pane_count: $n}}}'
+    ;;
+  "notification show")
+    if [ -n "${FAKE_NOTIFY_FAIL:-}" ]; then
+      printf '{"error":{"code":"server_unavailable"}}\n' >&2
+      exit 1
+    fi
+    printf '{"result":{}}\n'
     ;;
   "tab focus")
     if [ -n "${FAKE_TAB_MISSING:-}" ]; then
@@ -73,8 +297,33 @@ case "$1 $2" in
     printf '{"result":{}}\n'
     ;;
   "agent start")
+    # FAKE_START_BUSY=N: the first N starts find the shell of the pane not at its prompt.
+    busy=$(cat "$FAKE_LOG.start-busy" 2>/dev/null || echo 0)
+    if [ "$busy" -lt "${FAKE_START_BUSY:-0}" ]; then
+      echo $((busy + 1)) >"$FAKE_LOG.start-busy"
+      printf '{"error":{"code":"agent_pane_busy","message":"agent target pane %s is not an available shell"}}\n' "${5:-}" >&2
+      exit 1
+    fi
+    # Herdr agent names are unique in a session. The file $FAKE_LOG.names.SESSION
+    # keeps one "PANE NAME" line for each named agent; a test can fill it first.
+    names_file="$FAKE_LOG.names.$session"
+    owner=$(awk -v n="$3" -v p="${5:-}" '$2 == n && $1 != p { print $1; exit }' "$names_file" 2>/dev/null)
+    if [ -n "$owner" ]; then
+      printf '{"error":{"code":"agent_name_taken","message":"agent name %s is already used; candidates: pane_id=%s"}}\n' "$3" "$owner" >&2
+      exit 1
+    fi
     if [ -n "${FAKE_START_FAIL:-}" ]; then
       printf '{"error":{"code":"agent_not_ready"}}\n' >&2
+      exit 1
+    fi
+    { grep -v "^${5:-} " "$names_file" 2>/dev/null; echo "${5:-} $3"; } >"$names_file.new"
+    mv "$names_file.new" "$names_file"
+    printf '{"result":{}}\n'
+    ;;
+  "agent wait")
+    # FAKE_WAIT_FAIL: the agent is not idle in time.
+    if [ -n "${FAKE_WAIT_FAIL:-}" ]; then
+      printf '{"error":{"code":"timeout"}}\n' >&2
       exit 1
     fi
     printf '{"result":{}}\n'
@@ -100,6 +349,19 @@ case "$1 $2" in
     fi
     if [ -n "${FAKE_NAME_TAKEN:-}" ] && [ "${4:-}" = "$FAKE_NAME_TAKEN" ]; then
       printf '{"error":{"code":"agent_name_taken"}}\n' >&2
+      exit 1
+    fi
+    names_file="$FAKE_LOG.names.$session"
+    if [ -f "$names_file" ]; then
+      { grep -v "^${3:-} " "$names_file"; [ "${4:-}" = --clear ] || echo "${3:-} ${4:-}"; } >"$names_file.new"
+      mv "$names_file.new" "$names_file"
+    fi
+    printf '{"result":{}}\n'
+    ;;
+  "workspace close")
+    # FAKE_DEFAULT_CLOSE_FAIL: the close of a workspace of the default session fails.
+    if [ "$session" = default ] && [ -n "${FAKE_DEFAULT_CLOSE_FAIL:-}" ]; then
+      printf '{"error":{"code":"server_unavailable"}}\n' >&2
       exit 1
     fi
     printf '{"result":{}}\n'
