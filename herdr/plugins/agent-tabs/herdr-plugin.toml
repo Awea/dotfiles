@@ -18,6 +18,18 @@ contexts = ["pane"]
 command = ["bash", "handoff.sh", "open"]
 
 [[actions]]
+id = "board"
+title = "agent-tabs: run a board"
+contexts = ["pane", "workspace"]
+command = ["bash", "board.sh", "open"]
+
+[[actions]]
+id = "board-stop"
+title = "agent-tabs: stop a board orchestrator"
+contexts = ["pane", "workspace"]
+command = ["bash", "board.sh", "stop"]
+
+[[actions]]
 id = "new-shell-tab"
 title = "agent-tabs: new tab in the main worktree"
 contexts = ["pane", "workspace"]
@@ -34,6 +46,18 @@ id = "open-file"
 title = "agent-tabs: open a file link in Sublime Text"
 contexts = ["pane"]
 command = ["bash", "open-file.sh"]
+
+[[actions]]
+id = "split-right"
+title = "agent-tabs: split the pane right"
+contexts = ["pane"]
+command = ["bash", "split.sh", "right"]
+
+[[actions]]
+id = "split-down"
+title = "agent-tabs: split the pane down"
+contexts = ["pane"]
+command = ["bash", "split.sh", "down"]
 
 [[actions]]
 id = "reviewr"
@@ -68,3 +92,34 @@ placement = "popup"
 width = "60%"
 height = 7
 command = ["bash", "handoff.sh", "prompt"]
+
+[[panes]]
+id = "board-prompt"
+title = "Board"
+placement = "popup"
+width = "60%"
+height = 7
+command = ["bash", "board.sh", "prompt"]
+
+[[panes]]
+id = "board-stop-prompt"
+title = "Stop orchestrator"
+placement = "popup"
+width = "60%"
+height = 7
+command = ["bash", "board.sh", "stop-prompt"]
+
+# A worker view is a Herdr agent only while it is red or a reviewr is open next to it.
+# When a pane closes or exits, release the views that no longer need it.
+[[events]]
+on = "pane.closed"
+command = ["bash", "dispatch.sh", "views-sync"]
+
+[[events]]
+on = "pane.exited"
+command = ["bash", "dispatch.sh", "views-sync"]
+
+# After a restart of Herdr the view panes come back as bare shells: rebuild them, and
+# start the listener of the worker counts. The command returns at once.
+[[startup]]
+command = ["bash", "startup.sh"]

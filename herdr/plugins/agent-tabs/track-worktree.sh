@@ -35,7 +35,14 @@
 # turn does nothing. Claude Code runs no Stop after an Esc, so the prompt mode first
 # ends a turn that still has its file.
 #
-# The hook never stops claude: it always exits 0 and writes nothing on stdout.
+# In the pre mode, a guard blocks a Bash call of a board worker in the hidden Herdr
+# session ($DISPATCH_SESSION, default board-workers) that runs herdr pane split, tab
+# create, workspace create, worktree create or open, plugin pane open, plugin action or
+# agent start. The user cannot see a new pane or tab there. The guard exits 2 with the
+# reason on stderr. Claude Code then blocks the call and gives the reason to claude.
+#
+# Apart from the guard, the hook never stops claude: it exits 0 and writes nothing on
+# stdout. An error in the guard also gives exit 0.
 set -uo pipefail
 exec >/dev/null
 here="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
@@ -43,6 +50,25 @@ here="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 source "$here/lib.sh"
 
 input=$(cat 2>/dev/null) || input=""
+
+# Guard of the pre mode: a worker in the hidden session must not open a pane, a tab, a
+# workspace, a worktree, a plugin pane or an agent. The user cannot see it. Block the
+# Bash call with exit 2: Claude Code then gives stderr to claude. The match is simple:
+# the word herdr, optional --x or --x value options, then the subcommand. It also
+# matches the words in a quoted string, for example grep "herdr pane split" file. That
+# false positive is acceptable. On each error, the guard allows the call.
+hidden="${DISPATCH_SESSION:-board-workers}"
+if [ "${1:-}" = pre ] && [ "${HERDR_ENV:-}" = 1 ] && [ "${HERDR_SESSION:-}" = "$hidden" ]; then
+  guard=$(jq -r 'if .tool_name == "Bash" then .tool_input.command // "" else "" end' <<<"$input" 2>/dev/null) || guard=""
+  sp='[[:space:]]+'
+  opt="$sp--?[[:alnum:]-]+(=[^[:space:]]*)?(${sp}[^-[:space:]][^[:space:]]*)?"
+  sub="pane${sp}split|tab${sp}create|workspace${sp}create|worktree$sp(create|open)|plugin${sp}pane${sp}open|plugin${sp}action|agent${sp}start"
+  re="(^|[^[:alnum:]_.-])herdr($opt)*$sp($sub)([[:space:]]|$)"
+  if [[ "$guard" =~ $re ]]; then
+    printf '%s\n' "Blocked: you run in the hidden Herdr session $hidden. The user cannot see a new pane, tab or plugin pane there, and a link to it does not work. Do the work in your own pane or in a subagent. The user opens reviewr with ctrl+b d in your view." >&2
+    exit 2
+  fi
+fi
 [ "${HERDR_ENV:-}" = 1 ] && [ -n "${HERDR_PANE_ID:-}" ] || exit 0
 file=$(worktree_file "$HERDR_PANE_ID")
 turns=$(turn_file "$HERDR_PANE_ID")

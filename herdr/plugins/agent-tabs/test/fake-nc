@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Fake nc for the tests: `nc -U SOCKET`. It logs the request line of its stdin to
+# $FAKE_LOG.nc. FAKE_NC_EVENTS: event files, one for each call, separated by spaces.
+# A call prints the subscription reply and the lines of its file. On the last file, it
+# then exits, and it first marks the session of SOCKET (/fake/NAME.sock) as stopped in
+# $FAKE_LOG.stopped (only `session list` shows it), so that the listener ends. On
+# another file, it keeps the connection until its stdin closes or a signal stops it,
+# as the real nc does. With no file for the call, it prints nothing and exits 1, as nc
+# does when it cannot connect.
+# FAKE_NC_AGENTS: a file that a call copies to FAKE_HIDDEN_AGENTS_FILE before the
+# reply: an agent that comes while the listener subscribes. FAKE_NC_AGENTS_LATE: the
+# same, but after the reply and a short time, before the events: an agent that comes
+# later. FAKE_NC_REFUSE: close stdin before the request, as nc that cannot connect.
+if [ -n "${FAKE_NC_REFUSE:-}" ]; then
+  exec 0<&-
+  : >>"$FAKE_LOG.nc-refused"
+  sleep 0.5
+  exit 1
+fi
+IFS= read -r request
+printf '%s\n' "$request" >>"$FAKE_LOG.nc"
+read -r -a files <<<"${FAKE_NC_EVENTS:-}"
+n=$(wc -l <"$FAKE_LOG.nc")
+[ "$n" -le "${#files[@]}" ] || exit 1
+sock=${2##*/}
+last=""
+[ "$n" -lt "${#files[@]}" ] || last=1
+[ -z "$last" ] || printf '%s\n' "${sock%.sock}" >>"$FAKE_LOG.stopped"
+[ -z "${FAKE_NC_AGENTS:-}" ] || cp "$FAKE_NC_AGENTS" "$FAKE_HIDDEN_AGENTS_FILE"
+printf '{"id":"x","result":{"type":"subscription_started"}}\n'
+if [ -n "${FAKE_NC_AGENTS_LATE:-}" ]; then
+  sleep 0.5
+  cp "$FAKE_NC_AGENTS_LATE" "$FAKE_HIDDEN_AGENTS_FILE"
+fi
+cat "${files[$((n - 1))]}"
+# Keep stdout open: the listener reads the end of the connection there.
+[ -n "$last" ] || cat >/dev/null
