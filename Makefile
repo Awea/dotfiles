@@ -23,7 +23,7 @@ endif
 
 ## Create symbolic links for files/folders with a .symlink suffix
 .PHONY: links
-links: $(symlink_paths) $(sublime_links) antibody/zsh_plugins.sh $(HOME)/.config/direnv $(HOME)/.config/nix config/nix/os.conf $(HOME)/.config/zed/settings.json $(HOME)/.config/zed/keymap.json $(HOME)/.claude/CLAUDE.md $(HOME)/.claude/settings.json $(HOME)/.config/herdr/config.toml $(HOME)/.config/herdr/plugins/config/persiyanov.reviewr/config.toml $(HOME)/.config/ghostty/config.ghostty $(HOME)/.config/ghostty/os.ghostty $(HOME)/.claude/skills/handoff $(HOME)/.claude/hooks/herdr-agent-name.sh $(HOME)/.claude/hooks/herdr-worktree.sh $(HOME)/.claude/skills/ste-writing
+links: $(symlink_paths) $(sublime_links) antibody/zsh_plugins.sh $(HOME)/.config/direnv $(HOME)/.config/nix config/nix/os.conf $(HOME)/.config/zed/settings.json $(HOME)/.config/zed/keymap.json $(HOME)/.claude/CLAUDE.md $(HOME)/.claude/settings.json $(HOME)/.config/herdr/config.toml $(HOME)/.config/herdr/plugins/config/persiyanov.reviewr/config.toml $(HOME)/.config/ghostty/config.ghostty $(HOME)/.config/ghostty/os.ghostty $(HOME)/.claude/skills/handoff $(HOME)/.claude/hooks/herdr-agent-name.sh $(HOME)/.claude/hooks/herdr-worktree.sh $(HOME)/.claude/skills/ste-writing $(HOME)/.claude/skills/writing-for-agents
 
 # Create all symlink
 # Documentation: https://www.gnu.org/software/make/manual/html_node/Automatic-Variables.html#Automatic-Variables
@@ -93,6 +93,10 @@ $(HOME)/.claude/hooks/herdr-worktree.sh:
 $(HOME)/.claude/skills/ste-writing:
 	@mkdir -p $(dir $@)
 	ln -s $(PWD)/claude/skills/ste-writing $@
+
+$(HOME)/.claude/skills/writing-for-agents:
+	@mkdir -p $(dir $@)
+	ln -s $(PWD)/claude/skills/writing-for-agents $@
 
 ## Register the local Herdr plugins
 .PHONY: herdr-plugins
