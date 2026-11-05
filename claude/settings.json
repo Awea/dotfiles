@@ -4,7 +4,6 @@
     "FORCE_HYPERLINK": "1"
   },
   "model": "opus",
-  "includeCoAuthoredBy": false,
   "attribution": {
     "commit": "",
     "pr": ""
