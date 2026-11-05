@@ -8,6 +8,10 @@
 
 # Git
 
+- Write a commit message as a subject `<scope>: <summary>`, a blank line, then a body
+  that tells what changes and why. When a repo has its own commit style, use that style.
+  Its `CLAUDE.md`, its contributing docs or its recent `git log` show the style. For
+  example, the dotfiles put a gitmoji before `<scope>: <summary>` and write no body.
 - Never add a signature to commit messages: no `Co-Authored-By` trailer and no
   generated-by line. GPG signing stays on.
 - Before the first commit of a session, test the gpg-agent cache:
