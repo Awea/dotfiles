@@ -1,7 +1,9 @@
 {
   "env": {
     "CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-5-5",
-    "FORCE_HYPERLINK": "1"
+    "FORCE_HYPERLINK": "1",
+    "MCP_TIMEOUT": "60000",
+    "ENABLE_CLAUDEAI_MCP_SERVERS": "false"
   },
   "model": "opus",
   "attribution": {
@@ -15,11 +17,6 @@
           {
             "type": "command",
             "command": "python3 $HOME/.claude/skills/ste-writing/hooks/ste-gate.py"
-          },
-          {
-            "type": "command",
-            "command": "bash $HOME/.claude/hooks/herdr-worktree.sh stop",
-            "timeout": 10
           }
         ]
       }
@@ -30,11 +27,6 @@
           {
             "type": "command",
             "command": "bash $HOME/.claude/skills/ste-writing/hooks/ste-inject.sh"
-          },
-          {
-            "type": "command",
-            "command": "bash $HOME/.claude/hooks/herdr-worktree.sh prompt",
-            "timeout": 10
           }
         ]
       }
@@ -43,21 +35,6 @@
       {
         "matcher": "^(startup|resume|clear|compact|fork)$",
         "hooks": [
-          {
-            "type": "command",
-            "command": "bash $HOME/.claude/hooks/herdr-agent-state.sh session",
-            "timeout": 10
-          },
-          {
-            "type": "command",
-            "command": "bash $HOME/.claude/hooks/herdr-agent-name.sh start",
-            "timeout": 10
-          },
-          {
-            "type": "command",
-            "command": "bash $HOME/.claude/hooks/herdr-worktree.sh start",
-            "timeout": 10
-          },
           {
             "type": "command",
             "command": "bash $HOME/.claude/skills/ste-writing/hooks/ste-inject.sh",
@@ -70,18 +47,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash $HOME/.claude/hooks/herdr-compact-orchestrator.sh",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
-    "SessionEnd": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash $HOME/.claude/hooks/herdr-worktree.sh end",
+            "command": "f=\"$HOME/.claude/skills/board-orchestrator/hooks/compact.sh\"; [ -f \"$f\" ] || exit 0; bash \"$f\"",
             "timeout": 10
           }
         ]
@@ -89,23 +55,11 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash",
+        "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "bash $HOME/.claude/hooks/herdr-worktree.sh pre",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash $HOME/.claude/hooks/herdr-worktree.sh tool",
+            "command": "f=\"$HOME/.claude/skills/board-orchestrator/hooks/guard.sh\"; [ -f \"$f\" ] || exit 0; bash \"$f\"",
             "timeout": 10
           }
         ]
@@ -115,7 +69,7 @@
   "enabledPlugins": {
     "obsidian-second-brain@obsidian-second-brain": true,
     "superpowers@claude-plugins-official": true,
-    "pg@aiguide": true
+    "pg@aiguide": false
   },
   "extraKnownMarketplaces": {
     "obsidian-second-brain": {
@@ -138,8 +92,89 @@
     }
   },
   "tui": "fullscreen",
+  "enableArtifact": false,
   "preferredNotifChannel": "notifications_disabled",
   "remoteControlAtStartup": false,
   "inputNeededNotifEnabled": false,
-  "agentPushNotifEnabled": false
+  "agentPushNotifEnabled": false,
+  "enableWorkflows": false,
+  "bashOutputMaxChars": 10000,
+  "permissions": {
+    "deny": [
+      "SendFeedback",
+      "ReportFindings"
+    ]
+  },
+  "skillOverrides": {
+    "anthropic-skills:built-in-browser": "user-invocable-only",
+    "anthropic-skills:chrome-browser": "user-invocable-only",
+    "anthropic-skills:computer-use": "user-invocable-only",
+    "anthropic-skills:deep-research": "user-invocable-only",
+    "anthropic-skills:docs": "user-invocable-only",
+    "anthropic-skills:docx": "user-invocable-only",
+    "anthropic-skills:google-workspace": "user-invocable-only",
+    "anthropic-skills:import-memory": "user-invocable-only",
+    "anthropic-skills:morning": "user-invocable-only",
+    "anthropic-skills:pdf": "user-invocable-only",
+    "anthropic-skills:pptx": "user-invocable-only",
+    "anthropic-skills:skill-creator": "user-invocable-only",
+    "anthropic-skills:xlsx": "user-invocable-only",
+    "claude-api": "name-only",
+    "code-review": "user-invocable-only",
+    "dataviz": "name-only",
+    "fewer-permission-prompts": "user-invocable-only",
+    "find-skills": "user-invocable-only",
+    "init": "user-invocable-only",
+    "keybindings-help": "user-invocable-only",
+    "loop": "user-invocable-only",
+    "obsidian-second-brain:create-command": "user-invocable-only",
+    "obsidian-second-brain:crew": "user-invocable-only",
+    "obsidian-second-brain:idea-discovery": "user-invocable-only",
+    "obsidian-second-brain:notebooklm": "user-invocable-only",
+    "obsidian-second-brain:obsidian-architect": "user-invocable-only",
+    "obsidian-second-brain:obsidian-board-hygiene": "user-invocable-only",
+    "obsidian-second-brain:obsidian-brainstorm": "user-invocable-only",
+    "obsidian-second-brain:obsidian-calendar": "user-invocable-only",
+    "obsidian-second-brain:obsidian-capture": "user-invocable-only",
+    "obsidian-second-brain:obsidian-catchup": "user-invocable-only",
+    "obsidian-second-brain:obsidian-challenge": "user-invocable-only",
+    "obsidian-second-brain:obsidian-checkin": "user-invocable-only",
+    "obsidian-second-brain:obsidian-connect": "user-invocable-only",
+    "obsidian-second-brain:obsidian-daily": "user-invocable-only",
+    "obsidian-second-brain:obsidian-distill": "user-invocable-only",
+    "obsidian-second-brain:obsidian-emerge": "user-invocable-only",
+    "obsidian-second-brain:obsidian-export": "user-invocable-only",
+    "obsidian-second-brain:obsidian-find": "user-invocable-only",
+    "obsidian-second-brain:obsidian-graduate": "user-invocable-only",
+    "obsidian-second-brain:obsidian-health": "user-invocable-only",
+    "obsidian-second-brain:obsidian-ingest": "user-invocable-only",
+    "obsidian-second-brain:obsidian-init": "user-invocable-only",
+    "obsidian-second-brain:obsidian-learn": "user-invocable-only",
+    "obsidian-second-brain:obsidian-merge": "user-invocable-only",
+    "obsidian-second-brain:obsidian-panel": "user-invocable-only",
+    "obsidian-second-brain:obsidian-person": "user-invocable-only",
+    "obsidian-second-brain:obsidian-project": "user-invocable-only",
+    "obsidian-second-brain:obsidian-projects": "user-invocable-only",
+    "obsidian-second-brain:obsidian-reconcile": "user-invocable-only",
+    "obsidian-second-brain:obsidian-recurring": "user-invocable-only",
+    "obsidian-second-brain:obsidian-reindex": "user-invocable-only",
+    "obsidian-second-brain:obsidian-retrieval-eval": "user-invocable-only",
+    "obsidian-second-brain:obsidian-review": "user-invocable-only",
+    "obsidian-second-brain:obsidian-save": "user-invocable-only",
+    "obsidian-second-brain:obsidian-synthesize": "user-invocable-only",
+    "obsidian-second-brain:obsidian-visualize": "user-invocable-only",
+    "obsidian-second-brain:obsidian-world": "user-invocable-only",
+    "obsidian-second-brain:podcast": "user-invocable-only",
+    "obsidian-second-brain:research": "user-invocable-only",
+    "obsidian-second-brain:research-deep": "user-invocable-only",
+    "obsidian-second-brain:vault-deep-synthesis": "user-invocable-only",
+    "obsidian-second-brain:x-pulse": "user-invocable-only",
+    "obsidian-second-brain:x-read": "user-invocable-only",
+    "obsidian-second-brain:youtube": "user-invocable-only",
+    "plugin-authoring": "user-invocable-only",
+    "run": "user-invocable-only",
+    "schedule": "user-invocable-only",
+    "security-review": "user-invocable-only",
+    "simplify": "user-invocable-only"
+  }
 }
