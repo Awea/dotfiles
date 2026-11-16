@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# The herdr CLI of Herdr 0.9.5, for herdr-reviewr in herdr-app: the 7 calls that
+# herdr-reviewr 0.37.1 makes (src/herdr.rs), answered from hc and herdr-app.
+# agent-tabs.sh reviewr sets HERDR_BIN_PATH to this file.
+#
+# pane send-text presses Enter: the hc API has no paste without Enter, so reviewr's Send
+# submits the comments at once.
+set -euo pipefail
+export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}"
+HC=("${HC_BIN:-hc}")
+HAPP=("${HERDR_APP_BIN:-herdr-app}")
+
+# agents: {"result":{"agents":[...]}}, one entry for each live hc terminal whose program
+# reports an agent status, with the fields of `herdr agent list`. When the tab of reviewr
+# (HERDR_TAB_ID) has an agent, only the agents of that tab: reviewr sends to a sole agent
+# at once, and a herdr-app space holds the agents of all its tabs.
+agents() {
+  local addr json
+  "${HC[@]}" ls --json | jq -r '.terminals[]? | select(.state == "live") | .address' |
+    while IFS= read -r addr; do
+      json=$("${HC[@]}" get "$addr" --json 2>/dev/null) || continue
+      jq -c 'select(.status.app != null) | {
+        agent: (if .status.app == "claude-code" then "claude" else .status.app end),
+        agent_status: .status.state, pane_id: .address,
+        tab_id: (.labels["herdr.tab"] // ""), workspace_id: (.labels["herdr.space"] // ""),
+        cwd: (.foreground.cwd // .cwd), name: .name}' <<<"$json"
+    done | jq -sc --arg tab "${HERDR_TAB_ID:-}" '
+      [.[] | select(.tab_id == $tab and $tab != "")] as $here
+      | {result: {agents: (if $here == [] then . else $here end)}}'
+}
+
+# unpaste TEXT: TEXT without the bracketed paste markers that reviewr adds.
+unpaste() {
+  local text=$1
+  text=${text#$'\e[200~'}
+  text=${text%$'\e[201~'}
+  printf '%s' "$text"
+}
+
+case "${1:-} ${2:-}" in
+  "agent list") agents ;;
+  "agent focus") "${HAPP[@]}" "do" agent.focus --terminal "$3" >/dev/null ;;
+  "pane send-text") "${HC[@]}" send "$3" "$(unpaste "$4")" >/dev/null ;;
+  "pane list") printf '{"result":{"panes":[]}}\n' ;;
+  "pane rename") : ;;
+  "tab list")
+    [ "${3:-}" = --workspace ] || { printf 'herdr-shim: tab list needs --workspace\n' >&2; exit 2; }
+    "${HAPP[@]}" ls | jq -c --arg ws "$4" \
+      '{result: {tabs: [.spaces[]? | select(.id == $ws) | .tabs[]? | {tab_id: .id, label: .name}]}}'
+    ;;
+  # The reviewr config of the dotfiles: herdr-app/reviewr/config.toml.
+  "plugin config-dir") printf '%s\n' "$(cd "$(dirname "$0")/../reviewr" && pwd)" ;;
+  *)
+    printf 'herdr-shim: herdr %s is not supported in herdr-app.\n' "$*" >&2
+    exit 1
+    ;;
+esac

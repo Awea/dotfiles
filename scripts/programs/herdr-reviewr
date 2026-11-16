@@ -1,0 +1,44 @@
+#!/bin/zsh
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+# Linux and macOS. herdr-reviewr for ctrl+b d in herdr-app (herdr-app/bin/agent-tabs.sh
+# reviewr). Pinned: herdr-app/bin/herdr-shim covers the herdr calls of this version.
+# A link (the Herdr 0.9.5 plugin makes one) is replaced; a real file is left alone.
+# https://github.com/persiyanov/herdr-reviewr
+version=0.37.1
+name=herdr-reviewr
+bin_dir=${HERDR_REVIEWR_BIN_DIR:-$HOME/.local/bin}
+
+case "$(uname -s)-$(uname -m)" in
+  Darwin-arm64) target=aarch64-apple-darwin ;;
+  Darwin-x86_64) target=x86_64-apple-darwin ;;
+  Linux-aarch64 | Linux-arm64) target=aarch64-unknown-linux-musl ;;
+  Linux-x86_64) target=x86_64-unknown-linux-musl ;;
+  *) echo "$name: no release for $(uname -s)-$(uname -m)" >&2; exit 1 ;;
+esac
+
+if [[ -e "$bin_dir/$name" && ! -L "$bin_dir/$name" ]]; then
+  echo "$name: $bin_dir/$name is a real file, left alone"
+  exit 0
+fi
+
+base="https://github.com/persiyanov/$name/releases/download/v$version"
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+curl -fsSL --retry 5 --retry-delay 3 "$base/$name-$target.tar.gz" -o "$tmp/$name.tar.gz"
+curl -fsSL --retry 5 --retry-delay 3 "$base/$name-$target.sha256" -o "$tmp/$name.sha256"
+expected=$(awk '{print $1}' "$tmp/$name.sha256")
+if command -v sha256sum >/dev/null 2>&1; then
+  actual=$(sha256sum "$tmp/$name.tar.gz" | awk '{print $1}')
+else
+  actual=$(shasum -a 256 "$tmp/$name.tar.gz" | awk '{print $1}')
+fi
+[[ "$expected" == "$actual" ]] || { echo "$name: checksum mismatch" >&2; exit 1; }
+tar -xzf "$tmp/$name.tar.gz" -C "$tmp"
+mkdir -p "$bin_dir"
+rm -f "$bin_dir/$name"
+install -m 0755 "$tmp/$name" "$bin_dir/$name"
+echo "$name $version installed in $bin_dir"

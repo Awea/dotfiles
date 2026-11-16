@@ -23,7 +23,7 @@ endif
 
 ## Create symbolic links for files/folders with a .symlink suffix
 .PHONY: links
-links: $(symlink_paths) $(sublime_links) antibody/zsh_plugins.sh $(HOME)/.config/direnv $(HOME)/.config/nix config/nix/os.conf $(HOME)/.config/zed/settings.json $(HOME)/.config/zed/keymap.json $(HOME)/.claude/CLAUDE.md $(HOME)/.claude/rules/elixir.md $(HOME)/.claude/settings.json $(HOME)/.config/herdr/config.toml $(HOME)/.config/herdr/plugins/config/persiyanov.reviewr/config.toml $(HOME)/.config/ghostty/config.ghostty $(HOME)/.config/ghostty/os.ghostty $(HOME)/.claude/skills/handoff $(HOME)/.claude/hooks/herdr-agent-name.sh $(HOME)/.claude/hooks/herdr-worktree.sh $(HOME)/.claude/hooks/herdr-compact-orchestrator.sh $(HOME)/.claude/skills/ste-writing $(HOME)/.claude/skills/writing-for-agents $(HOME)/.claude/skills/project-tool-check $(HOME)/.claude/skills/board-orchestrator
+links: $(symlink_paths) $(sublime_links) antibody/zsh_plugins.sh $(HOME)/.config/direnv $(HOME)/.config/nix config/nix/os.conf $(HOME)/.config/zed/settings.json $(HOME)/.config/zed/keymap.json $(HOME)/.claude/CLAUDE.md $(HOME)/.claude/rules/elixir.md $(HOME)/.claude/settings.json $(HOME)/.config/ghostty/config.ghostty $(HOME)/.config/ghostty/os.ghostty $(HOME)/.claude/skills/handoff $(HOME)/.claude/skills/ste-writing $(HOME)/.claude/skills/writing-for-agents $(HOME)/.claude/skills/project-tool-check $(HOME)/.claude/skills/board-orchestrator
 
 # Create all symlink
 # Documentation: https://www.gnu.org/software/make/manual/html_node/Automatic-Variables.html#Automatic-Variables
@@ -70,14 +70,6 @@ $(HOME)/.claude/settings.json:
 	@mkdir -p $(dir $@)
 	ln -s $(PWD)/claude/settings.json $@
 
-$(HOME)/.config/herdr/config.toml:
-	@mkdir -p $(dir $@)
-	ln -s $(PWD)/herdr/config.toml $@
-
-$(HOME)/.config/herdr/plugins/config/persiyanov.reviewr/config.toml:
-	@mkdir -p $(dir $@)
-	ln -s $(PWD)/herdr/reviewr.toml $@
-
 $(HOME)/.config/ghostty/config.ghostty:
 	@mkdir -p $(dir $@)
 	ln -s $(PWD)/ghostty/config.ghostty $@
@@ -90,18 +82,6 @@ $(HOME)/.config/ghostty/os.ghostty:
 $(HOME)/.claude/skills/handoff:
 	@mkdir -p $(dir $@)
 	ln -s $(PWD)/claude/skills/handoff $@
-
-$(HOME)/.claude/hooks/herdr-agent-name.sh:
-	@mkdir -p $(dir $@)
-	ln -s $(PWD)/herdr/plugins/agent-tabs/sync-name.sh $@
-
-$(HOME)/.claude/hooks/herdr-worktree.sh:
-	@mkdir -p $(dir $@)
-	ln -s $(PWD)/herdr/plugins/agent-tabs/track-worktree.sh $@
-
-$(HOME)/.claude/hooks/herdr-compact-orchestrator.sh:
-	@mkdir -p $(dir $@)
-	ln -s $(PWD)/herdr/plugins/agent-tabs/compact-orchestrator.sh $@
 
 $(HOME)/.claude/skills/ste-writing:
 	@mkdir -p $(dir $@)
@@ -119,23 +99,19 @@ $(HOME)/.claude/skills/board-orchestrator:
 	@mkdir -p $(dir $@)
 	ln -s $(PWD)/claude/skills/board-orchestrator $@
 
-## Register the local Herdr plugins
-.PHONY: herdr-plugins
-herdr-plugins: herdr-hook
-	herdr plugin link $(PWD)/herdr/plugins/agent-tabs
-	herdr plugin link $(PWD)/herdr/plugins/workspaces
-
-# herdr integration install also adds its hook to ~/.claude/settings.json, with the
-# absolute path of the home folder. That file links to claude/settings.json, which runs
-# the hook with $HOME already. So install into a temporary home and copy only the hook.
-## Install or update the Herdr hook that reports the Claude state
-.PHONY: herdr-hook
-herdr-hook:
-	@mkdir -p $(HOME)/.claude/hooks
-	tmp=$$(mktemp -d) && trap 'rm -rf "$$tmp"' EXIT && \
-		mkdir $$tmp/.claude && \
-		HOME=$$tmp herdr integration install claude >/dev/null && \
-		cp $$tmp/.claude/hooks/herdr-agent-state.sh $(HOME)/.claude/hooks/
+## Link the herdr-app keys, mods, layout and scripts
+## (Linux and macOS). A plain keys.json moves to keys.json.before-dotfiles first.
+HERDR_APP_HOME ?= $(HOME)/.config/herdr-app
+.PHONY: herdr-app
+herdr-app:
+	@mkdir -p $(HERDR_APP_HOME)/mods $(HERDR_APP_HOME)/layouts $(HOME)/.claude/skills
+	@if [ -f $(HERDR_APP_HOME)/keys.json ] && [ ! -L $(HERDR_APP_HOME)/keys.json ]; then \
+	  mv $(HERDR_APP_HOME)/keys.json $(HERDR_APP_HOME)/keys.json.before-dotfiles; fi
+	ln -sfn $(PWD)/herdr-app/keys.json $(HERDR_APP_HOME)/keys.json
+	ln -sfn $(PWD)/herdr-app/layouts/main-quiet.json $(HERDR_APP_HOME)/layouts/main-quiet.json
+	ln -sfn $(PWD)/herdr-app/bin $(HERDR_APP_HOME)/bin
+	for m in board-open board-stop quiet-toast prefix new-agent-tab handoff new-space claude-resume; do \
+	  ln -sfn $(PWD)/herdr-app/mods/$$m $(HERDR_APP_HOME)/mods/$$m; done
 
 $(HOME)/.config/%:
 	@mkdir -p $(dir $@)
