@@ -1,0 +1,3 @@
+# herdr-app check writes these generated files into each mod folder.
+*.d.ts
+jsconfig.json

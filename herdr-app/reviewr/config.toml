@@ -1,0 +1,4 @@
+# The config of herdr-reviewr in herdr-app (ctrl+b d). agent-tabs.sh reviewr points
+# HERDR_PLUGIN_CONFIG_DIR here, and herdr-shim answers plugin config-dir with this folder.
+# reviewr opens each pane in the scope of the last claude turn.
+default_scope = "last-turn"

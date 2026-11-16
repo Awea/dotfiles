@@ -1,0 +1,10 @@
+#!/bin/zsh
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+# Linux and macOS. The installer puts herdr-core and the hc link in
+# ~/.local/bin. A second run updates hc, and running terminals keep running.
+# https://herdr.dev/core/
+curl -fsSL https://releases.herdr.dev/core/install.sh | sh
