@@ -14,6 +14,12 @@ in
   # Let home-manager manage itself.
   programs.home-manager.enable = true;
 
+  # Pin `nixpkgs#...` (as in `nix run nixpkgs#forgejo-mcp`) to the rev of
+  # flake.lock. The global registry points to the unstable channel: after the
+  # 1 h tarball TTL, a channel update makes nix fetch and evaluate nixpkgs again
+  # (about 30 s), and an MCP server start goes past the 30 s Claude Code limit.
+  nix.registry.nixpkgs.flake = inputs.nixpkgs;
+
   # Packages installed here land on $PATH everywhere (via ~/.nix-profile/bin).
   home.packages = with pkgs; [
     ripgrep

@@ -26,3 +26,6 @@ erl_crash.dump
 
 # Nix settings of this OS: a link that make links creates
 config/nix/os.conf
+
+# Nix user registry: a link that home-manager creates (nix.registry in home.nix)
+config/nix/registry.json
