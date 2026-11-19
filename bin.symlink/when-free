@@ -1,0 +1,171 @@
+#!/usr/bin/env bash
+
+# Start a heavy command (a test suite, a build) only when the machine has room.
+#
+#   Usage: when-free CMD [ARGS...]
+#
+# All agents of all boards share one lock. The script takes the lock, waits until the
+# 1-minute load is under WHEN_FREE_LOAD x cores (default 0.7) and the available RAM is
+# at least WHEN_FREE_MEM_MB (default 4096), then runs the command. The lock stays for
+# WHEN_FREE_HOLD seconds (default 30) after the start, or until the command stops: the
+# load average needs some seconds to show the new job.
+#
+# WHEN_FREE=off runs the command at once. WHEN_FREE_POLL sets the seconds between two
+# checks (default 5). WHEN_FREE_PROBE is a command that prints "LOAD CORES MEM_MB": the
+# tests use it.
+
+set -euo pipefail
+
+say() { printf 'when-free: %s\n' "$*" >&2; }
+
+if [ $# -eq 0 ]; then
+  say "usage: when-free CMD [ARGS...]"
+  exit 2
+fi
+if [ "${WHEN_FREE:-}" = off ]; then
+  exec "$@"
+fi
+
+max_load=${WHEN_FREE_LOAD:-0.7}
+min_mem=${WHEN_FREE_MEM_MB:-4096}
+hold=${WHEN_FREE_HOLD:-30}
+poll=${WHEN_FREE_POLL:-5}
+dir="${XDG_STATE_HOME:-$HOME/.local/state}/when-free"
+lock="$dir/lock"
+mkdir -p "$dir"
+
+# probe: print "LOAD CORES MEM_MB". Linux reads /proc. macOS reads sysctl and vm_stat:
+# free, inactive and speculative pages are the RAM that a new job can get.
+probe() {
+  if [ -n "${WHEN_FREE_PROBE:-}" ]; then
+    "$WHEN_FREE_PROBE"
+    return
+  fi
+  local load cores mem
+  cores=$(getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu)
+  if [ -r /proc/loadavg ]; then
+    load=$(cut -d ' ' -f 1 /proc/loadavg)
+    mem=$(awk '/^MemAvailable:/ { printf "%d", $2 / 1024 }' /proc/meminfo)
+  else
+    load=$(sysctl -n vm.loadavg | awk '{ print $2 }')
+    mem=$(vm_stat | awk '/page size of/ { size = $8 }
+      /^Pages (free|inactive|speculative):/ { sub(/\.$/, "", $NF); pages += $NF }
+      END { printf "%d", pages * size / 1048576 }')
+  fi
+  printf '%s %s %s\n' "$load" "$cores" "$mem"
+}
+
+# file_mtime FILE: the modification time in seconds. GNU stat takes -c, macOS stat -f.
+file_mtime() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1"; }
+
+# age PATH: the seconds since PATH changed. 0 when PATH is gone.
+age() {
+  local m
+  m=$(file_mtime "$1" 2>/dev/null) || m=$(date +%s)
+  printf '%s\n' $(($(date +%s) - m))
+}
+
+# holder PID: "PID|START", the identity of a process. After a reboot, a reused pid has
+# another start time. exec keeps the start time.
+holder() { printf '%s|%s\n' "$1" "$(LC_ALL=C ps -o lstart= -p "$1" 2>/dev/null)"; }
+
+# alive ID: exit 0 when the process of the identity ID still runs.
+alive() {
+  local pid=${1%%|*} now
+  [[ $pid =~ ^[0-9]+$ ]] || return 1
+  now=$(holder "$pid")
+  [ "${now#*|}" != "" ] && [ "$now" = "$1" ]
+}
+
+# break_stale ID: remove the lock when it still holds ID. A second lock makes the check
+# and the removal one step, so two runs cannot both remove a stale lock and take it.
+# Exit 1 when another run does this step now.
+break_stale() {
+  local brk="$dir/break"
+  if ! mkdir "$brk" 2>/dev/null; then
+    # A run that stopped in this step left the break lock.
+    if [ "$(age "$brk")" -gt 10 ]; then rmdir "$brk" 2>/dev/null || true; fi
+    return 1
+  fi
+  if [ "$(cat "$lock/pid" 2>/dev/null || true)" = "$1" ]; then rm -rf "$lock"; fi
+  rmdir "$brk"
+}
+
+# nap: sleep for the poll time. A stop signal ends it at once: bash runs a trap during
+# wait, but only after a foreground sleep.
+nap_pid=""
+nap() {
+  sleep "$poll" &
+  nap_pid=$!
+  wait "$nap_pid" || true
+  nap_pid=""
+}
+
+# A run that stops before the start removes its lock.
+owner=""
+release() {
+  [ -z "$nap_pid" ] || kill "$nap_pid" 2>/dev/null || true
+  [ -z "$owner" ] || rm -rf "$lock"
+}
+trap release EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+# take_lock: wait for the lock. A lock whose process is gone, or that has no pid after
+# 10 s, is stale: remove it.
+take_lock() {
+  local id shown=""
+  while ! mkdir "$lock" 2>/dev/null; do
+    id=$(cat "$lock/pid" 2>/dev/null || true)
+    if { [ -n "$id" ] && ! alive "$id"; } || { [ -z "$id" ] && [ "$(age "$lock")" -gt 10 ]; }; then
+      break_stale "$id" || nap
+      continue
+    fi
+    if [ -z "$shown" ]; then
+      say "waits for another start (pid ${id%%|*})."
+      shown=1
+    fi
+    nap
+  done
+  owner=1
+  holder "$$" >"$lock/pid"
+}
+
+# wait_free: wait until the load and the RAM are under the limits. Write why it waits
+# at once, when the reason changes, and each 60 s.
+wait_free() {
+  local load cores mem why kind last_kind="" last=0 now
+  while :; do
+    load="" cores="" mem=""
+    read -r load cores mem < <(probe 2>/dev/null) || true
+    if ! [[ "$load" =~ ^[0-9]+([.,][0-9]+)?$ && "$cores" =~ ^[0-9]+$ && "$mem" =~ ^[0-9]+$ ]]; then
+      say "cannot read the load and the free RAM. The command starts now."
+      return
+    fi
+    why=$(LC_ALL=C awk -v l="${load/,/.}" -v c="$cores" -v m="$mem" -v ml="${max_load/,/.}" -v mm="$min_mem" 'BEGIN {
+      if (l + 0 > ml * c) printf "CPU\tthe CPU: load %.1f, limit %.1f", l, ml * c
+      else if (m + 0 < mm + 0) printf "RAM\tRAM: %d MB free, limit %d MB", m, mm }')
+    [ -n "$why" ] || return 0
+    kind=${why%%$'\t'*}
+    now=$(date +%s)
+    if [ "$kind" != "$last_kind" ] || [ $((now - last)) -ge 60 ]; then
+      say "waits for ${why#*$'\t'}."
+      last_kind=$kind last=$now
+    fi
+    nap
+  done
+}
+
+take_lock
+wait_free
+
+# The command keeps the pid and the start time of this script after exec, so the lock
+# stays while it runs. A helper removes the lock after the hold, if no other run took it.
+me=$(holder "$$")
+owner=""
+trap - EXIT INT TERM
+(
+  sleep "$hold"
+  until break_stale "$me"; do sleep 1; done
+) </dev/null >/dev/null 2>&1 3>&- &
+exec "$@"
