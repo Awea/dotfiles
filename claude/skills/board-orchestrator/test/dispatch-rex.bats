@@ -65,12 +65,10 @@ sent_text() { rex_args send "${1:-1}"; printf '%s' "${RUN_ARGS[-1]}"; }
   report=$(sed -n 2p <<<"$output")
   [[ "$prompt" == *"run: $HOME/.claude/skills/board-orchestrator/dispatch.sh tell \"report fix-login $report\""* ]]
   [[ "$prompt" == *"dispatch.sh tell \"close fix-login\""* ]]
-  for a in "${RUN_ARGS[@]}"; do [[ "$a" != *"hc send"* ]]; done
   [[ "$prompt" == *"Run a long job"* ]]
   [[ "$prompt" == *"~/.bin/rex-job <job> <dir> -- <command>"* ]]
   [[ "$prompt" == *"rex wait <block> --for 3600s --json"* ]]
   [[ "$prompt" == *"rex capture -s <session> -b <block> --trim | tail -40"* ]]
-  [[ "$prompt" != *"hc "* ]]
   grep -q "^$new"$'\t' "$STATE/workers"
 }
 
@@ -326,18 +324,6 @@ rex_garden() {
   [ "$(jq -r .from_address "$STATE/queue/garden/$id.json")" = "$O" ]
 }
 
-@test "send from Rex to an hc board uses hc send" {
-  card_setup
-  rex_orchestrator "$O" work
-  fake_terminal t2 garden orchestrator
-  printf 't2\tgarden\n' >"$STATE/orchestrator-garden"
-  dispatch send garden start "$CARD"
-  [ "$status" -eq 0 ]
-  id=$(basename "$(find "$STATE/queue/garden" -name '*.json')" .json)
-  [ -n "$(calls "^hc send t2 card $id\$")" ]
-  [ -z "$(calls '^rex send ')" ]
-}
-
 @test "a failed send to a Rex orchestrator keeps the queue file" {
   card_setup
   rex_orchestrator "$O" work
@@ -465,7 +451,6 @@ notice_setup() {
   rex_args window-new
   prompt=${RUN_ARGS[-1]}
   [[ "$prompt" == *"Do not change the Renux window."* ]]
-  [[ "$prompt" != *"herdr-app window"* ]]
 }
 
 # setup_runs: the worker W runs worktree-setup.sh: bash in front, and a log with no exit line.

@@ -10,7 +10,7 @@ setup() {
   export FAKE_DIR="$BATS_TEST_TMPDIR/fake" FAKE_LOG="$BATS_TEST_TMPDIR/log"
   mkdir -p "$FAKE_DIR"
   : >"$FAKE_LOG"
-  unset HC_TERMINAL_ID BOARD BOARD_ROLE
+  unset BOARD BOARD_ROLE
   new=$("$FAKE" new garden)
   export REX_SESSION REX_BLOCK
   REX_SESSION=$(jq -r .session_id <<<"$new")
@@ -32,12 +32,6 @@ setup() {
   [ ! -s "$FAKE_LOG" ]
 }
 
-@test "does nothing in herdr-app" {
-  export HC_TERMINAL_ID=t7
-  run "$TN" rex-tab-names
-  [ "$status" -eq 0 ]
-  [ ! -s "$FAKE_LOG" ]
-}
 
 @test "does nothing in a board worker" {
   export BOARD=garden BOARD_ROLE=worker

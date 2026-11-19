@@ -161,21 +161,7 @@ $(HOME)/.claude/skills/board-orchestrator:
 	@mkdir -p $(dir $@)
 	ln -s $(PWD)/claude/skills/board-orchestrator $@
 
-## Link the herdr-app keys, mods, layout and scripts
-## (Linux and macOS). A plain keys.json moves to keys.json.before-dotfiles first.
-HERDR_APP_HOME ?= $(HOME)/.config/herdr-app
-.PHONY: herdr-app
-herdr-app:
-	@mkdir -p $(HERDR_APP_HOME)/mods $(HERDR_APP_HOME)/layouts $(HOME)/.claude/skills
-	@if [ -f $(HERDR_APP_HOME)/keys.json ] && [ ! -L $(HERDR_APP_HOME)/keys.json ]; then \
-	  mv $(HERDR_APP_HOME)/keys.json $(HERDR_APP_HOME)/keys.json.before-dotfiles; fi
-	ln -sfn $(PWD)/herdr-app/keys.json $(HERDR_APP_HOME)/keys.json
-	ln -sfn $(PWD)/herdr-app/layouts/main-quiet.json $(HERDR_APP_HOME)/layouts/main-quiet.json
-	ln -sfn $(PWD)/herdr-app/bin $(HERDR_APP_HOME)/bin
-	for m in board-open board-stop quiet-toast prefix new-agent-tab handoff new-space claude-resume; do \
-	  ln -sfn $(PWD)/herdr-app/mods/$$m $(HERDR_APP_HOME)/mods/$$m; done
-
-## Give Renux, the Linux client of Rex, the herdr-app look and keys: link the Rex config,
+## Give Renux, the Linux client of Rex, its look and keys: link the Rex config,
 ## link the graphite theme and set the look keys in settings.ini (Linux only).
 RENUX_HOME ?= $(HOME)/.config/renux
 .PHONY: renux

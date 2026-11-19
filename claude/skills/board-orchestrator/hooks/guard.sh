@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-# PreToolUse hook (Bash) of the board orchestrator on herdr-app. A worker of a board
-# must not change the herdr-app window: the user sees only what the orchestrator shows.
-# A worker can start other agents (a subagent, or a claude in an hc terminal), for
-# example for an independent review: an hc child shows under the worker in the agents
-# list. Exit 2 blocks the call.
+# PreToolUse hook (Bash) of the board orchestrator on Renux. A worker of a board must
+# not change the Renux window: the user sees only what the orchestrator shows.
+# A worker can start other agents (a subagent, or a claude in another terminal), for
+# example for an independent review. Exit 2 blocks the call.
 #
 # In a repo with the branch push policy (dispatch.sh policy-set CWD branch), the hook
 # also decides each git push of a worker. The policy has no git push rule: an ask rule
@@ -16,24 +15,13 @@
 # In each repo, a git push of a worker asks when no reviewer agent started in the session
 # after the oldest commit that the push sends: the worker reviews before a push.
 set -uo pipefail
-# Decide only on hc or Renux, never on HERDR_*: an hc core started from Herdr 0.9.5
-# gives its terminals that environment. On hc the role is in the labels. On Renux
-# (REX_BLOCK set) the role is in the env of the pane: the hook never reads a record and
-# never calls rex, so that it stays fast when Rex is slow.
-rex_worker=""
-if [ -n "${HC_TERMINAL_ID:-}" ]; then
-  :
-elif [ -n "${REX_BLOCK:-}" ] && [ -n "${BOARD:-}" ] && [ "${BOARD_ROLE:-}" = worker ]; then
-  rex_worker=1
-else
+# Decide only on Renux (REX_BLOCK set): the role is in the env of the pane. The hook never
+# reads a record and never calls rex, so that it stays fast when Rex is slow.
+if [ -z "${REX_BLOCK:-}" ] || [ -z "${BOARD:-}" ] || [ "${BOARD_ROLE:-}" != worker ]; then
   exit 0
 fi
 # shellcheck source=SCRIPTDIR/../lib.sh
 source "$(dirname "$(readlink -f "$0")")/../lib.sh"
-if [ -z "$rex_worker" ]; then
-  labels=$(hc_labels "$HC_TERMINAL_ID") || exit 0
-  [ "$(jq -r '.["board.role"] // empty' <<<"$labels")" = worker ] || exit 0
-fi
 
 input=$(cat)
 command=$(jq -r '.tool_input.command // empty' 2>/dev/null <<<"$input") || exit 0
@@ -100,14 +88,7 @@ rex_check() {
 push="" edit="" commit=""
 while IFS= read -r part; do
   read -ra words <<<"$part"
-  for ((i = 0; i < ${#words[@]}; i++)); do
-    if [ "${words[$i]}" = herdr-app ] && [ "${words[$((i + 1))]:-}" = "do" ]; then
-      block "change the herdr-app window (herdr-app do)"
-    fi
-  done
-  if [ -n "$rex_worker" ]; then
-    while IFS= read -r sp; do rex_check "$sp"; done < <(tr '`(){}' '\n' <<<"$part")
-  fi
+  while IFS= read -r sp; do rex_check "$sp"; done < <(tr '`(){}' '\n' <<<"$part")
   # A git push, also after git options. A gh pr edit.
   [[ ! "$part" =~ (^|[[:space:]])git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*[[:space:]]+push([[:space:]]|$) ]] || push=1
   [[ ! "$part" =~ (^|[[:space:]])gh[[:space:]]+pr[[:space:]]+edit([[:space:]]|$) ]] || edit=1

@@ -9,8 +9,8 @@
 # the id "summary" (https://www.superlogical.com/rex/docs/build/program-status). The agent
 # reports its own state on the root record, so it never erases the sentence. A command of
 # the Bash tool of Claude Code has no terminal, so the script writes to the terminal of the
-# nearest parent process that has one: the agent. Outside Renux (REX_BLOCK not set, or
-# HC_TERMINAL_ID set), the script does nothing.
+# nearest parent process that has one: the agent. Outside Renux (REX_BLOCK not set), the
+# script does nothing.
 # Exit 1: no parent process has a terminal. Exit 2: a usage error.
 # REX_SUMMARY_TTY is the file to write to (for the tests). REX_SUMMARY_PID is the process
 # where the search for a terminal starts (default: the parent of this script).
@@ -28,7 +28,7 @@ if [ -z "$sentence" ]; then
   exit 2
 fi
 
-[ -n "${REX_BLOCK:-}" ] && [ -z "${HC_TERMINAL_ID:-}" ] || exit 0
+[ -n "${REX_BLOCK:-}" ] || exit 0
 
 tty=${REX_SUMMARY_TTY:-}
 if [ -z "$tty" ]; then

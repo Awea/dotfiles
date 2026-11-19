@@ -56,4 +56,4 @@ lines[start:end] = group + ([""] if end < len(lines) else [])
 open(path, "w").write("\n".join(lines) + "\n")
 EOF
 
-echo "Set the herdr-app look in $settings"
+echo "Set the Renux look in $settings"

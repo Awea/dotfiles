@@ -4,8 +4,7 @@
 # HERDR_BIN_PATH to this file. A Herdr workspace is a Rex session, a tab is a Rex window,
 # a pane is a Rex block.
 #
-# pane send-text presses Enter, as the herdr-app shim does: reviewr's Send submits the
-# comments at once.
+# pane send-text presses Enter: reviewr's Send submits the comments at once.
 set -euo pipefail
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}"
 here=$(dirname "$(readlink -f "$0")")

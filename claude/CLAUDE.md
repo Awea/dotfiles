@@ -47,19 +47,13 @@
   only `no findings`, or after 3 rounds. Report the open findings.
 - The reviewer runs in the background, so the loop spans several turns. When the loop
   ends, tell the user to review the branch in herdr reviewr and send the comments from it.
-  In herdr-app (`HC_TERMINAL_ID` set), first set two labels on your terminal:
-  `hc label "$HC_TERMINAL_ID" reviewr.dir=<worktree root> reviewr.base=<short base SHA>`.
-  Then the user presses ctrl+b d on your pane, and reviewr opens on that worktree in the
-  branch scope from that base. Set the labels again for each new branch. Outside
-  herdr-app, give the short SHA of the base (`git rev-parse --short <base>`): the user
-  presses `b` for the branch scope, then presses `B`, types the short SHA of the base commit
-  and picks the row it adds. A branch name such as `master` resolves to `origin/master`, so
-  it also shows the unpushed commits.
-- In Renux (`REX_BLOCK` set and `HC_TERMINAL_ID` not set), in place of the `hc label` step
-  and of the `b`/`B` steps, run
+  In Renux (`REX_BLOCK` set), first run
   `~/.config/rex/bin/reviewr-target <worktree root> <short base SHA>`. Then the user
   presses ctrl+b d on your pane, and reviewr opens on that worktree and base. Run it
-  again for each new branch.
+  again for each new branch. Outside Renux, give the short SHA of the base
+  (`git rev-parse --short <base>`): the user presses `b` for the branch scope, then
+  presses `B`, types the short SHA of the base commit and picks the row it adds. A branch
+  name such as `master` resolves to `origin/master`, so it also shows the unpushed commits.
 - Run the Fable review only when the user asks for it. Do not offer it: the user asks for it
   when needed. For it, start a new `reviewer` with `model: "fable"` on `base..HEAD`, and fix
   its findings.
@@ -71,27 +65,12 @@
 - Keep long command output out of the context. Write an output that can be long (a test
   run, a log, a build, an API reply, a query) to a file in the scratchpad, then read it
   with `head`, `tail` or `grep`. Read the full file only when the parts do not answer.
-- Run a slow command (a build, a test suite, a deploy) in an `hc` terminal, so the user
-  can watch it with `hc attach`: `hc run --bg --no-notify --name <n> --cwd <dir> -- <cmd>`,
-  then `hc wait <n> --timeout 110`. `wait` exits 0: read `exit_code` in its JSON. On
-  `reason: timeout`, wait again. Read the end with `hc read <n> | tail -40`, then `hc rm <n>`.
-- Put `~/.bin/when-free` before the command of a build or a test suite:
-  `hc run ... -- ~/.bin/when-free mix test`. It waits until the CPU load and the free RAM
-  let the command start, for all agents of all boards. Its lines in the terminal tell why
-  it waits. A long wait is not an error: wait again. It runs one program: for env vars
-  write `when-free env MIX_ENV=test mix test`, for a shell line `when-free bash -c '...'`.
-  A hook refuses a heavy `mix` task (test, compile, dialyzer) without `when-free`.
-- Put the task or branch name in a run name, for example `shop323-test`, never `fix` or
-  `test`. On `name_taken` for a test or a build, pick a new name. Reuse a live terminal
-  only for a shared resource.
-- Share a dev resource that does not change with the code (a database, a Docker service, a
-  docs server) in one `hc` terminal for all agents. Name it after the resource, for example
-  `shop-postgres`. Start it:
-  `hc run --bg --no-parent --no-notify --name <n> --cwd <dir> -- <cmd>`. On `name_taken`,
-  another agent started it: use it, and check its `cwd` and `argv` with `hc get <n>`. Run
-  `hc wait <n> --timeout 30`: a live resource ends with `reason: timeout`. Read
-  `hc read <n> | tail -40` to see if it is ready. Do not `hc rm` or `hc kill` it: other
-  agents use it.
+- Put `~/.bin/when-free` before the command of a build or a test suite. It waits until
+  the CPU load and the free RAM let the command start, for all agents of all boards. Its
+  lines in the terminal tell why it waits. A long wait is not an error: wait again. It runs
+  one program: for env vars write `when-free env MIX_ENV=test mix test`, for a shell line
+  `when-free bash -c '...'`. A hook refuses a heavy `mix` task (test, compile, dialyzer)
+  without `when-free`.
 - Agents only read a shared database: a read-only role with a `statement_timeout`, and no
   write credentials in the environment or in a file. The project `CLAUDE.md` has a short
   schema note.
@@ -101,7 +80,9 @@
 
 ## Rex
 
-- In Renux (`REX_BLOCK` set and `HC_TERMINAL_ID` not set), use these rules in place of the `hc` rules above.
+- In Renux (`REX_BLOCK` set), use these rules.
+  Outside Renux, run a slow command as a background Bash call (`run_in_background`), and
+  write its output to a file in the scratchpad.
 - Run a slow command (a build, a test suite, a deploy) in a tab the user can watch:
   `rex run -s "$REX_SESSION" --focus=false --keep-open --interactive --label <n> --cwd <dir> --json -- ~/.bin/when-free <cmd>`.
   It prints `{window_id, block_ids:[…]}`. Keep the block ID and use it, not the label:
@@ -133,12 +114,9 @@
 - When you explore an idea on live data, run `board-ro notebook <topic>`. Write the
   queries and the result in that notebook, then commit it in the notebooks folder.
 
-# herdr-app
+# Replies
 
-- In herdr-app (`HC_TERMINAL_ID` set), write a terminal address such as `t7` as plain
-  text. A Ctrl-click on it peeks at that terminal.
-- In Renux (`REX_BLOCK` set and `HC_TERMINAL_ID` not set), write the tab name of a job,
-  not a `t7` address.
+- In Renux, write the tab name of a job, not its block ID.
 - Write each file path in a reply as a link to the absolute path:
   `[docs/spec.md](file:///home/awea/repo/docs/spec.md)`. Add a line as `#L12`.
 

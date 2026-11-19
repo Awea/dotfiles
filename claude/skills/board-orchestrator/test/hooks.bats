@@ -63,62 +63,6 @@ review_repo() {
 
 compact() { run bash "$SKILL_DIR/hooks/compact.sh" <<<'{"source":"compact"}'; }
 
-as_worker() { export HC_TERMINAL_ID=t9; fake_terminal t9 garden worker; }
-
-@test "guard is silent outside hc" {
-  export HERDR_ENV=1 HERDR_WORKSPACE_ID=w1
-  guard 'hc run --bg -- claude "do it"'
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-  [ ! -s "$FAKE_LOG" ]
-}
-
-@test "guard allows an agent start in a worker, for an independent review" {
-  as_worker
-  printf '{"templates":[{"name":"reviewer"}]}\n' >"$FAKE_DIR/hc-templates.json"
-  for c in 'hc run --bg --name x -- claude "review the branch"' 'hc run codex' 'hc run --bg pi' \
-    'cd /x && hc run --bg reviewer "review x"' 'hc run --bg --name y -- /usr/bin/claude'; do
-    guard "$c"
-    [ "$status" -eq 0 ] || { echo "blocked: $c"; return 1; }
-  done
-}
-
-@test "guard blocks window changes in a worker" {
-  as_worker
-  guard 'herdr-app do tab.new --name x'
-  [ "$status" -eq 2 ]
-  [[ "$output" == *herdr-app* ]]
-}
-
-@test "guard allows a slow command in a worker" {
-  as_worker
-  guard 'hc run --bg --no-notify --name t --cwd /repo -- make test'
-  [ "$status" -eq 0 ]
-  guard 'hc wait t --timeout 110'
-  [ "$status" -eq 0 ]
-}
-
-@test "guard allows the shared long job of the worker prompt" {
-  as_worker
-  guard 'hc run --bg --no-notify --outlive-parent --name deploy-web-4fb7f80 --cwd /repo -- bin/wait-deploy 4fb7f80'
-  [ "$status" -eq 0 ]
-  guard 'hc get deploy-web-4fb7f80 && hc wait deploy-web-4fb7f80 --timeout 3600'
-  [ "$status" -eq 0 ]
-}
-
-@test "guard allows everything in the orchestrator" {
-  export HC_TERMINAL_ID=t5
-  fake_terminal t5 garden orchestrator
-  guard 'hc run --bg -- claude "x"'
-  [ "$status" -eq 0 ]
-}
-
-@test "guard allows a terminal that is not on a board" {
-  export HC_TERMINAL_ID=t3
-  guard 'hc run --bg -- claude "x"'
-  [ "$status" -eq 0 ]
-}
-
 @test "guard asks for the first push of a branch in a branch repo" {
   as_worker
   branch_repo
@@ -337,15 +281,6 @@ ssh_origin() {
   [ -z "$output" ]
 }
 
-@test "guard does not decide a push outside a worker" {
-  branch_repo
-  export HC_TERMINAL_ID=t5
-  fake_terminal t5 garden orchestrator
-  guard 'git push origin master'
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
 @test "guard asks for a push when no reviewer started after the commits that it sends" {
   as_worker
   review_repo
@@ -445,41 +380,12 @@ ssh_origin() {
   [[ "$(reason)" == *"the commit of this call"* ]]
 }
 
-@test "compact speaks only for an orchestrator" {
-  export HC_TERMINAL_ID=t5
-  fake_terminal t5 garden orchestrator
-  compact
-  [ "$status" -eq 0 ]
-  [ "$(jq -r .hookSpecificOutput.hookEventName <<<"$output")" = SessionStart ]
-  ctx=$(jq -r .hookSpecificOutput.additionalContext <<<"$output")
-  [[ "$ctx" == *"~/.claude/skills/board-orchestrator/SKILL.md"* ]]
-  [[ "$ctx" == *"orchestrator of the board garden"* ]]
-}
-
-@test "compact is silent for a worker and outside hc" {
-  as_worker
-  compact
-  [ -z "$output" ]
-  unset HC_TERMINAL_ID
-  export HERDR_ENV=1
-  compact
-  [ -z "$output" ]
-}
-
-@test "compact gives the whole board name as the arguments" {
-  export HC_TERMINAL_ID=t5
-  fake_terminal t5 "my board" orchestrator
-  compact
-  ctx=$(jq -r .hookSpecificOutput.additionalContext <<<"$output")
-  [[ "$ctx" == *'with "my board" as the whole argument text'* ]]
-}
-
-# Rex versions of the hc tests above: the role is in the env of the pane.
-as_rex_worker() { export REX_BLOCK=b1 REX_SESSION=rs1 BOARD=garden BOARD_ROLE=worker BOARD_NAME=w1; }
+# The role is in the env of the pane.
+as_worker() { export REX_BLOCK=b1 REX_SESSION=rs1 BOARD=garden BOARD_ROLE=worker BOARD_NAME=w1; }
 as_rex_orchestrator() { export REX_BLOCK=b1 BOARD="${1:-garden}" BOARD_ROLE=orchestrator; }
 
 @test "guard allows an agent start and a slow command in a Rex worker, outside rex (Rex)" {
-  as_rex_worker
+  as_worker
   for c in 'claude "review the branch"' 'codex' 'make test' 'bin/wait-deploy 4fb7f80'; do
     guard "$c"
     [ "$status" -eq 0 ] || { echo "blocked: $c"; return 1; }
@@ -498,7 +404,7 @@ as_rex_orchestrator() { export REX_BLOCK=b1 BOARD="${1:-garden}" BOARD_ROLE=orch
   [ -z "$output" ]
 }
 @test "guard allows a later push to the branch after the user allowed its first push (Rex)" {
-  as_rex_worker
+  as_worker
   branch_repo
   push_feat
   for c in 'git push' 'git push origin feat' 'git push -u origin HEAD' 'git push --force-with-lease' \
@@ -514,7 +420,7 @@ as_rex_orchestrator() { export REX_BLOCK=b1 BOARD="${1:-garden}" BOARD_ROLE=orch
 }
 
 @test "guard asks again when the user refused the first push (Rex)" {
-  as_rex_worker
+  as_worker
   branch_repo
   guard 'git push -u origin HEAD'
   [ "$(decision)" = ask ]
@@ -523,7 +429,7 @@ as_rex_orchestrator() { export REX_BLOCK=b1 BOARD="${1:-garden}" BOARD_ROLE=orch
 }
 
 @test "guard asks for the first push to a branch that origin already has (Rex)" {
-  as_rex_worker
+  as_worker
   branch_repo
   git -C "$REPO" push -q origin feat 2>/dev/null
   guard 'git push origin feat'
@@ -531,7 +437,7 @@ as_rex_orchestrator() { export REX_BLOCK=b1 BOARD="${1:-garden}" BOARD_ROLE=orch
 }
 
 @test "guard keeps the approval of a branch to one session (Rex)" {
-  as_rex_worker
+  as_worker
   branch_repo
   push_feat
   guard 'git push' "$REPO" s2
@@ -539,7 +445,7 @@ as_rex_orchestrator() { export REX_BLOCK=b1 BOARD="${1:-garden}" BOARD_ROLE=orch
 }
 
 @test "guard asks for each push to the default branch, also a bare push on it (Rex)" {
-  as_rex_worker
+  as_worker
   branch_repo
   push_feat
   for c in 'git push origin master' 'git push origin HEAD:master' 'git push origin feat:refs/heads/master' \
@@ -558,7 +464,7 @@ as_rex_orchestrator() { export REX_BLOCK=b1 BOARD="${1:-garden}" BOARD_ROLE=orch
 }
 
 @test "guard asks for a bare push to a default branch upstream (Rex)" {
-  as_rex_worker
+  as_worker
   branch_repo
   git -C "$REPO" checkout -q -b other --track origin/master
   guard 'git push'
@@ -567,7 +473,7 @@ as_rex_orchestrator() { export REX_BLOCK=b1 BOARD="${1:-garden}" BOARD_ROLE=orch
 }
 
 @test "guard asks for a push that it cannot read (Rex)" {
-  as_rex_worker
+  as_worker
   branch_repo
   push_feat
   for c in 'git push && echo ok' 'git commit -m x; git push' 'git push 2>&1 | tail -3' 'git push -f' \
@@ -580,7 +486,7 @@ as_rex_orchestrator() { export REX_BLOCK=b1 BOARD="${1:-garden}" BOARD_ROLE=orch
 }
 
 @test "guard asks for a cd folder name with a command in it (Rex)" {
-  as_rex_worker
+  as_worker
   branch_repo
   push_feat
   mkdir "$REPO/\$(touch\${IFS}pwned)"
@@ -589,7 +495,7 @@ as_rex_orchestrator() { export REX_BLOCK=b1 BOARD="${1:-garden}" BOARD_ROLE=orch
 }
 
 @test "guard asks for a short name or a source that reaches another ref (Rex)" {
-  as_rex_worker
+  as_worker
   branch_repo
   push_feat
   git -C "$REPO" tag v1
@@ -606,7 +512,7 @@ as_rex_orchestrator() { export REX_BLOCK=b1 BOARD="${1:-garden}" BOARD_ROLE=orch
 }
 
 @test "guard reads origin, not the local origin refs, for the approval (Rex)" {
-  as_rex_worker
+  as_worker
   branch_repo
   guard 'git push -u origin HEAD'
   [ "$(decision)" = ask ]
@@ -616,7 +522,7 @@ as_rex_orchestrator() { export REX_BLOCK=b1 BOARD="${1:-garden}" BOARD_ROLE=orch
 }
 
 @test "guard asks for a push with a push setting that changes the target (Rex)" {
-  as_rex_worker
+  as_worker
   branch_repo
   push_feat
   local key
@@ -633,7 +539,7 @@ as_rex_orchestrator() { export REX_BLOCK=b1 BOARD="${1:-garden}" BOARD_ROLE=orch
 }
 
 @test "guard asks for a push to the default branch of origin when the local origin/HEAD is gone (Rex)" {
-  as_rex_worker
+  as_worker
   branch_repo
   git -C "$REPO" push -q origin master:trunk 2>/dev/null
   git -C "$ORIGIN" symbolic-ref HEAD refs/heads/trunk
@@ -644,7 +550,7 @@ as_rex_orchestrator() { export REX_BLOCK=b1 BOARD="${1:-garden}" BOARD_ROLE=orch
 }
 
 @test "guard reads the policy of a card folder in a sub-folder of the repo (Rex)" {
-  as_rex_worker
+  as_worker
   branch_repo
   mkdir -p "$REPO/app/.claude"
   mv "$REPO/.claude/settings.local.json" "$REPO/app/.claude/"
@@ -664,7 +570,7 @@ ssh_origin() {
 }
 
 @test "guard reads origin with the core.sshCommand of the repo (Rex)" {
-  as_rex_worker
+  as_worker
   branch_repo
   ssh_origin ':'
   push_feat
@@ -673,7 +579,7 @@ ssh_origin() {
 }
 
 @test "guard asks when origin does not answer in 5 s (Rex)" {
-  as_rex_worker
+  as_worker
   branch_repo
   push_feat
   ssh_origin 'sleep 30'
@@ -685,7 +591,7 @@ ssh_origin() {
 }
 
 @test "guard asks for a PR body edit in a branch repo (Rex)" {
-  as_rex_worker
+  as_worker
   branch_repo
   guard 'gh pr edit 12 --body-file /tmp/b.md'
   [ "$(decision)" = ask ]
@@ -693,7 +599,7 @@ ssh_origin() {
 }
 
 @test "guard does not decide a push in an ask or allow repo, or outside a repo (Rex)" {
-  as_rex_worker
+  as_worker
   branch_repo
   printf '{"permissions":{"allow":["Bash(git push*)"]}}\n' >"$REPO/.claude/settings.local.json"
   guard 'git push origin master'

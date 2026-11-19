@@ -13,7 +13,7 @@ setup() {
 # rex_args CMD [N]: the arguments of the Nth saved call, one for each element of RUN_ARGS.
 rex_args() { mapfile -d '' RUN_ARGS <"$FAKE_DIR/rex/rex-$1-${2:-1}.args"; }
 
-@test "rex_get maps a Claude block to the hc shape" {
+@test "rex_get maps a Claude block to the term_get shape" {
   source "$SKILL_DIR/lib.sh"
   run rex_get "$W"
   [ "$status" -eq 0 ]
@@ -77,15 +77,6 @@ rex_args() { mapfile -d '' RUN_ARGS <"$FAKE_DIR/rex/rex-$1-${2:-1}.args"; }
   [ "${RUN_ARGS[4]}" = $'\e[200~''a "b" $c'$'\n''</rex>'$'\e[201~' ]
   [ "$(calls '^rex send -s' | wc -l | tr -d ' ')" = 1 ]
   [ -n "$(calls "^rex send-key -s session:fake-1 -b $W enter")" ]
-}
-
-@test "rex_message from an hc orchestrator names the board of its labels" {
-  source "$SKILL_DIR/lib.sh"
-  export HC_TERMINAL_ID=t3
-  fake_terminal t3 "my board" orchestrator
-  rex_message "$W" hi
-  rex_args send
-  [ "${RUN_ARGS[4]}" = '<rex from="t3 my-board-orchestrator">hi</rex>' ]
 }
 
 @test "lib.sh never starts a Rex server" {

@@ -6,8 +6,8 @@
 #
 # The tab is the Rex window of REX_BLOCK. Renux shows the label of a tab in place of the
 # programs of its panes (with the tab-label patch of renux/patches). Outside Renux
-# (REX_BLOCK not set, or HC_TERMINAL_ID set) and in a board worker, whose tab has the
-# card name, the script does nothing.
+# (REX_BLOCK not set) and in a board worker, whose tab has the card name, the script does
+# nothing.
 # Exit 1: Rex fails. Exit 2: a usage error. REX_BIN is the rex command (default rex).
 
 set -euo pipefail
@@ -20,7 +20,7 @@ if [ $# -ne 1 ] || [ -z "$1" ]; then
 fi
 name=$1
 
-[ -n "${REX_BLOCK:-}" ] && [ -z "${HC_TERMINAL_ID:-}" ] || exit 0
+[ -n "${REX_BLOCK:-}" ] || exit 0
 [ "${BOARD_ROLE:-}" != worker ] || exit 0
 
 rex=("${REX_BIN:-rex}")

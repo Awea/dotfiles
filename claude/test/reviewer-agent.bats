@@ -41,7 +41,7 @@ frontmatter() { awk '/^---$/ { n++; next } n == 1' "$AGENT"; }
   grep -q 'is the final whole-branch review of a superpowers skill: run it once' "$rules"
   grep -q '^description: .*When the user asks for the review loop, send each new range' "$AGENT"
   grep -q 'presses `B`, types the short SHA of the base commit' "$rules"
-  grep -q 'hc label "$HC_TERMINAL_ID" reviewr.dir=<worktree root> reviewr.base=<short base SHA>' "$rules"
+  grep -qF '~/.config/rex/bin/reviewr-target <worktree root> <short base SHA>' "$rules"
   run grep -q 'replaces the final whole-branch review of a superpowers skill' "$rules"
   [ "$status" -eq 1 ]
   grep -q 'send the rejected findings with their reasons' "$rules"
