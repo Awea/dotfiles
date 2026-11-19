@@ -73,3 +73,61 @@ source_lib() { source "$SKILL_DIR/lib.sh"; }
   [ "$output" = "$XDG_STATE_HOME/board-orchestrator-hc" ]
   [ -d "$output" ]
 }
+
+# --- Rex versions ---
+
+# rex_block BOARD ROLE [claude|shell]: a live Rex block with a record.
+rex_lib_block() {
+  export REX_BIN="$BATS_TEST_DIRNAME/fake-rex" BOARD_REX_POLL=0
+  export REX_BLOCK=block:00000000-0000-0000-0000-000000000001 REX_SESSION=session:fake-1
+  mkdir -p "$FAKE_DIR/rex"
+  RB=block:00000000-0000-0000-0000-000000000005
+  fake_block session:fake-1 "$RB" window:fake-1 w "${3:-claude}"
+  rex_record_file "$RB" "$(jq -cn --arg b "$1" --arg r "$2" \
+    '{board:$b, role:$r, rex_session:"session:fake-1", window:"window:fake-1"}')"
+  source_lib
+}
+
+@test "has_labels is true for a live terminal of that board and role (Rex)" {
+  source_lib
+  rex_lib_block garden worker
+  run has_labels "$RB" garden worker
+  [ "$status" -eq 0 ]
+}
+
+@test "has_labels is false for another board (Rex)" {
+  source_lib
+  rex_lib_block lab worker
+  run has_labels "$RB" garden worker
+  [ "$status" -ne 0 ]
+}
+
+@test "has_labels is false for another role (Rex)" {
+  source_lib
+  rex_lib_block garden orchestrator
+  run has_labels "$RB" garden worker
+  [ "$status" -ne 0 ]
+}
+
+@test "has_labels is false when rex get fails (Rex)" {
+  source_lib
+  rex_lib_block garden worker
+  run has_labels block:00000000-0000-0000-0000-000000000006 garden worker
+  [ "$status" -ne 0 ]
+}
+
+@test "has_labels is false for a closed block (Rex)" {
+  source_lib
+  rex_lib_block garden worker
+  : >"$FAKE_DIR/rex/blocks.jsonl"
+  run has_labels "$RB" garden worker
+  [ "$status" -ne 0 ]
+}
+
+@test "hc_labels prints the labels of a live block (Rex)" {
+  source_lib
+  rex_lib_block garden worker
+  run hc_labels "$RB"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.board' <<<"$output")" = garden ]
+}

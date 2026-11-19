@@ -136,9 +136,10 @@ main_dir() {
 # REPO-SLUG-2, ...). The worker claude starts there, so herdr-app and herdr-reviewr see
 # where it works. It uses the worktree again when it is there. A new branch starts at
 # origin/HEAD (else HEAD), with no upstream: a push never goes to the default branch. DIR
-# when DIR is not in a main git checkout. Exit 1 when git fails.
+# when DIR is not in a main git checkout. A second line "new" when it made the worktree.
+# Exit 1 when git fails.
 card_worktree() {
-  local dir=$1 slug=$2 top common path base err="" n=2 rel
+  local dir=$1 slug=$2 top common path base err="" n=2 rel made=""
   if ! top=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null) || ! common=$(common_dir "$dir") ||
     [ "$common" != "$(cd -- "$top" && pwd -P)/.git" ]; then
     printf '%s\n' "$dir"
@@ -171,6 +172,7 @@ card_worktree() {
       printf 'dispatch: could not make a worktree for %s in %s: %s\n' "$slug" "$top" "${err:-git made no folder}" >&2
       return 1
     fi
+    made=new
   fi
   # The push policy (policy-set) is in an ignored file: the worktree uses the one of DIR.
   if [ -f "$dir/.claude/settings.local.json" ] && [ ! -e "$path$rel/.claude/settings.local.json" ]; then
@@ -178,6 +180,28 @@ card_worktree() {
     ln -s "$dir/.claude/settings.local.json" "$path$rel/.claude/settings.local.json"
   fi
   printf '%s%s\n' "$path" "$rel"
+  [ -z "$made" ] || printf '%s\n' "$made"
+}
+
+# setup_dir WORK: the folder where make worktree-setup runs for a new worktree: WORK, else
+# the root of its worktree, the first that has the target. Exit 1 when none has it. It
+# reads the makefile text, the one that make reads first: make itself remakes an included
+# makefile and runs each $(shell) even with -n, -q or -p, and dispatch must return at once.
+# So a target that only an included makefile has gives no setup.
+setup_dir() {
+  local d f top
+  top=$(git -C "$1" rev-parse --show-toplevel 2>/dev/null) || top=$1
+  for d in "$1" "$top"; do
+    for f in GNUmakefile makefile Makefile; do
+      [ -f "$d/$f" ] || continue
+      if grep -Eq '^worktree-setup[[:space:]]*::?([^=]|$)' "$d/$f"; then
+        printf '%s\n' "$d"
+        return 0
+      fi
+      break
+    done
+  done
+  return 1
 }
 
 # The workers: one line "ADDRESS<tab>MODE<tab>BOARD<tab>REPORT<tab>SESSION<tab>CWD<tab>NAME"
@@ -307,8 +331,11 @@ footer() {
   # job lets them find it, and hc refuses a second live terminal with that name. An hc child
   # ends with its parent: --outlive-parent keeps the job when the orchestrator closes the
   # worker that started it.
-  # hc stays installed in Renux, so a Renux worker gets the same rule.
-  if [ "$mode" = task ]; then
+  # In Renux, rex-job does the same in the Rex session "jobs": the name finds the job, and
+  # an ended job stays, so a second worker reads its result.
+  if [ "$mode" = task ] && [ "$(term_here)" = rex ]; then
+    text="$text Run a long job (a wait for a deploy, a build) as a shared job, so that other workers can use the same job. Name the job after what it does, not after your card, for example deploy-web-4fb7f80. Run ~/.bin/rex-job <job> <dir> -- <command>. It starts the job, or gives the job that another worker started: its JSON tells the block, the session, started, ended and exit_code. To use a job, run rex wait <block> --for 3600s --json as a background Bash call, end your turn with \"I wait for <job>.\", then read the end of the job with rex capture -s <session> -b <block> --trim | tail -40. A time-out gives the error \"wait timed out\": wait again. An ended job stays: run rex-job --again <job> <dir> -- <command> only to start it again. Do not close a shared job: another worker can still use it."
+  elif [ "$mode" = task ]; then
     text="$text Run a long job (a wait for a deploy, a build) in a named hc terminal, so that other workers can use the same job. Name the job after what it does, not after your card, for example deploy-web-4fb7f80. First run: hc get <job>. When it shows the job, use it and do not start it again. Else start it: hc run --bg --no-notify --outlive-parent --name <job> --cwd <dir> -- <command>. On name_taken, another worker started it first: use that job. To use a job, run hc wait <job> --timeout 3600 as a background Bash call, end your turn with \"I wait for <job>.\", then read exit_code in its JSON and the end of the job with hc read <job> | tail -40. On reason timeout or message, wait again. Do not hc rm or hc kill a shared job: another worker can still use it."
   fi
   # A worker has no obsidian plugin (set_claude_args), so it gets the way to read the vault.
@@ -349,6 +376,8 @@ footer() {
 
 # run_worker MODE BOARD CWD NAME SESSION REPORT PROMPT [CLAUDE_FLAGS...]: start the worker
 # claude as a terminal of the caller (an hc child, a window in Renux). Prints the address.
+# The command in the array setup_cmd (set by start) runs before claude, in its env.
+setup_cmd=()
 run_worker() {
   local mode=$1 board=$2 cwd=$3 name=$4 session=$5 report=$6 prompt=$7 envdir
   local -a env_cmd=()
@@ -364,7 +393,7 @@ run_worker() {
   fi
   # --allowedTools takes many values: -- ends the options before the prompt.
   term_run_worker "$cwd" "$(unique_name "$name")" "$board" "$session" \
-    -- ${env_cmd[@]+"${env_cmd[@]}"} claude "$@" -n "$name" ${claude_args[@]+"${claude_args[@]}"} -- "$prompt"
+    -- ${env_cmd[@]+"${env_cmd[@]}"} ${setup_cmd[@]+"${setup_cmd[@]}"} claude "$@" -n "$name" ${claude_args[@]+"${claude_args[@]}"} -- "$prompt"
 }
 
 # worker_line ADDR: the record line of the worker ADDR, if any.
@@ -374,20 +403,31 @@ worker_line() {
   [ ! -f "$f" ] || awk -F '\t' -v a="$1" '$1 == a { line = $0 } END { if (line != "") print line }' "$f"
 }
 
+# setup_runs REPORT: exit 0 when the worktree-setup.sh of the worker with REPORT runs: its
+# log has no exit line yet.
+setup_runs() {
+  local log="${1%.md}-worktree-setup.log" last
+  [ -f "$log" ] || return 1
+  last=$(tail -n 1 "$log")
+  [ "${last#worktree-setup: exit }" = "$last" ]
+}
+
 # worker_terminal LINE CHECK: exit 0 when the address of the record LINE is a live worker
 # terminal of its board with the same session, and the jq CHECK is true for that terminal.
 # The jq function lost gives a terminal of a worker that claude no longer runs in. A worker
 # terminal that the user opened in a tab is a kept terminal: after a restart or a reboot,
 # hc puts a shell in the place of claude, with the same labels. Its argv is then that
 # shell, not the env, direnv or claude command of run_worker. The worker runs again when
-# claude runs in front of that shell.
+# claude runs in front of that shell. While worktree-setup.sh runs, Rex gives bash as the
+# argv: that worker is not lost.
 worker_terminal() {
-  local addr board session json
+  local addr board session json setup=false
   addr=$(cut -f1 <<<"$1") board=$(cut -f3 <<<"$1") session=$(cut -f5 <<<"$1")
   json=$(term_get "$addr") || return 1
-  jq -e --arg b "$board" --arg s "$session" "
+  ! setup_runs "$(cut -f4 <<<"$1")" || setup=true
+  jq -e --arg b "$board" --arg s "$session" --argjson setup "$setup" "
     def lost: ((.argv // [])[0] // \"\" | split(\"/\") | last // \"\") as \$p
-      | \$p != \"\" and (\$p | IN(\"env\", \"direnv\", \"claude\") | not)
+      | (\$setup | not) and \$p != \"\" and (\$p | IN(\"env\", \"direnv\", \"claude\") | not)
         and (.foreground.name // \"\") != \"claude\";
     .state == \"live\" and .labels.board == \$b and .labels[\"board.role\"] == \"worker\"
       and .labels[\"board.session\"] == \$s and ($2)" <<<"$json" >/dev/null 2>&1
@@ -962,6 +1002,9 @@ NOTE
     if [ "$mode" = task ]; then
       slug=$(card_slug "$name") || exit 1
       work=$(card_worktree "$cwd" "$slug") || exit 1
+      made=${work#*$'\n'}
+      [ "$made" != "$work" ] || made=""
+      work=${work%%$'\n'*}
     else
       slug=$(board_slug "$name")
       slug=${slug:-worker}
@@ -971,6 +1014,14 @@ NOTE
     prompt="$(<"$prompt_file")"$'\n\n'"$(footer "$mode" "$cwd" "$report" "$slug" ${rules[@]+"${rules[@]}"})"
     if [ "$work" != "$cwd" ]; then
       prompt="$prompt Your git worktree is $work, on the branch $(git -C "$work" rev-parse --abbrev-ref HEAD). Do the work there. Rename the branch with git branch -m when the repo wants another name."
+    fi
+    # A new worktree has no deps, no build and no env files. When the repo has a make
+    # target worktree-setup, the worker terminal runs it first: dispatch returns at once,
+    # and the terminal shows the setup. A worktree used again has its setup already.
+    if [ "${made:-}" = new ] && setup=$(setup_dir "$work"); then
+      setup_log="${report%.md}-worktree-setup.log"
+      setup_cmd=("$here/worktree-setup.sh" "$setup" "$setup_log" --)
+      prompt="$prompt Your terminal ran make worktree-setup in $setup before claude started. Its output is in $setup_log. Its last line gives the exit status: when it is not 0, read the log and fix the setup first."
     fi
     if ! addr=$(run_worker "$mode" "$board" "$work" "$slug" "$session" "$report" "$prompt" --session-id "$session") || [ -z "$addr" ]; then
       printf 'dispatch: %s did not start the worker.\n' "$(term_here)" >&2

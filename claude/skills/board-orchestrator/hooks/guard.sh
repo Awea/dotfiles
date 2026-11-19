@@ -69,7 +69,8 @@ rex_check() {
   sub=${words[$((j + 1))]:-}
   sub=${sub//[\"\']/}
   case "$sub" in
-    capture | help | --help | version | keymap) return 0 ;;
+    # wait reads the end of a block: a worker waits for a shared job of rex-job.
+    capture | wait | help | --help | version | keymap) return 0 ;;
     server)
       [ "${words[$((j + 2))]:-}" = status ] && return 0
       sub="server ${words[$((j + 2))]:-}"

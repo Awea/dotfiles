@@ -67,7 +67,10 @@ sent_text() { rex_args send "${1:-1}"; printf '%s' "${RUN_ARGS[-1]}"; }
   [[ "$prompt" == *"dispatch.sh tell \"close fix-login\""* ]]
   for a in "${RUN_ARGS[@]}"; do [[ "$a" != *"hc send"* ]]; done
   [[ "$prompt" == *"Run a long job"* ]]
-  [[ "$prompt" == *"hc run --bg --no-notify --outlive-parent"* ]]
+  [[ "$prompt" == *"~/.bin/rex-job <job> <dir> -- <command>"* ]]
+  [[ "$prompt" == *"rex wait <block> --for 3600s --json"* ]]
+  [[ "$prompt" == *"rex capture -s <session> -b <block> --trim | tail -40"* ]]
+  [[ "$prompt" != *"hc "* ]]
   grep -q "^$new"$'\t' "$STATE/workers"
 }
 
@@ -463,4 +466,36 @@ notice_setup() {
   prompt=${RUN_ARGS[-1]}
   [[ "$prompt" == *"Do not change the Renux window."* ]]
   [[ "$prompt" != *"herdr-app window"* ]]
+}
+
+# setup_runs: the worker W runs worktree-setup.sh: bash in front, and a log with no exit line.
+setup_runs() {
+  rex_orchestrator "$O" garden
+  rex_worker "$W" garden s1
+  cp "$SKILL_DIR/test/fixtures/rex/process-setup.json" "$FAKE_DIR/rex/process-$W.json"
+  printf 'worktree-setup: make worktree-setup in /x\n' >"$STATE/fix-login-1-worktree-setup.log"
+}
+
+@test "resumable keeps a worker block while its worktree-setup runs" {
+  setup_runs
+  dispatch resumable garden
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ -z "$(calls 'api call block.close')" ]
+  [ -f "$STATE/rex/$W.json" ]
+}
+
+@test "workers lists a worker while its worktree-setup runs" {
+  setup_runs
+  dispatch workers garden
+  [ "$status" -eq 0 ]
+  [ "$(jq -r .address <<<"$output")" = "$W" ]
+}
+
+@test "resumable drops a worker block whose worktree-setup ended and left a shell" {
+  setup_runs
+  printf 'worktree-setup: exit 0\n' >>"$STATE/fix-login-1-worktree-setup.log"
+  dispatch resumable garden
+  [ "$status" -eq 0 ]
+  [ -n "$(calls 'api call block.close')" ]
 }

@@ -63,6 +63,16 @@ blocked() {
   [ "$status" -eq 0 ]
 }
 
+@test "guard lets a Rex worker wait for a shared job, and still blocks rex run and rex block close" {
+  rex_worker
+  guard 'rex wait block:01a1 --for 3600s --json'
+  [ "$status" -eq 0 ]
+  guard 'rex run -s s1 --label x -- make'
+  blocked 'change the Renux window (rex run)'
+  guard 'rex block close -s s1 block:01a1'
+  blocked 'change the Renux window (rex block)'
+}
+
 @test "guard allows grep rex file" {
   rex_worker
   guard 'grep rex file'
