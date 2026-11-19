@@ -1,0 +1,43 @@
+# TOPIC
+
+```elixir
+Mix.install([
+  {:kino, "~> 0.14"},
+  {:nimble_csv, "~> 1.2"}
+])
+```
+
+## Live data
+
+`q(db, sql)` runs `board-ro sql` from the notebook folder, so it reads only the
+databases of this board, in a read-only transaction. The notebook holds no password.
+
+```elixir
+defmodule Live do
+  NimbleCSV.define(CSV, separator: ",", escape: "\"")
+
+  def q(db, sql) do
+    case System.cmd("board-ro", ["sql", db, sql], cd: __DIR__, stderr_to_stdout: true) do
+      {out, 0} ->
+        [header | rows] = CSV.parse_string(out, skip_headers: false)
+        keys = Enum.map(header, &String.to_atom/1)
+        rows |> Enum.map(&Map.new(Enum.zip(keys, &1))) |> Kino.DataTable.new()
+
+      {out, code} ->
+        raise "board-ro exit #{code}: #{out}"
+    end
+  end
+end
+
+import Live
+```
+
+## Queries
+
+```elixir
+q("db1", "select 1 as one")
+```
+
+## What we found
+
+-

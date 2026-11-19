@@ -64,3 +64,6 @@ export PATH="$FLYCTL_INSTALL/bin:$PATH"
 
 # Replace cmake by gnumake
 export PATH="/opt/homebrew/opt/make/libexec/gnubin:$PATH"
+
+# Board resources: the claude wrapper goes first, so a session gets the tools of its board
+export PATH="$DOTFILES/board-resources/bin:$PATH"

@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Fake pass: log the call, print a connection URL.
+printf 'pass %s\n' "$*" >>"$FAKE_LOG"
+printf 'postgres://ro:secret@db.test/x\nsecond line\n'

@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# Read the live data of the board of the current folder, with read-only access only.
+#   board-ro sql DB QUERY   run QUERY on the database DB of the board, print CSV
+#   board-ro list           print the board, its databases and its notebooks folder
+#   board-ro notebook TOPIC make a Livebook notebook for TOPIC, print its path
+# Exit 2: no board, an unknown database or a wrong use.
+set -euo pipefail
+here="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+# shellcheck source=../lib.sh source-path=SCRIPTDIR
+source "$here/../lib.sh"
+
+usage() {
+  printf 'usage: board-ro sql DB QUERY | board-ro list | board-ro notebook TOPIC\n' >&2
+  exit 2
+}
+
+die() {
+  printf 'board-ro: %s\n' "$1" >&2
+  exit 2
+}
+
+board=""
+need_board() {
+  board=$(board_of "$PWD") || die "no board holds $PWD (see $BOARD_RESOURCES_HOME/*/roots)"
+}
+
+# databases: print "name entry" for each database line of the board.
+databases() {
+  local f
+  f=$(board_file "$board" databases) || return 0
+  grep -vE '^[[:space:]]*(#|$)' "$f" || true
+}
+
+cmd_sql() {
+  [ $# -eq 2 ] || usage
+  local db=$1 query=$2 name entry found="" url
+  need_board
+  while read -r name entry _; do
+    if [ "$name" = "$db" ]; then found=$entry; break; fi
+  done < <(databases)
+  [ -n "$found" ] || die "no database $db in the board $board (run board-ro list)"
+  url=$(pass show "$found" | head -n 1)
+  [ -n "$url" ] || die "the pass entry of $db is empty"
+  PGOPTIONS='-c default_transaction_read_only=on -c statement_timeout=30s' \
+    psql -X --csv -v ON_ERROR_STOP=1 -d "$url" -c "$query"
+}
+
+cmd_list() {
+  [ $# -eq 0 ] || usage
+  local names nb
+  need_board
+  names=$(databases | awk '{print $1}' | paste -sd ' ' -)
+  nb=$(board_notebooks "$board") || nb=none
+  printf 'board: %s\ndatabases: %s\nnotebooks: %s\n' "$board" "${names:-none}" "$nb"
+}
+
+cmd_notebook() {
+  [ $# -eq 1 ] || usage
+  local topic=$1 dir slug file
+  need_board
+  dir=$(board_notebooks "$board") || die "the board $board has no notebooks folder"
+  slug=$(printf '%s' "$topic" | tr '[:upper:]' '[:lower:]' | sed -e 's/[^a-z0-9]\{1,\}/-/g' -e 's/^-//' -e 's/-$//')
+  [ -n "$slug" ] || die "the topic gives an empty file name"
+  mkdir -p "$dir"
+  [ -d "$dir/.git" ] || git -C "$dir" init -q
+  file="$dir/$(date +%F)-$slug.livemd"
+  if [ ! -e "$file" ]; then
+    awk -v t="$topic" 'NR == 1 && $0 == "# TOPIC" { print "# " t; next } { print }' \
+      "$here/../notebook-template.livemd" >"$file"
+  fi
+  printf '%s\n' "$file"
+}
+
+[ $# -ge 1 ] || usage
+cmd=$1
+shift
+case $cmd in
+  sql) cmd_sql "$@" ;;
+  list) cmd_list "$@" ;;
+  notebook) cmd_notebook "$@" ;;
+  *) usage ;;
+esac

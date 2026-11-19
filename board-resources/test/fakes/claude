@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Fake claude: log each argument on its own line.
+for a in "$@"; do printf '%s\n' "$a"; done >>"$FAKE_LOG"
