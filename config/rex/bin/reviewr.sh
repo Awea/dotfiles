@@ -4,37 +4,28 @@
 #
 #   reviewr.sh DIR [BASE]
 #
-# With BASE: the branch scope on BASE (config/rex/reviewr-branch, --base).
+# reviewr opens in the branch scope (config/rex/reviewr). With BASE: on BASE (--base).
 set -euo pipefail
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}"
 here=$(dirname "$(readlink -f "$0")")
 
-# reviewr_bin: herdr-reviewr from PATH, else from the Herdr 0.9.5 plugin install.
+# reviewr_bin: herdr-reviewr from PATH (scripts/programs/herdr-reviewr installs it).
 reviewr_bin() {
-  local f
   if [ -n "${REVIEWR_BIN:-}" ]; then printf '%s\n' "$REVIEWR_BIN"; return; fi
-  if command -v herdr-reviewr >/dev/null 2>&1; then command -v herdr-reviewr; return; fi
-  for f in "$HOME"/.config/herdr/plugins/github/persiyanov.reviewr-*/bin/herdr-reviewr; do
-    [ -x "$f" ] && printf '%s\n' "$f" && return
-  done
-  return 1
+  command -v herdr-reviewr
 }
 
 if ! bin=$(reviewr_bin); then
   printf 'reviewr.sh: herdr-reviewr is not installed.\n' >&2
   exec "${SHELL:-sh}"
 fi
-config=reviewr
 flags=()
-if [ -n "${2:-}" ]; then
-  config=reviewr-branch
-  flags=(--base "$2")
-fi
+if [ -n "${2:-}" ]; then flags=(--base "$2"); fi
 window=$(rex api call session.list_blocks "$(jq -cn --arg s "${REX_SESSION:-}" '{session_id: $s}')" |
   jq -r --arg b "${REX_BLOCK:-}" '.blocks[] | select(.block_id == $b) | .window_id') || window=
 HERDR_BIN_PATH="$here/herdr-shim" \
   HERDR_WORKSPACE_ID=${REX_SESSION:-} \
   HERDR_TAB_ID=$window \
   HERDR_PANE_ID=${REX_BLOCK:-} \
-  HERDR_PLUGIN_CONFIG_DIR="$(cd "$here/../$config" && pwd)" \
+  HERDR_PLUGIN_CONFIG_DIR="$(cd "$here/../reviewr" && pwd)" \
   exec "$bin" ${flags[@]+"${flags[@]}"} "${1:?usage: reviewr.sh DIR [BASE]}"

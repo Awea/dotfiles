@@ -1,0 +1,47 @@
+diff --git a/src/rex/server.zig b/src/rex/server.zig
+index 6e47d91..085c22f 100644
+--- a/src/rex/server.zig
++++ b/src/rex/server.zig
+@@ -1369,7 +1369,7 @@ pub const Server = struct {
+         c.fire("block.event", .{ .session_id = session_id, .block_id = block_id, .event = .{ .type = "mouse", .payload = .{
+             .action = action,
+             .button = button,
+-            .buttons = Buttons{ .name = button, .pressed = eql(action, "press") },
++            .buttons = heldButtons(action, button),
+             .x = col,
+             .y = row,
+             .pixel = null,
+@@ -1377,7 +1377,13 @@ pub const Server = struct {
+         } } });
+     }
+ 
+-    /// Rex wants the held buttons as {"left": true} on a press and null otherwise.
++    /// The held buttons of a mouse event: Renux sends a motion only while a button is held,
++    /// so a drag tells Rex its button, as a terminal tells a program that takes the mouse.
++    fn heldButtons(action: []const u8, button: []const u8) Buttons {
++        return .{ .name = button, .pressed = !eql(action, "release") };
++    }
++
++    /// Rex wants the held buttons as {"left": true} on a press and a drag, and null on a release.
+     const Buttons = struct {
+         name: []const u8,
+         pressed: bool,
+@@ -1947,6 +1953,18 @@ test "refreshing an empty session list clears stale sessions" {
+     try std.testing.expectEqual(@as(usize, 0), s.sessions.items.len);
+ }
+ 
++test "a drag motion tells Rex that its button is held" {
++    const t = std.testing.allocator;
++    for ([_][]const u8{ "press", "motion" }) |action| {
++        const held = try std.json.Stringify.valueAlloc(t, Server.heldButtons(action, "left"), .{});
++        defer t.free(held);
++        try std.testing.expectEqualStrings("{\"left\":true}", held);
++    }
++    const released = try std.json.Stringify.valueAlloc(t, Server.heldButtons("release", "left"), .{});
++    defer t.free(released);
++    try std.testing.expectEqualStrings("null", released);
++}
++
+ test "an action request leaves out what isn't set" {
+     const t = std.testing.allocator;
+     const bare = try actionRequest(t, "s1", null, "pane.zoom", null);

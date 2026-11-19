@@ -1,0 +1,97 @@
+diff --git a/src/terminal/termview.zig b/src/terminal/termview.zig
+index d341756..e4a4d4f 100644
+--- a/src/terminal/termview.zig
++++ b/src/terminal/termview.zig
+@@ -303,6 +303,20 @@ test "a ctrl+click on a web link is kept from a program on this computer" {
+     try std.testing.expect(!TermView.keptWebLink("https://example.com", true));
+ }
+ 
++test "the wheel over a full-screen program without the mouse sends arrow keys" {
++    // Rex drops the wheel there, so a pager such as less or man gets nothing.
++    // A wheel notch sends three presses.
++    const up = TermView.wheelArrows(-1, 3);
++    try std.testing.expectEqualStrings("arrow_up", up.name);
++    try std.testing.expectEqual(@as(u32, 3), up.count);
++    const down = TermView.wheelArrows(2, 3);
++    try std.testing.expectEqualStrings("arrow_down", down.name);
++    try std.testing.expectEqual(@as(u32, 6), down.count);
++    // A touchpad already gives rows: one press a row.
++    try std.testing.expectEqual(@as(u32, 2), TermView.wheelArrows(2, 1).count);
++    try std.testing.expectEqual(@as(u32, 0), TermView.wheelArrows(0, 3).count);
++}
++
+ /// The space around the text, from the settings.
+ pub var pad_x: f64 = 8;
+ pub var pad_y: f64 = 8;
+@@ -1855,7 +1869,8 @@ pub const TermView = struct {
+         // at the cell under the pointer. A touchpad reports pixels, which become lines here.
+         if (t.frame.mouse or t.frame.alt_screen) {
+             v.coast_rows_per_second = 0;
+-            v.wheelToProgram(t, if (ctl.getUnit() == .surface) dy * settings.current.scroll_speed / v.cell_h else dy, mods);
++            const surface = ctl.getUnit() == .surface;
++            v.wheelToProgram(t, if (surface) dy * settings.current.scroll_speed / v.cell_h else dy, mods, if (surface) 1 else 3);
+             return 1;
+         }
+         v.scroll_velocity = 0;
+@@ -1975,7 +1990,30 @@ pub const TermView = struct {
+         return settings.current.program_scroll_glide and t.frame.alt_screen;
+     }
+ 
+-    fn wheelToProgram(v: *TermView, t: *term_mod.Term, rows: f64, mods: u4) void {
++    /// The arrow key and the number of presses for steps of the wheel, as xterm, Ghostty and
++    /// kitty do over a program on the whole screen that does not take the mouse. Rex drops the
++    /// wheel there. A wheel notch sends three presses, as a program that takes the mouse
++    /// scrolls three lines for it. A touchpad already gives rows, so it sends one a row.
++    pub fn wheelArrows(steps: f64, presses_a_step: u32) struct { name: []const u8, count: u32 } {
++        return .{
++            .name = if (steps < 0) "arrow_up" else "arrow_down",
++            .count = @as(u32, @intFromFloat(@abs(steps))) * presses_a_step,
++        };
++    }
++
++    fn sendWheelArrows(v: *TermView, steps: f64, presses_a_step: u32) void {
++        const arrows = wheelArrows(steps, presses_a_step);
++        var key = keys.Key{ .name = arrows.name };
++        for (0..arrows.count) |_| {
++            key.action = .press;
++            v.server.sendKey(v.session_id, v.block_id, key);
++            key.action = .release;
++            v.server.sendKey(v.session_id, v.block_id, key);
++        }
++    }
++
++    /// `presses_a_step` is for a program without the mouse: 3 for a wheel notch, 1 for a row.
++    fn wheelToProgram(v: *TermView, t: *term_mod.Term, rows: f64, mods: u4, presses_a_step: u32) void {
+         const following = followsFingers(t);
+         const a_step: f64 = if (following) v.glide_rows_a_step else 1;
+         v.scroll_rest += rows;
+@@ -1986,7 +2024,10 @@ pub const TermView = struct {
+             const cell = v.cellAt(v.pointer[0], v.pointer[1]);
+             const col = @min(cell[0], t.frame.cols -| 1);
+             const row = @min(cell[1], t.frame.rows -| 1);
+-            if (following) {
++            if (!t.frame.mouse) {
++                // The glide learns the rows of a step from the first frame: one press a step.
++                v.sendWheelArrows(steps, if (following) 1 else presses_a_step);
++            } else if (following) {
+                 var left = @abs(steps);
+                 while (left >= 1) : (left -= 1) v.server.sendWheel(v.session_id, v.block_id, std.math.sign(steps), col, row, keys.modsString(mods));
+             } else v.server.sendWheel(v.session_id, v.block_id, steps, col, row, keys.modsString(mods));
+@@ -2044,7 +2085,7 @@ pub const TermView = struct {
+     pub fn wheelBy(v: *TermView, rows: f64) void {
+         const t = v.term() orelse return;
+         v.pointer = .{ @as(f64, @floatFromInt(v.widget().getWidth())) / 2, @as(f64, @floatFromInt(v.widget().getHeight())) / 2 };
+-        if (t.frame.mouse or t.frame.alt_screen) v.wheelToProgram(t, rows, 0);
++        if (t.frame.mouse or t.frame.alt_screen) v.wheelToProgram(t, rows, 0, 1);
+     }
+ 
+     fn startGlideTick(v: *TermView) void {
+@@ -2060,7 +2101,7 @@ pub const TermView = struct {
+         v.glide_frame_us = now;
+         const clock_now = glib.getMonotonicTime();
+         if (v.coast_rows_per_second != 0) {
+-            if (v.term()) |t| v.wheelToProgram(t, v.coast_rows_per_second * seconds, 0);
++            if (v.term()) |t| v.wheelToProgram(t, v.coast_rows_per_second * seconds, 0, 1);
+             v.coast_rows_per_second *= std.math.pow(f64, coast_fade_per_second, seconds);
+             if (@abs(v.coast_rows_per_second) * v.cell_h < coast_slowest_px_per_second) v.coast_rows_per_second = 0;
+         }

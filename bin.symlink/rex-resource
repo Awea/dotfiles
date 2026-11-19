@@ -3,6 +3,7 @@
 # Find or start a shared resource (a database, a docs server) in Renux, once for all agents.
 #
 #   Usage: rex-resource [--session NAME] [--keep-ended] NAME DIR -- CMD [ARGS...]
+#          rex-resource [--session NAME] --sweep
 #
 # The resource runs in a block labeled NAME, in the Rex session labeled "resources" (or
 # the --session one). A lock makes the look-up and the start one step, so two agents
@@ -10,6 +11,14 @@
 # such a block and starts the command again. With --keep-ended, the next call gives the
 # ended block (rex-job: a second worker reads the result of a job). CMD runs with the
 # PATH of ~/.zshrc (rex run --interactive).
+# Each call keeps the Renux block of the caller (REX_BLOCK) as a user of NAME. Each call,
+# and --sweep, closes the other blocks of the session that this script started, whose
+# command ended and that no live block uses: the tabs of finished jobs do not stay. A
+# block with no user (a caller outside Renux) stays until its start is 1 hour old. A
+# caller outside Renux is not a user: a block that it shares with Renux callers closes
+# when those are gone. A block whose command runs always stays. A failed or wrong answer
+# of Rex closes nothing. The sweep also removes the saved start of a block that is gone.
+# --sweep prints the label of each closed block.
 # Prints one JSON line: {"block", "session", "started", "ended", "exit_code", "cwd",
 # "argv"}. exit_code is null while the command runs. cwd and argv are those of the start,
 # kept in the state folder next to the lock.
@@ -23,7 +32,7 @@ set -euo pipefail
 
 say() { printf 'rex-resource: %s\n' "$*" >&2; }
 
-session_label=resources keep_ended=""
+session_label=resources keep_ended="" sweep_only=""
 while :; do
   case "${1:-}" in
     --session)
@@ -32,10 +41,17 @@ while :; do
       shift 2
       ;;
     --keep-ended) keep_ended=1; shift ;;
+    --sweep) sweep_only=1; shift ;;
     *) break ;;
   esac
 done
-if [ $# -lt 4 ] || [ -z "${1:-}" ] || [ "${3:-}" != -- ] || [ -z "$session_label" ]; then
+if [ -n "$sweep_only" ]; then
+  if [ $# -gt 0 ] || [ -n "$keep_ended" ] || [ -z "$session_label" ]; then
+    say "usage: rex-resource [--session NAME] --sweep"
+    exit 2
+  fi
+  set -- "" . -- true
+elif [ $# -lt 4 ] || [ -z "${1:-}" ] || [ "${3:-}" != -- ] || [ -z "$session_label" ]; then
   say "usage: rex-resource [--session NAME] [--keep-ended] NAME DIR -- CMD [ARGS...]"
   exit 2
 fi
@@ -52,7 +68,11 @@ lock="$dir/lock"
 # folder of the first version of this script, another session has a folder of its own.
 start_dir=$dir
 [ "$session_label" = resources ] || start_dir="$dir/$(printf '%s' "$session_label" | tr '/' '_')"
-start_file="$start_dir/$(printf '%s' "$name" | tr '/' '_').json"
+# file_of NAME: the state files of NAME without the extension: .json for the start,
+# .users for the blocks that called for NAME.
+file_of() { printf '%s/%s' "$start_dir" "$(printf '%s' "$1" | tr '/' '_')"; }
+start_file="$(file_of "$name").json"
+users_file="$(file_of "$name").users"
 mkdir -p "$start_dir"
 
 # This function is named rex: "command rex" skips it, or it would call itself.
@@ -89,12 +109,67 @@ take_lock() {
     fi
     tries=$((tries + 1))
     if [ "$tries" -gt "$max" ]; then
-      say "$name is locked"
+      say "${name:-the sweep} is locked"
       exit 1
     fi
     sleep "$poll"
   done
   owner=1
+}
+
+# live_blocks: print the block ID of each block of each session. Exit 1 when a list
+# fails: a missing list must not make a live user look gone.
+live_blocks() {
+  local list ids out s all=""
+  list=$(rex api call session.list '{}' 2>/dev/null) || return 1
+  ids=$(jq -r '.sessions | if type == "array" then .[].session_id else error("no sessions") end' \
+    <<<"$list" 2>/dev/null) || return 1
+  for s in $ids; do
+    out=$(rex api call session.list_blocks "$(jq -cn --arg s "$s" '{session_id: $s}')" 2>/dev/null) || return 1
+    out=$(jq -r '.blocks | if type == "array" then .[].block_id else error("no blocks") end' \
+      <<<"$out" 2>/dev/null) || return 1
+    all+="$out"$'\n'
+  done
+  # The session of the sweep has blocks: an empty list is a wrong answer.
+  [ -n "${all//$'\n'/}" ] || return 1
+  printf '%s' "$all"
+}
+
+# sweep SKIP: close each block of the session with a saved start (this script started
+# it) whose command ended, when no live block uses it. Skip the blocks labeled SKIP.
+# Print the label of each closed block.
+sweep() {
+  local blocks b label file info live="" listed="" present f
+  blocks=$(rex api call session.list_blocks "$(jq -cn --arg s "$session" '{session_id: $s}')" 2>/dev/null) || return 0
+  jq -e '.blocks | type == "array"' <<<"$blocks" >/dev/null 2>&1 || return 0
+  # The saved start of a block that is gone: remove it, or a new block with the same label
+  # looks like a block of this script.
+  present=$(jq -r '.blocks[].label' <<<"$blocks" | while IFS= read -r label; do file_of "$label"; echo; done)
+  for f in "$start_dir"/*.json; do
+    [ -f "$f" ] && [ "${f%.json}" != "$(file_of "$1")" ] || continue
+    grep -qxF "${f%.json}" <<<"$present" || rm -f "$f" "${f%.json}.users"
+  done
+  while IFS=$'\t' read -r b label; do
+    [ -n "$b" ] && [ "$label" != "$1" ] || continue
+    file=$(file_of "$label")
+    [ -f "$file.json" ] || continue
+    info=$(rex api call block.method \
+      "$(jq -cn --arg s "$session" --arg b "$b" '{session_id: $s, block_id: $b, method: "process"}')" 2>/dev/null) || continue
+    # A process answer always has last_exit: an answer without it is wrong.
+    jq -e 'has("last_exit") and (.last_exit != null or .child == null)' <<<"$info" >/dev/null 2>&1 || continue
+    if [ -s "$file.users" ]; then
+      if [ -z "$listed" ]; then
+        live=$(live_blocks) || return 0
+        listed=1
+      fi
+      ! grep -qxFf "$file.users" <<<"$live" || continue
+    else
+      [ "$(age "$file.json")" -gt 3600 ] || continue
+    fi
+    rex block close -s "$session" "$b" >/dev/null 2>&1 || continue
+    rm -f "$file.json" "$file.users"
+    printf '%s\n' "$label"
+  done < <(jq -r '.blocks[] | [.block_id, .label] | @tsv' <<<"$blocks")
 }
 
 take_lock
@@ -104,8 +179,15 @@ take_lock
 session=$(rex_out api call session.list '{}' |
   jq -r --arg l "$session_label" '[.sessions[] | select(.label == $l)][0].session_id // empty')
 if [ -z "$session" ]; then
+  [ -z "$sweep_only" ] || exit 0
   session=$(rex_out new "$session_label" --json | jq -r '.session_id')
 fi
+
+if [ -n "$sweep_only" ]; then
+  sweep ""
+  exit 0
+fi
+sweep "$name" >/dev/null
 
 args=$(jq -cn --arg s "$session" '{session_id: $s}')
 block=$(rex_out api call session.list_blocks "$args" |
@@ -143,6 +225,11 @@ else
   # After --args --, jq 1.6 and 1.7 keep each word of CMD as it is, also a word such as -D.
   start=$(jq -cn --arg cwd "$cwd" '{cwd: $cwd, argv: $ARGS.positional}' --args -- "$@")
   printf '%s\n' "$start" >"$start_file"
+  rm -f "$users_file"
+fi
+# The caller uses the block: a sweep keeps the block while the caller lives.
+if [ -n "${REX_BLOCK:-}" ] && ! grep -qxF "$REX_BLOCK" "$users_file" 2>/dev/null; then
+  printf '%s\n' "$REX_BLOCK" >>"$users_file"
 fi
 
 jq -cn --arg block "$block" --arg session "$session" --argjson started "$started" --argjson start "$start" \

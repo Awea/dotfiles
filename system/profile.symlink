@@ -1,7 +1,6 @@
 # ~/.profile: login shells read it. On Linux the desktop session (gdm Xsession)
-# reads it too, and the hc core and the Rex server take the PATH of that session.
-# So a `bash -c` job in hc or Rex gets the PATH set here. macOS GUI apps and launchd
-# do not read this file.
+# reads it too, and the Rex server takes the PATH of that session. So a `bash -c` job
+# in Rex gets the PATH set here. macOS GUI apps and launchd do not read this file.
 
 # bash: read ~/.bashrc
 if [ -n "$BASH_VERSION" ] && [ -f "$HOME/.bashrc" ]; then

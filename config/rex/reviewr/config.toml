@@ -1,4 +1,7 @@
 # The config of herdr-reviewr in Renux (ctrl+b d). config/rex/bin/reviewr.sh points
 # HERDR_PLUGIN_CONFIG_DIR here, and herdr-shim answers plugin config-dir with this folder.
-# reviewr opens each pane in the scope of the last claude turn.
-default_scope = "last-turn"
+# reviewr opens in the branch scope: all the changes of the branch, committed or not, on
+# the base that reviewr-target or reviewr-pick gives (--base). With no base, reviewr uses
+# the base picked in reviewr for this worktree, else the default branch. The last-turn
+# scope stays empty, as reviewr starts after the turn and never sees the turn start.
+default_scope = "branch"

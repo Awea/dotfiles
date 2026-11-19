@@ -1,0 +1,13 @@
+diff --git a/src/app/app.zig b/src/app/app.zig
+index 917dfee..54521d1 100644
+--- a/src/app/app.zig
++++ b/src/app/app.zig
+@@ -56,7 +56,7 @@ const css =
+     \\.board-column-title { font-weight: 700; }
+     \\.board-count { color: @renux_secondary; font-size: 0.9em; }
+     \\.agent-row { min-height: 44px; }
+-    \\.agent-status { font-size: 0.86em; color: @renux_secondary; }
++    \\.agent-status { font-size: 0.9em; color: @renux_secondary; }
+     \\.agent-status.blocked { color: @warning_color; }
+     \\.agent-status.failed { color: @error_color; }
+     \\.eye-dot { min-width: 7px; min-height: 7px; border-radius: 99px; margin: -2px -3px 0 0; background-color: @accent_bg_color; box-shadow: 0 0 0 1.5px @renux_shell; }

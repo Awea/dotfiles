@@ -66,7 +66,7 @@ queue_dir() {
   printf '%s\n' "$dir"
 }
 
-# board_slug NAME: a short lowercase name of a-z, 0-9 and -, as agent_slug of agent-tabs.
+# board_slug NAME: a short lowercase name of a-z, 0-9 and -.
 board_slug() {
   local text
   text=$(tr '[:upper:]' '[:lower:]' <<<"$1" | tr -cs 'a-z0-9' '-')

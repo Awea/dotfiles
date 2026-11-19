@@ -102,6 +102,9 @@
 - When you start a task, and when its goal changes, run `~/.bin/rex-summary "<sentence>"`
   with one sentence of 8 words at most, for example "Patches the Renux sidebar status".
   The Renux sidebar shows it under your name. A subagent skips it.
+- When the user asks to see the branches or the status of a repo, run
+  `~/.config/rex/bin/branches-open <repo>`. It opens a tab with a graph of the branches
+  and their commits in your space. Tell the user its tab name.
 
 # Live data
 

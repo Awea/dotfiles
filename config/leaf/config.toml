@@ -1,0 +1,8 @@
+# Leaf, the markdown view of the Renux file peek (bin.symlink/renux-open).
+# Leaf reads ~/.config/leaf/config.toml, also on macOS. It stops at a bad key or value.
+
+[reader]
+# The text uses the full width of the pane, less the margin of Leaf. The default stops
+# it at 76 columns. Leaf 0.17.1 (config/nix/leaf.nix) does not read this file yet: the
+# setting is on the main branch of Leaf, for the release after 0.17.1.
+max_width = 65535

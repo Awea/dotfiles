@@ -1,0 +1,73 @@
+diff --git a/src/terminal/termview.zig b/src/terminal/termview.zig
+index 20d0d3c..d341756 100644
+--- a/src/terminal/termview.zig
++++ b/src/terminal/termview.zig
+@@ -292,6 +292,17 @@ test "file hover targets preserve web and OSC8 links without reading files" {
+     try std.testing.expectEqualStrings("renux-file:/tmp/picture one.png:42", targets[2].url);
+ }
+ 
++test "a ctrl+click on a web link is kept from a program on this computer" {
++    // Claude Code waits 500 ms for a double-click before it opens a link itself.
++    try std.testing.expect(TermView.keptWebLink("https://github.com/o/r/pull/46", false));
++    try std.testing.expect(TermView.keptWebLink("HTTP://example.com", false));
++    try std.testing.expect(!TermView.keptWebLink("vscode://file/a.zig", false));
++    try std.testing.expect(!TermView.keptWebLink("mailto:a@example.com", false));
++    try std.testing.expect(!TermView.keptWebLink("https:example.com", false));
++    // A program on a remote host keeps its web links: linksOpenHere decides there.
++    try std.testing.expect(!TermView.keptWebLink("https://example.com", true));
++}
++
+ /// The space around the text, from the settings.
+ pub var pad_x: f64 = 8;
+ pub var pad_y: f64 = 8;
+@@ -1887,7 +1898,7 @@ pub const TermView = struct {
+                 const cell = v.cellAt(v.pointer[0], v.pointer[1]);
+                 if (v.linkAt(t, cell[0], cell[1])) |url| {
+                     defer gpa.free(url);
+-                    armed = !t.frame.mouse or v.linksOpenHere() or keepsClick(url);
++                    armed = !t.frame.mouse or v.linksOpenHere() or keepsClick(url) or v.keepsWebLink(url);
+                     hand = armed;
+                 }
+             } else armed = false;
+@@ -2206,7 +2217,8 @@ pub const TermView = struct {
+ 
+     /// Whether Ctrl+click on a link is Renux's to open even though the program in the pane
+     /// takes the mouse. Given the click, a program on a remote host opens the link in a
+-    /// browser on that host, where nobody is looking. On this computer the program keeps it.
++    /// browser on that host, where nobody is looking. On this computer the program keeps
++    /// the links that are not web, file or block links.
+     fn linksOpenHere(v: *const TermView) bool {
+         return settings.current.remote_links_here and v.onRemoteHost();
+     }
+@@ -2217,7 +2229,21 @@ pub const TermView = struct {
+         if (mods & keys.ctrl == 0 or !v.programHasMouse(mods)) return false;
+         const url = v.linkAt(t, cell[0], cell[1]) orelse return false;
+         defer gpa.free(url);
+-        return keepsClick(url) or v.linksOpenHere();
++        return keepsClick(url) or v.linksOpenHere() or v.keepsWebLink(url);
++    }
++
++    /// Whether Renux opens a web link that a program on this computer also opens. A program
++    /// such as Claude Code waits for a double-click before it opens a link: Renux opens it
++    /// at once.
++    fn keepsWebLink(v: *const TermView, url: []const u8) bool {
++        return keptWebLink(url, v.onRemoteHost());
++    }
++
++    fn keptWebLink(url: []const u8, remote: bool) bool {
++        if (remote) return false;
++        const colon = std.mem.indexOfScalar(u8, url, ':') orelse return false;
++        if (!std.mem.startsWith(u8, url[colon..], "://")) return false;
++        return std.ascii.eqlIgnoreCase(url[0..colon], "http") or std.ascii.eqlIgnoreCase(url[0..colon], "https");
+     }
+ 
+     fn hyperlinkTarget(t: *term_mod.Term, col: u16, row: u16) ?[:0]u8 {
+@@ -2592,7 +2618,7 @@ pub const TermView = struct {
+     }
+ 
+     /// A link that Renux opens itself, even when the program in the pane takes the mouse:
+-    /// a file, or a pane of a `renux://block/` link.
++    /// a file, or a pane of a `renux://block/` link. keepsWebLink keeps a web link.
+     fn keepsClick(url: []const u8) bool {
+         return links.blockId(url) != null or isFileLink(url);
+     }

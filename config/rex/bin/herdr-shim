@@ -11,13 +11,18 @@ here=$(dirname "$(readlink -f "$0")")
 
 api() { rex api call "$1" "$2"; }
 
+# session_blocks SESSION: one JSON line for each terminal block of SESSION.
+session_blocks() {
+  api session.list_blocks "$(jq -cn --arg s "$1" '{session_id: $s}')" |
+    jq -c --arg s "$1" '.blocks[] | select(.creator_name == "com.superlogical.terminal")
+      | {session_id: $s, block_id, window_id, label: .label}'
+}
+
 # blocks: one JSON line for each terminal block of each session, with its session.
 blocks() {
   local session
   for session in $(api session.list '{}' | jq -r '.sessions[].session_id'); do
-    api session.list_blocks "$(jq -cn --arg s "$session" '{session_id: $s}')" |
-      jq -c --arg s "$session" '.blocks[] | select(.creator_name == "com.superlogical.terminal")
-        | {session_id: $s, block_id, window_id, label: .label}'
+    session_blocks "$session"
   done
 }
 
@@ -27,28 +32,63 @@ method() {
     '{session_id: $s, block_id: $b, method: $m}')" 2>/dev/null || echo '{}'
 }
 
-# session_of BLOCK: the session that holds BLOCK.
+# session_of BLOCK: the session that holds BLOCK. The session of reviewr
+# (HERDR_WORKSPACE_ID) first: one call, where the scan of each session takes one call
+# for each session.
 session_of() {
+  if [ -n "${HERDR_WORKSPACE_ID:-}" ] &&
+    api session.list_blocks "$(jq -cn --arg s "$HERDR_WORKSPACE_ID" '{session_id: $s}')" 2>/dev/null |
+    jq -e --arg b "$1" 'any(.blocks[]?; .block_id == $b)' >/dev/null 2>&1; then
+    printf '%s\n' "$HERDR_WORKSPACE_ID"
+    return
+  fi
   blocks | jq -r --arg b "$1" 'select(.block_id == $b) | .session_id' | head -1
 }
 
+# agent_of BLOCK_JSON: the agent entry of the block, with the fields of `herdr agent
+# list`. Nothing when its program reports no agent status.
+agent_of() {
+  local s id status cwd
+  IFS=$'\t' read -r s id < <(jq -r '[.session_id, .block_id] | @tsv' <<<"$1")
+  status=$(method "$s" "$id" program_status | jq -c '[.records[]? | select(.app != null)][0] // empty')
+  [ -n "$status" ] || return 0
+  cwd=$(method "$s" "$id" process | jq -r '.foreground.cwd // .child.cwd // ""')
+  jq -cn --argjson b "$1" --argjson st "$status" --arg cwd "$cwd" '{
+    agent: (if $st.app == "claude-code" then "claude" else $st.app end),
+    agent_status: $st.state, pane_id: $b.block_id, tab_id: $b.window_id,
+    workspace_id: $b.session_id, cwd: $cwd, name: $b.label}'
+}
+
+# agents_of: the agent entries of the blocks on stdin, in their order. The blocks run in
+# parallel: Send waits for this call, and each block takes two rex calls.
+agents_of() {
+  local dir b i=0 j
+  dir=$(mktemp -d "${TMPDIR:-/tmp}/herdr-shim.XXXXXX")
+  # agents_of runs in a subshell: the trap also removes the folder when reviewr quits.
+  trap 'rm -rf "$dir"' EXIT
+  while IFS= read -r b; do
+    agent_of "$b" >"$dir/$i" &
+    i=$((i + 1))
+  done
+  wait
+  for ((j = 0; j < i; j++)); do cat "$dir/$j"; done
+}
+
 # agents: {"result":{"agents":[...]}}, one entry for each block whose program reports an
-# agent status, with the fields of `herdr agent list`. When the tab of reviewr
-# (HERDR_TAB_ID) has an agent, only the agents of that tab: reviewr sends to a sole agent
-# at once.
+# agent status. When the tab of reviewr (HERDR_TAB_ID) has an agent, only the agents of
+# that tab: reviewr sends to a sole agent at once. That tab is read first, from the
+# session of reviewr: the scan of each block of each session takes seconds.
 agents() {
-  local b s id status cwd
-  blocks | while IFS= read -r b; do
-    s=$(jq -r .session_id <<<"$b")
-    id=$(jq -r .block_id <<<"$b")
-    status=$(method "$s" "$id" program_status | jq -c '[.records[]? | select(.app != null)][0] // empty')
-    [ -n "$status" ] || continue
-    cwd=$(method "$s" "$id" process | jq -r '.foreground.cwd // .child.cwd // ""')
-    jq -cn --argjson b "$b" --argjson st "$status" --arg cwd "$cwd" '{
-      agent: (if $st.app == "claude-code" then "claude" else $st.app end),
-      agent_status: $st.state, pane_id: $b.block_id, tab_id: $b.window_id,
-      workspace_id: $b.session_id, cwd: $cwd, name: $b.label}'
-  done | jq -sc --arg tab "${HERDR_TAB_ID:-}" '
+  local here=""
+  if [ -n "${HERDR_WORKSPACE_ID:-}" ] && [ -n "${HERDR_TAB_ID:-}" ]; then
+    here=$(session_blocks "$HERDR_WORKSPACE_ID" 2>/dev/null |
+      jq -c --arg t "$HERDR_TAB_ID" 'select(.window_id == $t)' | agents_of) || here=""
+  fi
+  if [ -n "$here" ]; then
+    printf '%s\n' "$here" | jq -sc '{result: {agents: .}}'
+    return
+  fi
+  blocks | agents_of | jq -sc --arg tab "${HERDR_TAB_ID:-}" '
     [.[] | select(.tab_id == $tab and $tab != "")] as $here
     | {result: {agents: (if $here == [] then . else $here end)}}'
 }

@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# The board commands that need no Herdr. Copied from herdr/plugins/agent-tabs/test/agent-tabs.bats.
+# The board commands that need no terminal backend.
 
 bats_require_minimum_version 1.5.0
 load helper

@@ -1,0 +1,46 @@
+diff --git a/src/app/app.zig b/src/app/app.zig
+index 45b2c22..bde0094 100644
+--- a/src/app/app.zig
++++ b/src/app/app.zig
+@@ -1947,7 +1947,7 @@ pub const App = struct {
+                 for (v.windows) |*w| for (w.layers) |l| for (l.blocks) |blk| {
+                     if (!blk.isTerminal()) continue;
+                     const info = s.blockInfo(blk.id) orelse continue;
+-                    if (!info.has_status and !programs.isAgent(info.program)) continue;
++                    if (!programs.listsAsAgent(info.program, if (info.has_status) info.status_app else null)) continue;
+                     if (!headed) {
+                         headed = true;
+                         plan.append(gpa, .{ .kind = .session, .host = h, .session = session, .key = hashParts(&.{ "session", h.page, session.id, "agents" }) }) catch return;
+diff --git a/src/icons/programs.zig b/src/icons/programs.zig
+index c9cddcc..7baa217 100644
+--- a/src/icons/programs.zig
++++ b/src/icons/programs.zig
+@@ -59,6 +59,13 @@ const agents = std.StaticStringMap(void).initComptime(.{
+     .{"crush"},  .{"droid"},        .{"qwen"},  .{"cline"},     .{"kiro"},
+ });
+ 
++/// Whether the sidebar with the eye on lists a block: what it runs is a coding agent, or it
++/// reports a status (`status_app`, null without a status) as one. A program such as Leaf
++/// reports a status too, for the command palette, but it is not an agent.
++pub fn listsAsAgent(process: ?[]const u8, status_app: ?[]const u8) bool {
++    return isAgent(process) or isAgent(status_app);
++}
++
+ /// Whether what a block runs (given as `name/script`) is a coding agent.
+ pub fn isAgent(process: ?[]const u8) bool {
+     const p = process orelse return false;
+@@ -198,6 +205,14 @@ pub fn shortFolder(buf: []u8, pwd: []const u8) []const u8 {
+     return path;
+ }
+ 
++test "the eye lists agents, and not a program that reports a status" {
++    try std.testing.expect(listsAsAgent("claude", null));
++    try std.testing.expect(listsAsAgent("node/cli.js", "claude"));
++    try std.testing.expect(listsAsAgent("claude", "claude"));
++    try std.testing.expect(!listsAsAgent("leaf", "leaf"));
++    try std.testing.expect(!listsAsAgent("zsh", null));
++}
++
+ test "program names map to icons" {
+     try std.testing.expectEqualStrings("zsh", iconFor(null, "-zsh").?.slug);
+     try std.testing.expectEqualStrings("claude", iconFor(null, "node/claude.js").?.slug);

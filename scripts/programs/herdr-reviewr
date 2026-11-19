@@ -6,7 +6,7 @@ set -o pipefail
 
 # Linux and macOS. herdr-reviewr for ctrl+b d in Renux (config/rex/bin/reviewr.sh).
 # Pinned: config/rex/bin/herdr-shim covers the herdr calls of this version.
-# A link (the Herdr 0.9.5 plugin makes one) is replaced; a real file is left alone.
+# A link (the old Herdr 0.9.5 plugin made one) is replaced; a real file is left alone.
 # https://github.com/persiyanov/herdr-reviewr
 version=0.37.1
 name=herdr-reviewr

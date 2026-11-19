@@ -33,9 +33,19 @@ git -C "$src_dir" submodule update --init --depth 1
 # Our changes to Renux, in renux/patches: a tab with a label shows its label, a
 # ctrl+click on a text file link opens the editor at once, the pane title has the size
 # of the tab label and does not repeat the tab name, and the sidebar shows the sentence
-# of an agent (rex-summary) and its state as an emoji. A patch only changes files:
-# checkout --force does not remove a new file, so a patch that adds one fails on the
-# next run.
+# of an agent (rex-summary) and its state as an emoji. A click on a pane title copies
+# the pane ID, for an agent that reads the pane with rex capture. A ctrl+click on a
+# renux://block/ID link shows the pane of that block. A ctrl+click on a web link opens
+# it at once, also in a Claude Code pane, which waits 500 ms for a double-click before
+# it opens a link itself. The wheel over a program on the whole screen that does not
+# take the mouse, such as less, sends arrow keys: Rex drops the wheel there. A drag
+# tells Rex that its button is held, as a terminal tells a program that takes the
+# mouse. The eye lists a pane when its program or its status is an agent: Leaf reports
+# a status for the command palette but is not an agent. The current sidebar row has an
+# accent tint, a left accent bar and a bold title, as the faint grey tint did not stand
+# out. The subtext of an agent row, such as Done, is 0.9em: at 0.86em the GTK renderer
+# cut the top of its letters. A patch only changes files: checkout --force does not
+# remove a new file, so a patch that adds one fails on the next run.
 for patch in "${0:A:h:h:h}"/renux/patches/*.patch(N); do
   git -C "$src_dir" apply "$patch"
 done

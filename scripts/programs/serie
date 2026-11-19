@@ -1,0 +1,37 @@
+#!/bin/zsh
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+# Linux only. On macOS, the Brewfile installs serie.
+[[ "$(uname)" == Linux ]] || { echo "Skip: Linux only"; exit 0; }
+
+# [serie](https://github.com/lusingander/serie) - a graph of the branches and their
+# commits, drawn with kitty images. ctrl+b shift+l in Renux opens it on a repo
+# (config/rex/bin/branches-pick.sh). Pop!_OS 22.04 has no apt package: install the
+# release binary. The release has no checksum file, so the sums are pinned here.
+# Run it again to replace it.
+version=0.11.0
+bin_dir=${SERIE_BIN_DIR:-$HOME/.local/bin}
+
+case "$(uname -m)" in
+  aarch64 | arm64)
+    target=aarch64-unknown-linux-musl
+    sum=9de33d0436767aa5ce16072135b458230e28c59753731192173ae1257100e9ad ;;
+  x86_64)
+    target=x86_64-unknown-linux-musl
+    sum=b4fe42038d8540eed74104db2483ffa8023d37c21cc58164280f5558f577e25b ;;
+  *) echo "serie: no release for Linux-$(uname -m)" >&2; exit 1 ;;
+esac
+
+asset="serie-$version-$target.tar.gz"
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+curl -fsSL --retry 5 --retry-delay 3 \
+  "https://github.com/lusingander/serie/releases/download/v$version/$asset" -o "$tmp/$asset"
+[[ "$(sha256sum "$tmp/$asset" | awk '{print $1}')" == "$sum" ]] || { echo "serie: checksum mismatch" >&2; exit 1; }
+tar -xzf "$tmp/$asset" -C "$tmp" serie
+mkdir -p "$bin_dir"
+install -m 0755 "$tmp/serie" "$bin_dir/serie"
+echo "serie $version installed in $bin_dir"

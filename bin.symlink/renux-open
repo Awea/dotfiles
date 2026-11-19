@@ -1,45 +1,27 @@
 #!/usr/bin/env bash
 
-# Open a file from the Renux file peek: a markdown file rendered in md-tui, another file
-# in Fresh.
+# Open a file from the Renux file peek: a markdown file rendered in Leaf, another file
+# in Fresh at its line.
 #
 #   Usage: renux-open view LINE PATH   the editor-command of Renux (renux/look.sh)
-#          renux-open [+LINE] PATH     the EDITOR of md-tui
 #
-# In md-tui: s selects a link, Enter opens it, b goes back to the previous file, e opens
-# the file in Fresh at the line on screen. Quit Fresh to come back to md-tui.
-# md-tui calls its EDITOR as `EDITOR +LINE PATH`, and Fresh takes PATH:LINE.
-# Exit 2: a usage error. MDT_BIN and FRESH_BIN are the commands (default mdt and fresh).
+# In Leaf: a drag selects text and copies it without the wrap, @ asks an agent pane
+# about the selection, f finds text, ? shows the keys, q quits. Config in config/leaf.
+# Exit 2: a usage error. LEAF_BIN and FRESH_BIN are the commands (default leaf and fresh).
 
 set -euo pipefail
 
 usage() {
-  echo "usage: renux-open view LINE PATH | renux-open [+LINE] PATH" >&2
+  echo "usage: renux-open view LINE PATH" >&2
   exit 2
 }
 
-self="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
-fresh="${FRESH_BIN:-fresh}"
-
-case "${1:-}" in
-  view)
-    [ $# -eq 3 ] || usage
-    line=$2 path=$3
-    shopt -s nocasematch
-    case "$path" in
-      *.md | *.markdown) EDITOR="$self" exec "${MDT_BIN:-mdt}" "$path" ;;
-    esac
-    exec "$fresh" "$path:$line"
-    ;;
-  +*)
-    [ $# -eq 2 ] || usage
-    exec "$fresh" "$2:${1#+}"
-    ;;
-  "")
-    usage
-    ;;
-  *)
-    [ $# -eq 1 ] || usage
-    exec "$fresh" "$1"
-    ;;
+if [ "${1:-}" != view ] || [ $# -ne 3 ]; then
+  usage
+fi
+line=$2 path=$3
+shopt -s nocasematch
+case "$path" in
+  *.md | *.markdown) exec "${LEAF_BIN:-leaf}" open "$path" ;;
 esac
+exec "${FRESH_BIN:-fresh}" "$path:$line"

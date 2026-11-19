@@ -41,6 +41,7 @@ brew "pass"
 brew "pinentry-mac"
 brew "pipx"
 brew "ripgrep"
+brew "serie"
 brew "spaceship"
 brew "syncthing", restart_service: :changed
 brew "tmux"
