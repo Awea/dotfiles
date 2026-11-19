@@ -1,0 +1,86 @@
+{
+  "theme": "herdr-graphite",
+  "locale": "en",
+  "check_for_updates": false,
+  "self_update": false,
+  "plugins": {
+    "orchestrator": {
+      "enabled": false
+    },
+    "welcome_screen": {
+      "enabled": false
+    }
+  },
+  "keybindings": [
+    {
+      "comment": "ctrl+p finds a file, as Goto Anything in Sublime Text. Type > for the commands: Renux takes ctrl+shift+p",
+      "key": "p",
+      "modifiers": [
+        "ctrl"
+      ],
+      "action": "quick_open_files",
+      "args": {},
+      "when": "global"
+    },
+    {
+      "comment": "ctrl+b is the Renux prefix: ctrl+k ctrl+b opens the file tree, as in Sublime Text",
+      "keys": [
+        {
+          "key": "k",
+          "modifiers": [
+            "ctrl"
+          ]
+        },
+        {
+          "key": "b",
+          "modifiers": [
+            "ctrl"
+          ]
+        }
+      ],
+      "action": "toggle_file_explorer",
+      "args": {},
+      "when": "normal"
+    },
+    {
+      "comment": "ctrl+k ctrl+b closes the file tree when it has the focus",
+      "keys": [
+        {
+          "key": "k",
+          "modifiers": [
+            "ctrl"
+          ]
+        },
+        {
+          "key": "b",
+          "modifiers": [
+            "ctrl"
+          ]
+        }
+      ],
+      "action": "toggle_file_explorer",
+      "args": {},
+      "when": "file_explorer"
+    },
+    {
+      "comment": "The ctrl+k chords take ctrl+k alone: ctrl+k ctrl+k deletes to the end of the line, as in Sublime Text",
+      "keys": [
+        {
+          "key": "k",
+          "modifiers": [
+            "ctrl"
+          ]
+        },
+        {
+          "key": "k",
+          "modifiers": [
+            "ctrl"
+          ]
+        }
+      ],
+      "action": "delete_to_line_end",
+      "args": {},
+      "when": "normal"
+    }
+  ]
+}

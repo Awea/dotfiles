@@ -8,7 +8,7 @@
 set -euo pipefail
 client=${4:-}
 here=$(dirname "$(readlink -f "$0")")
-agent_tabs="$here/../../../herdr-app/bin/agent-tabs.sh"
+folders="$here/folders.sh"
 
 # show JSON: make Renux show the new session. JSON is the output of rex new --json.
 # Renux switches the session only when the call gives its session_id.
@@ -26,7 +26,7 @@ key() {
   printf '%s' "$k"
 }
 
-picked=$(bash "$agent_tabs" folders | jq -r '.[]' | sed "s|^$HOME|~|" |
+picked=$(bash "$folders" folders | jq -r '.[]' | sed "s|^$HOME|~|" |
   fzf --expect=tab --layout=reverse --prompt='New space> ' \
     --header='Enter: shell · Tab: claude · Esc: close') || exit 0
 how=$(sed -n 1p <<<"$picked")

@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+
+# Find or start a long job (a wait for a deploy, a build) that board workers share.
+#
+#   Usage: rex-job [--again] NAME DIR -- CMD [ARGS...]
+#
+# The job runs in a block labeled NAME in the Rex session "jobs", with rex-resource. Name
+# a job after what it does, for example deploy-web-4fb7f80. A second call gets the same
+# block, also after the job ended: the worker then reads its result. With --again, a call
+# closes an ended job and starts it again. A live job never starts again.
+# Prints the JSON line of rex-resource: {"block", "session", "started", "ended",
+# "exit_code", "cwd", "argv"}. Exit codes: those of rex-resource.
+
+set -euo pipefail
+
+keep=(--keep-ended)
+if [ "${1:-}" = --again ]; then
+  keep=()
+  shift
+fi
+exec "$(dirname "$(readlink -f "$0" 2>/dev/null || printf '%s' "$0")")/rex-resource" \
+  --session jobs ${keep[@]+"${keep[@]}"} "$@"

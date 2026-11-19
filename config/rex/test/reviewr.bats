@@ -89,7 +89,7 @@ SH
   run "$BIN/reviewr.sh" "$WT" abc123
   [ "$status" -eq 0 ]
   [[ $output == *"args=--base abc123 $WT"* ]]
-  [[ $output == *"config="*"/herdr-app/reviewr-branch"* ]]
+  [[ $output == *"config="*"/config/rex/reviewr-branch"* ]]
 }
 
 @test "reviewr.sh without BASE is unchanged" {
@@ -98,7 +98,7 @@ SH
   [ "$status" -eq 0 ]
   [[ $output == *"args=$WT"* ]]
   [[ $output != *"--base"* ]]
-  [[ $output == *"/herdr-app/reviewr" ]] || [[ $output == *"/herdr-app/reviewr"$'\n'* ]]
+  [[ $output == *"/config/rex/reviewr" ]] || [[ $output == *"/config/rex/reviewr"$'\n'* ]]
 }
 
 @test "reviewr-pick finds jq in ~/.local/bin when the server PATH lacks it" {
@@ -130,4 +130,10 @@ SH
   run "$BIN/reviewr.sh" "$root" "$base"
   [ "$status" -eq 0 ]
   [[ $output == *"args=--base my base $(cd "$sp" && pwd -P)"* ]]
+}
+
+@test "herdr-shim gives the reviewr config of config/rex" {
+  run "$BIN/herdr-shim" plugin config-dir
+  [ "$status" -eq 0 ]
+  [[ $output == */config/rex/reviewr ]]
 }

@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+
+# Name the Renux tab of the agent that runs this script, for example after its branch.
+#
+#   Usage: rex-tab-name NAME
+#
+# The tab is the Rex window of REX_BLOCK. Renux shows the label of a tab in place of the
+# programs of its panes (with the tab-label patch of renux/patches). Outside Renux
+# (REX_BLOCK not set, or HC_TERMINAL_ID set) and in a board worker, whose tab has the
+# card name, the script does nothing.
+# Exit 1: Rex fails. Exit 2: a usage error. REX_BIN is the rex command (default rex).
+
+set -euo pipefail
+
+say() { printf 'rex-tab-name: %s\n' "$*" >&2; }
+
+if [ $# -ne 1 ] || [ -z "$1" ]; then
+  say "usage: rex-tab-name NAME"
+  exit 2
+fi
+name=$1
+
+[ -n "${REX_BLOCK:-}" ] && [ -z "${HC_TERMINAL_ID:-}" ] || exit 0
+[ "${BOARD_ROLE:-}" != worker ] || exit 0
+
+rex=("${REX_BIN:-rex}")
+args=$(jq -cn --arg s "${REX_SESSION:-}" --arg b "$REX_BLOCK" '{session_id: $s, block_id: $b}')
+window=$("${rex[@]}" api call session.describe_block "$args" | jq -r '.block.window_id // empty') || {
+  say "Rex does not answer"
+  exit 1
+}
+[ -n "$window" ] || { say "no window for $REX_BLOCK"; exit 1; }
+"${rex[@]}" window rename -s "$REX_SESSION" "$window" "$name" >/dev/null || exit 1

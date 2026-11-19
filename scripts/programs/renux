@@ -26,8 +26,19 @@ if [[ ! -d "$src_dir/.git" ]]; then
   git -C "$src_dir" remote add origin https://github.com/zenodea/renux
 fi
 git -C "$src_dir" fetch --depth 1 origin "$renux_rev"
-git -C "$src_dir" checkout --quiet --detach "$renux_rev"
+# --force drops the patches of the last run, so each patch applies once.
+git -C "$src_dir" checkout --quiet --detach --force "$renux_rev"
 git -C "$src_dir" submodule update --init --depth 1
+
+# Our changes to Renux, in renux/patches: a tab with a label shows its label, a
+# ctrl+click on a text file link opens the editor at once, the pane title has the size
+# of the tab label and does not repeat the tab name, and the sidebar shows the sentence
+# of an agent (rex-summary) and its state as an emoji. A patch only changes files:
+# checkout --force does not remove a new file, so a patch that adds one fails on the
+# next run.
+for patch in "${0:A:h:h:h}"/renux/patches/*.patch(N); do
+  git -C "$src_dir" apply "$patch"
+done
 
 # renux links to these libraries in /nix/store. prune-disk runs nix-collect-garbage,
 # so keep them with a GC root.

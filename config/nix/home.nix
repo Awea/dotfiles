@@ -32,6 +32,13 @@ in
     # Apt has mosh 1.3.2, which drops OSC 52: a copy in a remote tmux does
     # not reach the local clipboard. mosh 1.4 passes it.
     mosh
+    # The editor of the Renux file peek (renux/look.sh): keys as in Sublime
+    # Text and VS Code, a file tree and a ctrl+p file finder. Config in
+    # config/fresh.
+    fresh-editor
+    # The markdown view of the Renux file peek (bin.symlink/renux-open): headings,
+    # tables and links rendered in the terminal. Its e key opens Fresh.
+    md-tui
   ] ++ [
     inputs.hunk.packages.${system}.default
   ];

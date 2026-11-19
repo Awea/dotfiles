@@ -4,7 +4,7 @@
 #
 #   reviewr.sh DIR [BASE]
 #
-# With BASE: the branch scope on BASE (herdr-app/reviewr-branch, --base), as
+# With BASE: the branch scope on BASE (config/rex/reviewr-branch, --base), as
 # herdr-app/bin/agent-tabs.sh reviewr does.
 set -euo pipefail
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}"
@@ -37,5 +37,5 @@ HERDR_BIN_PATH="$here/herdr-shim" \
   HERDR_WORKSPACE_ID=${REX_SESSION:-} \
   HERDR_TAB_ID=$window \
   HERDR_PANE_ID=${REX_BLOCK:-} \
-  HERDR_PLUGIN_CONFIG_DIR="$(cd "$here/../../../herdr-app/$config" && pwd)" \
+  HERDR_PLUGIN_CONFIG_DIR="$(cd "$here/../$config" && pwd)" \
   exec "$bin" ${flags[@]+"${flags[@]}"} "${1:?usage: reviewr.sh DIR [BASE]}"

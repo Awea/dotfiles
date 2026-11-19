@@ -1,0 +1,31 @@
+diff --git a/src/terminal/termview.zig b/src/terminal/termview.zig
+index 869d0be..fc31b58 100644
+--- a/src/terminal/termview.zig
++++ b/src/terminal/termview.zig
+@@ -987,10 +987,25 @@ pub const TermView = struct {
+         return out[0..n];
+     }
+ 
++    /// The program and its folder, as "claude dotfiles", or "Terminal".
++    fn programTitle(v: *TermView, out: []u8) []const u8 {
++        const info = v.server.blockInfo(v.block_id) orelse return copy(out, "Terminal");
++        const p = programs.programName(info.program orelse return copy(out, "Terminal"));
++        var folder_buf: [256]u8 = undefined;
++        if (info.folder) |f| return std.fmt.bufPrint(out, "{s} {s}", .{ p, programs.shortFolder(&folder_buf, f) }) catch copy(out, p);
++        return copy(out, p);
++    }
++
+     pub fn updateTitle(v: *TermView) void {
+         const label = v.title_label orelse return;
+         var buf: [256]u8 = undefined;
+-        const t = v.title(&buf);
++        var t = v.title(&buf);
++        // The pane title does not repeat the name of its tab: then it shows the program
++        // and its folder.
++        var pbuf: [256]u8 = undefined;
++        if (v.server.sessionView(v.session_id)) |sv| if (sv.windowOf(v.block_id)) |w| if (w.title()) |name| {
++            if (std.mem.eql(u8, name, t)) t = v.programTitle(&pbuf);
++        };
+         const n = @min(t.len, v.title_buf.len - 1);
+         if (n == v.title_len and std.mem.eql(u8, v.title_buf[0..n], t[0..n])) return;
+         @memcpy(v.title_buf[0..n], t[0..n]);

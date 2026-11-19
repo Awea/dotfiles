@@ -1,0 +1,14 @@
+diff --git a/src/app/app.zig b/src/app/app.zig
+index 917dfee..a647758 100644
+--- a/src/app/app.zig
++++ b/src/app/app.zig
+@@ -1767,7 +1767,9 @@ pub const App = struct {
+     }
+ 
+     /// A tab's name: every program in its window, or its focused pane's, as the setting says.
++    /// A label that a person or a script gave the window comes first.
+     fn tabTitle(h: *Host, buf: []u8, w: *const view.Window, v: *const view.SessionView) [:0]const u8 {
++        if (w.title()) |t| return std.fmt.bufPrintSentinel(buf, "{s}", .{t}, 0) catch "Window";
+         return if (settings.current.tab_processes) processList(h, buf, w) else rowTitle(h, buf, w, v);
+     }
+ 

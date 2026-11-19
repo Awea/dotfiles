@@ -1,0 +1,36 @@
+diff --git a/src/ui/peek.zig b/src/ui/peek.zig
+index 7140b49..5479222 100644
+--- a/src/ui/peek.zig
++++ b/src/ui/peek.zig
+@@ -41,6 +41,8 @@ pub fn show(parent: *gtk.Widget, at: gdk.Rectangle, server: *Server, sid: []cons
+     if (where.path.len == 0) return;
+     const p = Peek.create(parent, at, server, sid, bid, where.path, where.line) catch return;
+     open = p;
++    // A text file opens in the editor at once. A picture and a PDF keep the peek.
++    p.auto = !looksLikeImage(where.path) and !looksLikePdf(where.path);
+     p.transfer = download.Download.start(server, sid, bid, where.path, .{ .ctx = p, .finished = Peek.received, .located = Peek.located }) catch {
+         p.fail("Connect to this host to look at the file");
+         return;
+@@ -125,6 +127,8 @@ const Peek = struct {
+     kind: Kind = .loading,
+     /// A key pressed before Rex had said where the file is, kept until it has.
+     waiting: ?How = null,
++    /// Whether a text file goes to the editor beside the pane at once, with no peek.
++    auto: bool = false,
+     /// Runs out when the file is slow to arrive, and the peek opens without it.
+     /// Then, once the peek is closing, runs out when it has faded.
+     timer: c_uint = 0,
+@@ -448,6 +452,13 @@ const Peek = struct {
+         if (preview.isText(data)) {
+             p.kind = .text;
+             p.showLines(data);
++            // As the key for "beside": the editor starts after this turn of the main loop,
++            // and the peek stays hidden unless it was already open for a slow file.
++            if (p.auto and p.waiting == null) {
++                p.refresh();
++                p.waiting = .beside;
++                return p.resumeLater();
++            }
+         } else {
+             p.kind = .other;
+             p.setBody(message("No peek for this kind of file"));

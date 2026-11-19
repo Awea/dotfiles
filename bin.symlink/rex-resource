@@ -2,14 +2,17 @@
 
 # Find or start a shared resource (a database, a docs server) in Renux, once for all agents.
 #
-#   Usage: rex-resource NAME DIR -- CMD [ARGS...]
+#   Usage: rex-resource [--session NAME] [--keep-ended] NAME DIR -- CMD [ARGS...]
 #
-# The resource runs in a block labeled NAME, in the Rex session labeled "resources". A
-# lock makes the look-up and the start one step, so two agents cannot start it twice.
-# The block stays open when its command ends. The next call closes such a block and
-# starts the command again. CMD runs with the PATH of ~/.zshrc (rex run --interactive).
-# Prints one JSON line: {"block", "session", "started", "cwd", "argv"}. cwd and argv are
-# those of the start, kept in the state folder next to the lock.
+# The resource runs in a block labeled NAME, in the Rex session labeled "resources" (or
+# the --session one). A lock makes the look-up and the start one step, so two agents
+# cannot start it twice. The block stays open when its command ends. The next call closes
+# such a block and starts the command again. With --keep-ended, the next call gives the
+# ended block (rex-job: a second worker reads the result of a job). CMD runs with the
+# PATH of ~/.zshrc (rex run --interactive).
+# Prints one JSON line: {"block", "session", "started", "ended", "exit_code", "cwd",
+# "argv"}. exit_code is null while the command runs. cwd and argv are those of the start,
+# kept in the state folder next to the lock.
 # Exit 1: Rex fails, or the lock stays taken. Exit 2: a usage error.
 #
 # REX_BIN is the rex command (default rex). REX_RESOURCE_STALE is the age in seconds after
@@ -20,8 +23,20 @@ set -euo pipefail
 
 say() { printf 'rex-resource: %s\n' "$*" >&2; }
 
-if [ $# -lt 4 ] || [ -z "${1:-}" ] || [ "${3:-}" != -- ]; then
-  say "usage: rex-resource NAME DIR -- CMD [ARGS...]"
+session_label=resources keep_ended=""
+while :; do
+  case "${1:-}" in
+    --session)
+      [ $# -ge 2 ] || { say "usage: --session NAME"; exit 2; }
+      session_label=$2
+      shift 2
+      ;;
+    --keep-ended) keep_ended=1; shift ;;
+    *) break ;;
+  esac
+done
+if [ $# -lt 4 ] || [ -z "${1:-}" ] || [ "${3:-}" != -- ] || [ -z "$session_label" ]; then
+  say "usage: rex-resource [--session NAME] [--keep-ended] NAME DIR -- CMD [ARGS...]"
   exit 2
 fi
 name=$1 cwd=$2 dir_arg=$2
@@ -33,9 +48,12 @@ stale=${REX_RESOURCE_STALE:-60}
 poll=${REX_RESOURCE_POLL:-0.2}
 dir="${XDG_STATE_HOME:-$HOME/.local/state}/rex-resource"
 lock="$dir/lock"
-# The cwd and argv of the start of NAME. A "/" in NAME becomes "_".
-start_file="$dir/$(printf '%s' "$name" | tr '/' '_').json"
-mkdir -p "$dir"
+# The cwd and argv of the start of NAME. A "/" in NAME becomes "_". The resources keep the
+# folder of the first version of this script, another session has a folder of its own.
+start_dir=$dir
+[ "$session_label" = resources ] || start_dir="$dir/$(printf '%s' "$session_label" | tr '/' '_')"
+start_file="$start_dir/$(printf '%s' "$name" | tr '/' '_').json"
+mkdir -p "$start_dir"
 
 # This function is named rex: "command rex" skips it, or it would call itself.
 rex() {
@@ -81,23 +99,32 @@ take_lock() {
 
 take_lock
 
-# The session "resources": use it, or make it. A new session does not switch the view.
-session=$(rex_out api call session.list '{}' | jq -r '[.sessions[] | select(.label == "resources")][0].session_id // empty')
+# The session "resources" (or --session): use it, or make it. A new session does not switch
+# the view.
+session=$(rex_out api call session.list '{}' |
+  jq -r --arg l "$session_label" '[.sessions[] | select(.label == $l)][0].session_id // empty')
 if [ -z "$session" ]; then
-  session=$(rex_out new resources --json | jq -r '.session_id')
+  session=$(rex_out new "$session_label" --json | jq -r '.session_id')
 fi
 
 args=$(jq -cn --arg s "$session" '{session_id: $s}')
 block=$(rex_out api call session.list_blocks "$args" |
   jq -r --arg n "$name" '[.blocks[] | select(.label == $n)][0].block_id // empty')
 
-# A found block whose command ended is gone: close it, then start the command again.
+# A found block whose command ended: keep it with --keep-ended, else close it and start
+# the command again.
+ended=false exit_code=null
 if [ -n "$block" ]; then
   info=$(rex_out api call block.method \
     "$(jq -cn --arg s "$session" --arg b "$block" '{session_id: $s, block_id: $b, method: "process"}')")
   if jq -e '.last_exit != null or .child == null' <<<"$info" >/dev/null; then
-    rex_out block close -s "$session" "$block" >/dev/null
-    block=""
+    if [ -n "$keep_ended" ]; then
+      ended=true
+      exit_code=$(jq -c '.last_exit.exit_code // null' <<<"$info")
+    else
+      rex_out block close -s "$session" "$block" >/dev/null
+      block=""
+    fi
   fi
 fi
 
@@ -119,4 +146,5 @@ else
 fi
 
 jq -cn --arg block "$block" --arg session "$session" --argjson started "$started" --argjson start "$start" \
-  '{block: $block, session: $session, started: $started, cwd: $start.cwd, argv: $start.argv}'
+  --argjson ended "$ended" --argjson code "$exit_code" \
+  '{block: $block, session: $session, started: $started, ended: $ended, exit_code: $code, cwd: $start.cwd, argv: $start.argv}'

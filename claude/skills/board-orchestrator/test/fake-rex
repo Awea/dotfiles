@@ -136,6 +136,11 @@ case "$cmd" in
           | {session_id: $s, label: $s, active_window_id: ($b[0].window_id // null), revision: 1,
              windows: ($b | map({window_id, label: .window_label}) | unique_by(.window_id))}' "$d/blocks.jsonl"
         ;;
+      session.describe_block)
+        in_session "$s" "$b" || not_found
+        jq -s --arg b "$b" '[.[] | select(.block_id == $b)][0]
+          | {block: {block_id, label: "shell", window_id, placement: "placed"}}' "$d/blocks.jsonl"
+        ;;
       block.method)
         in_session "$s" "$b" || not_found
         case "$(jq -r .method <<<"$args")" in

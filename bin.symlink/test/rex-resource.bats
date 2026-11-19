@@ -132,7 +132,7 @@ setup() {
   [ "$status" -eq 0 ]
   [ "$(jq -r .started <<<"$output")" = true ]
   [ "$(jq -r .block <<<"$output")" != "$block" ]
-  [ "$(jq -r 'keys | join(",")' <<<"$output")" = argv,block,cwd,session,started ]
+  [ "$(jq -r 'keys | join(",")' <<<"$output")" = argv,block,cwd,ended,exit_code,session,started ]
   grep -qF "rex block close -s $session $block" "$FAKE_LOG"
   [ "$(grep -c '^rex run ' "$FAKE_LOG")" -eq 2 ]
 }
