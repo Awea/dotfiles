@@ -88,3 +88,16 @@ shim() { run bash "$SHIM" "$@"; }
   [ "${lines[5]}" = "$(cd "$BATS_TEST_DIRNAME/../reviewr" && pwd)" ]
   [ -f "${lines[5]}/config.toml" ]
 }
+
+@test "reviewr with a base starts in the branch scope on that base" {
+  export HC_TERMINAL_ID=t7
+  printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$HERDR_PLUGIN_CONFIG_DIR" "$@"\n' >"$BATS_TEST_TMPDIR/fake-reviewr"
+  chmod +x "$BATS_TEST_TMPDIR/fake-reviewr"
+  REVIEWR_BIN="$BATS_TEST_TMPDIR/fake-reviewr" run bash "$AT" reviewr /r abc1234
+  [ "$status" -eq 0 ]
+  [ "${lines[0]}" = "$(cd "$BATS_TEST_DIRNAME/../reviewr-branch" && pwd)" ]
+  grep -qx 'default_scope = "branch"' "${lines[0]}/config.toml"
+  [ "${lines[1]}" = --base ]
+  [ "${lines[2]}" = abc1234 ]
+  [ "${lines[3]}" = /r ]
+}
