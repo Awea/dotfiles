@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# claude wrapper, first on PATH: a session in a board folder gets the MCP servers and the
+# rules of its board (--mcp-config, --settings). It reads only local files: no network,
+# no pass. BOARD_RESOURCES_OFF=1 (set by the board orchestrator) passes through.
+set -uo pipefail
+self_dir="$(cd "$(dirname "$(readlink -f "$0")")" && pwd -P)"
+
+# The next claude on PATH that is not this wrapper.
+real=""
+IFS=: read -ra dirs <<<"$PATH"
+for d in "${dirs[@]}"; do
+  if [ -z "$d" ] || [ ! -x "$d/claude" ] || [ -d "$d/claude" ]; then continue; fi
+  [ "$(cd "$d" 2>/dev/null && pwd -P)" != "$self_dir" ] || continue
+  [ "$(readlink -f "$d/claude")" != "$self_dir/claude" ] || continue
+  real="$d/claude"
+  break
+done
+if [ -z "$real" ]; then
+  echo "claude wrapper: no claude on PATH after $self_dir" >&2
+  exit 127
+fi
+
+[ "${BOARD_RESOURCES_OFF:-}" != 1 ] || exec "$real" "$@"
+# A subcommand or an info flag takes no session flags.
+case ${1:-} in
+  agents | attach | auth | auto-mode | doctor | gateway | import | install | logs | mcp | \
+    plugin | plugins | purge | respawn | rm | setup-token | stop | kill | ultrareview | \
+    update | upgrade | config | migrate-installer | -v | --version | -h | --help)
+    exec "$real" "$@" ;;
+esac
+
+# shellcheck source=../lib.sh source-path=SCRIPTDIR
+source "$self_dir/../lib.sh"
+board=$(board_of "$PWD") || exec "$real" "$@"
+extra=()
+# --mcp-config FILE takes the next arguments as files too: one --mcp-config=FILE argument.
+if f=$(board_file "$board" mcp.json); then extra+=("--mcp-config=$f"); fi
+has_settings=""
+for a in "$@"; do
+  case $a in --settings | --settings=*) has_settings=1 ;; esac
+done
+if [ -z "$has_settings" ] && f=$(board_file "$board" settings.json); then
+  extra+=(--settings "$f")
+fi
+exec "$real" ${extra[@]+"${extra[@]}"} "$@"

@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Fake psql: log the call and PGOPTIONS, print a CSV, or fail with FAKE_PSQL_FAIL=1.
+printf 'psql %s\n' "$*" >>"$FAKE_LOG"
+printf 'PGOPTIONS=%s\n' "${PGOPTIONS:-}" >>"$FAKE_LOG"
+if [ "${FAKE_PSQL_FAIL:-}" = 1 ]; then
+  echo 'ERROR:  cannot execute DELETE in a read-only transaction' >&2
+  exit 1
+fi
+printf 'a,b\n1,2\n'
