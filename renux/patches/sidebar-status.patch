@@ -1,0 +1,109 @@
+diff --git a/src/app/app.zig b/src/app/app.zig
+index 917dfee..626ab48 100644
+--- a/src/app/app.zig
++++ b/src/app/app.zig
+@@ -117,6 +117,7 @@ const css =
+     \\window.tight .renux-sidebar list > row:selected { box-shadow: none; }
+     \\.renux-sidebar list > row:hover:not(:selected):not(.session-row):not(.host-row) { background-color: alpha(@window_fg_color, 0.04); }
+     \\.renux-sidebar .row-title { font-size: 0.95em; }
++    \\.status-emoji { font-size: 15px; min-width: 20px; }
+     \\.row-more { opacity: 0; }
+     \\.row-more, .row-more > button { min-height: 20px; min-width: 24px; padding: 0; margin: 0; border-radius: 6px; }
+     \\row:hover .row-more, row:selected .row-more { opacity: 0.6; }
+@@ -1970,14 +1971,24 @@ pub const App = struct {
+         zbuf[n] = 0;
+         setLabel(mark.label, zbuf[0..n :0]);
+         const status = if (info) |i| (if (i.has_status) i.status else .other) else .other;
++        // The agent's own sentence, in place of Working, Done and Idle. Needs you and Failed
++        // stay: the person has to act on them.
++        const summary: ?[]const u8 = if (info) |i| (if (i.summary) |t| (if (t.len > 0) t else null) else null) else null;
++        const agent = if (info) |i| i.has_status or summary != null else false;
+         if (mark.sub) |sub| {
+-            setLabel(sub, switch (status) {
++            const word: []const u8 = switch (status) {
+                 .working => "Working",
+                 .blocked => "Needs you",
+                 .failed => "Failed",
+                 .done => "Done",
+                 .other => "Idle",
+-            });
++            };
++            const said = if (status == .blocked or status == .failed) word else (summary orelse word);
++            var sbuf: [321]u8 = undefined;
++            const n2 = @min(said.len, sbuf.len - 1);
++            @memcpy(sbuf[0..n2], said[0..n2]);
++            sbuf[n2] = 0;
++            setLabel(sub, sbuf[0..n2 :0]);
+             inline for (.{ "blocked", "failed" }, .{ server_mod.StatusKind.blocked, server_mod.StatusKind.failed }) |class, kind| {
+                 if (status == kind) sub.as(gtk.Widget).addCssClass(class) else sub.as(gtk.Widget).removeCssClass(class);
+             }
+@@ -1988,12 +1999,24 @@ pub const App = struct {
+         var hasher = std.hash.Wyhash.init(1);
+         hasher.update(prog orelse "");
+         hasher.update(std.mem.asBytes(&status));
++        hasher.update(std.mem.asBytes(&agent));
+         if (info) |i| hasher.update(std.mem.asBytes(&i.attention));
+         const key = hasher.final() | 1;
+         if (key != mark.tile_for) if (mark.line) |line| {
+             mark.tile_for = key;
+             if (mark.tile) |old| line.remove(old);
+-            const tile = @import("../icons/blockicon.zig").create(h.server, block_id, 20);
++            // An agent shows its state as an emoji, in place of the program's tile.
++            const tile = if (agent) blk: {
++                const l = gtk.Label.new(switch (status) {
++                    .working => "⏳",
++                    .blocked => "✋",
++                    .failed => "❌",
++                    .done => "✅",
++                    .other => "💤",
++                });
++                l.as(gtk.Widget).addCssClass("status-emoji");
++                break :blk l.as(gtk.Widget);
++            } else @import("../icons/blockicon.zig").create(h.server, block_id, 20);
+             tile.setValign(.center);
+             line.prepend(tile);
+             mark.tile = tile;
+diff --git a/src/rex/server.zig b/src/rex/server.zig
+index 38a7fc7..6e47d91 100644
+--- a/src/rex/server.zig
++++ b/src/rex/server.zig
+@@ -67,6 +67,8 @@ pub const BlockInfo = struct {
+     message: ?[]u8 = null,
+     /// The program's own short name for what it is doing, such as a task's name.
+     task: ?[]u8 = null,
++    /// One sentence on what the agent works on: the msg of its record with the id "summary".
++    summary: ?[]u8 = null,
+     program: ?[]u8 = null,
+     folder: ?[]u8 = null,
+     title: ?[]u8 = null,
+@@ -80,7 +82,7 @@ pub const BlockInfo = struct {
+     details: enum { unread, reading, read } = .unread,
+ 
+     fn deinit(b: *BlockInfo) void {
+-        inline for (.{ "status_app", "status_kind", "message", "task", "program", "folder", "title" }) |f| {
++        inline for (.{ "status_app", "status_kind", "message", "task", "summary", "program", "folder", "title" }) |f| {
+             if (@field(b, f)) |v| gpa.free(v);
+             @field(b, f) = null;
+         }
+@@ -773,7 +775,13 @@ pub const Server = struct {
+                 // The most urgent record counts.
+                 var best: ?json.Value = null;
+                 var best_rank: u8 = 0;
++                var summary: ?[]const u8 = null;
+                 for (json.array(payload, "records")) |rec| {
++                    // The summary record holds a sentence, not a status.
++                    if (json.str(rec, "id")) |id| if (eql(id, "summary")) {
++                        summary = json.str(rec, "msg");
++                        continue;
++                    };
+                     const st = json.str(rec, "state") orelse continue;
+                     const rank: u8 = if (eql(st, "blocked")) 4 else if (eql(st, "error")) 3 else if (eql(st, "working")) 2 else if (eql(st, "done")) 1 else 0;
+                     if (best == null or rank > best_rank) {
+@@ -781,6 +789,7 @@ pub const Server = struct {
+                         best_rank = rank;
+                     }
+                 }
++                setStr(&b.summary, summary);
+                 s.applyStatus(b, d.session_id, d.block_id, best, d.announce);
+             },
+             .title => setStr(&b.title, json.str(payload, "title")),

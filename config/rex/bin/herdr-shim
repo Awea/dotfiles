@@ -80,8 +80,8 @@ case "${1:-} ${2:-}" in
     api session.view "$(jq -cn --arg s "$4" '{session_id: $s}')" |
       jq -c '{result: {tabs: [.windows[]? | {tab_id: .window_id, label: .label}]}}'
     ;;
-  # The reviewr config of the dotfiles: herdr-app/reviewr/config.toml.
-  "plugin config-dir") printf '%s\n' "$(cd "$here/../../../herdr-app/reviewr" && pwd)" ;;
+  # The reviewr config of the dotfiles: config/rex/reviewr/config.toml.
+  "plugin config-dir") printf '%s\n' "$(cd "$here/../reviewr" && pwd)" ;;
   *)
     printf 'herdr-shim: herdr %s is not supported in Rex.\n' "$*" >&2
     exit 1

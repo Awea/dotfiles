@@ -1,0 +1,8 @@
+{
+  "name": "herdr-graphite",
+  "extends": "terminal",
+  "editor": {
+    "selection_bg": [57, 68, 84],
+    "selection_modifier": []
+  }
+}

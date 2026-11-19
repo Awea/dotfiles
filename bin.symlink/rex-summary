@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+
+# Tell Renux what the agent works on, in one short sentence. The Renux sidebar shows it under
+# the agent name, in place of Working, Done and Idle (sidebar-status patch of renux/patches).
+#
+#   Usage: rex-summary SENTENCE...
+#
+# The sentence goes to the terminal of the agent as an OSC 7501 report on the record with
+# the id "summary" (https://www.superlogical.com/rex/docs/build/program-status). The agent
+# reports its own state on the root record, so it never erases the sentence. A command of
+# the Bash tool of Claude Code has no terminal, so the script writes to the terminal of the
+# nearest parent process that has one: the agent. Outside Renux (REX_BLOCK not set, or
+# HC_TERMINAL_ID set), the script does nothing.
+# Exit 1: no parent process has a terminal. Exit 2: a usage error.
+# REX_SUMMARY_TTY is the file to write to (for the tests). REX_SUMMARY_PID is the process
+# where the search for a terminal starts (default: the parent of this script).
+
+set -euo pipefail
+
+say() { printf 'rex-summary: %s\n' "$*" >&2; }
+
+sentence="$*"
+# Control characters void the whole report. The protocol takes at most 2048 bytes of text:
+# iconv -c drops a character that the cut splits.
+sentence=$(printf %s "$sentence" | tr -d '\000-\037\177' | head -c 2048 | iconv -c -f UTF-8 -t UTF-8)
+if [ -z "$sentence" ]; then
+  say "usage: rex-summary SENTENCE..."
+  exit 2
+fi
+
+[ -n "${REX_BLOCK:-}" ] && [ -z "${HC_TERMINAL_ID:-}" ] || exit 0
+
+tty=${REX_SUMMARY_TTY:-}
+if [ -z "$tty" ]; then
+  pid=${REX_SUMMARY_PID:-$PPID}
+  # ps shows "?" on Linux and "??" on macOS for a process with no terminal.
+  while [ -n "$pid" ] && [ "$pid" -gt 1 ]; do
+    t=$(ps -o tty= -p "$pid" 2>/dev/null | tr -d ' ') || t=""
+    case "$t" in
+      "" | "?" | "??") ;;
+      *) tty="/dev/$t"; break ;;
+    esac
+    pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ') || pid=""
+  done
+fi
+[ -n "$tty" ] || { say "no parent process has a terminal"; exit 1; }
+
+msg=$(printf %s "$sentence" | base64 | tr -d '\n')
+# One write, so the report does not mix with the output of the agent.
+printf '\033]7501;id=summary:state=idle:msg=%s\033\\' "$msg" >>"$tty"

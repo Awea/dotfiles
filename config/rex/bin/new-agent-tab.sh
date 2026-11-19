@@ -7,9 +7,9 @@
 set -euo pipefail
 dir=$1 session=$2
 here=$(dirname "$(readlink -f "$0")")
-agent_tabs="$here/../../../herdr-app/bin/agent-tabs.sh"
+folders="$here/folders.sh"
 
-folder=$(bash "$agent_tabs" main-folder "$dir" 2>/dev/null) || folder=$dir
+folder=$(bash "$folders" main-folder "$dir" 2>/dev/null) || folder=$dir
 
 printf '\e[1mNew claude tab\e[0m in %s   (ctrl+c closes)\n\n' "${folder/#$HOME/~}"
 read -r -e -p 'Prompt (Enter for a clean tab): ' prompt

@@ -1,0 +1,13 @@
+diff --git a/src/app/app.zig b/src/app/app.zig
+index 917dfee..a1a4d35 100644
+--- a/src/app/app.zig
++++ b/src/app/app.zig
+@@ -151,7 +151,7 @@ const css =
+     \\.pane-card.joined.focused .pane-title .title { color: @accent_color; }
+     \\.pane-title { min-height: 38px; padding: 0 6px 0 12px; }
+     \\.pane-tools > * { margin-left: 2px; }
+-    \\.pane-title .title { font-weight: 500; font-size: 0.95em; }
++    \\.pane-title .title { font-weight: 500; font-size: 1em; }
+     \\.pane-card:not(.focused) .pane-title .title { color: @renux_secondary; }
+     \\.pane-tools { opacity: 0; transition: opacity 120ms; }
+     \\.pane-card.focused .pane-tools, .pane-card:hover .pane-tools { opacity: 1; }

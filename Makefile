@@ -23,7 +23,7 @@ endif
 
 ## Create symbolic links for files/folders with a .symlink suffix
 .PHONY: links
-links: $(symlink_paths) $(sublime_links) antibody/zsh_plugins.sh $(HOME)/.config/direnv $(HOME)/.config/nix config/nix/os.conf $(HOME)/.config/zed/settings.json $(HOME)/.config/zed/keymap.json $(HOME)/.claude/CLAUDE.md $(HOME)/.claude/rules/elixir.md $(HOME)/.claude/settings.json $(HOME)/.claude/agents/reviewer.md $(HOME)/.claude/hooks/plugin-skill-overrides.sh $(HOME)/.config/ghostty/config.ghostty $(HOME)/.config/ghostty/os.ghostty $(HOME)/.claude/skills/handoff $(HOME)/.claude/skills/ste-writing $(HOME)/.claude/skills/writing-for-agents $(HOME)/.claude/skills/project-tool-check $(HOME)/.claude/skills/board-orchestrator
+links: $(symlink_paths) $(sublime_links) antibody/zsh_plugins.sh $(HOME)/.config/direnv $(HOME)/.config/nix config/nix/os.conf $(HOME)/.config/zed/settings.json $(HOME)/.config/zed/keymap.json $(HOME)/.config/fresh/config.json $(HOME)/.config/fresh/themes/herdr-graphite.json $(HOME)/.claude/CLAUDE.md $(HOME)/.claude/rules/elixir.md $(HOME)/.claude/settings.json $(HOME)/.claude/agents/reviewer.md $(HOME)/.claude/hooks/plugin-skill-overrides.sh $(HOME)/.config/ghostty/config.ghostty $(HOME)/.config/ghostty/os.ghostty $(HOME)/.claude/skills/handoff $(HOME)/.claude/skills/ste-writing $(HOME)/.claude/skills/writing-for-agents $(HOME)/.claude/skills/retro $(HOME)/.claude/skills/project-tool-check $(HOME)/.claude/skills/board-orchestrator
 
 # Create all symlink
 # Documentation: https://www.gnu.org/software/make/manual/html_node/Automatic-Variables.html#Automatic-Variables
@@ -57,6 +57,18 @@ $(HOME)/.config/zed/settings.json:
 $(HOME)/.config/zed/keymap.json:
 	@mkdir -p $(dir $@)
 	ln -s $(PWD)/zed/keymap.json $@
+
+# Fresh, the editor of the Renux file peek: link only config.json. Fresh keeps its
+# themes and plugins in the same folder. A setting changed in Fresh replaces the link
+# with a file: copy that file to config/fresh, remove it and run make links again.
+$(HOME)/.config/fresh/config.json:
+	@mkdir -p $(dir $@)
+	ln -s $(PWD)/config/fresh/config.json $@
+
+# The herdr-graphite theme of Fresh: the terminal colors of Renux, and its selection color
+$(HOME)/.config/fresh/themes/herdr-graphite.json:
+	@mkdir -p $(dir $@)
+	ln -s $(PWD)/config/fresh/themes/herdr-graphite.json $@
 
 $(HOME)/.claude/CLAUDE.md:
 	@mkdir -p $(dir $@)
@@ -99,6 +111,10 @@ $(HOME)/.claude/skills/ste-writing:
 $(HOME)/.claude/skills/writing-for-agents:
 	@mkdir -p $(dir $@)
 	ln -s $(PWD)/claude/skills/writing-for-agents $@
+
+$(HOME)/.claude/skills/retro:
+	@mkdir -p $(dir $@)
+	ln -s $(PWD)/claude/skills/retro $@
 
 $(HOME)/.claude/skills/project-tool-check:
 	@mkdir -p $(dir $@)
