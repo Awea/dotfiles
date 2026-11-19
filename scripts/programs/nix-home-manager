@@ -23,3 +23,13 @@ fi
 # Bootstrap + apply the configuration. `-b backup` renames any pre-existing
 # files that would otherwise block the switch (e.g. foo -> foo.backup).
 nix run home-manager/master -- switch -b backup --flake "${flake_dir}#${config}"
+
+# Linux: link the GPU drivers of home.nix to /run/opengl-driver, for Nix programs
+# such as Renux. It needs root, so it runs only when the link changes.
+if [[ "$(uname -s)" == Linux ]]; then
+  gpu_setup="$HOME/.nix-profile/bin/non-nixos-gpu-setup"
+  gpu_drivers=$(awk '$2 == "/run/opengl-driver" { print $NF }' "${gpu_setup:A:h:h}/lib/tmpfiles.d/non-nixos-gpu.conf")
+  if [[ "$(readlink /run/opengl-driver || true)" != "$gpu_drivers" ]]; then
+    sudo "${gpu_setup:A}"
+  fi
+fi
