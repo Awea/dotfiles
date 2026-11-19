@@ -63,3 +63,13 @@ rules="$BATS_TEST_DIRNAME/../CLAUDE.md"
   grep -qF '  and of the `b`/`B` steps, run' "$rules"
   grep -qF -- '- In Renux (`REX_BLOCK` set and `HC_TERMINAL_ID` not set), write the tab name of a job' "$rules"
 }
+
+@test "the Rex block has the rex-tab-name line" {
+  grep -qF '~/.bin/rex-tab-name <branch>' "$rules"
+  grep -qF 'A board worker skips it' "$rules"
+}
+
+@test "the Rex block has the rex-summary line" {
+  grep -qF '~/.bin/rex-summary "<sentence>"' "$rules"
+  grep -qF 'A subagent skips it' "$rules"
+}

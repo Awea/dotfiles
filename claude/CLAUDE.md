@@ -3,6 +3,9 @@
 - Use a subagent only for independent work that runs in parallel, or for a wide search
   that would put many file dumps into the main context. Do a task of a few tool calls
   inline. Each subagent starts at 20k to 30k tokens before it does any work.
+- Give each subagent one task.
+- When you start more than one subagent, wait until all of them finish. Do not write a
+  summary of the results before that.
 - Use the Explore agent for a search, not general-purpose: it starts at about half the
   tokens.
 - Subagents run on Sonnet by default (`CLAUDE_CODE_SUBAGENT_MODEL`). Pass `model: "opus"`
@@ -77,6 +80,7 @@
   let the command start, for all agents of all boards. Its lines in the terminal tell why
   it waits. A long wait is not an error: wait again. It runs one program: for env vars
   write `when-free env MIX_ENV=test mix test`, for a shell line `when-free bash -c '...'`.
+  A hook refuses a heavy `mix` task (test, compile, dialyzer) without `when-free`.
 - Put the task or branch name in a run name, for example `shop323-test`, never `fix` or
   `test`. On `name_taken` for a test or a build, pick a new name. Reuse a live terminal
   only for a shared resource.
@@ -112,6 +116,11 @@
   Its JSON tells the block, the session, `started`, `cwd` and `argv`: check `cwd` and
   `argv` when `started` is false. Read it with
   `rex capture -s <session> -b <block> --trim | tail -40`. Do not close a shared resource.
+- When you start work on a branch, run `~/.bin/rex-tab-name <branch>`: your Renux tab then
+  shows the task. A board worker skips it: its tab has the card name.
+- When you start a task, and when its goal changes, run `~/.bin/rex-summary "<sentence>"`
+  with one sentence of 8 words at most, for example "Patches the Renux sidebar status".
+  The Renux sidebar shows it under your name. A subagent skips it.
 
 # Live data
 

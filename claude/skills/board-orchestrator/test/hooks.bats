@@ -7,8 +7,9 @@ load helper
 # guard COMMAND [CWD [SESSION]]: run the hook on a Bash call.
 guard() {
   local json
-  json=$(jq -cn --arg c "$1" --arg d "${2:-${REPO:-$BATS_TEST_TMPDIR}}" --arg s "${3:-s1}" \
-    '{session_id: $s, cwd: $d, tool_name: "Bash", tool_input: {command: $c}}')
+  json=$(jq -cn --arg c "$1" --arg d "${2:-${REPO:-$BATS_TEST_TMPDIR}}" --arg s "${3:-s1}" --arg t "${TRANSCRIPT:-}" \
+    '{session_id: $s, cwd: $d, tool_name: "Bash", tool_input: {command: $c}}
+      + (if $t == "" then {} else {transcript_path: $t} end)')
   run bash "$SKILL_DIR/hooks/guard.sh" <<<"$json"
 }
 
@@ -41,6 +42,23 @@ push_feat() {
   [ "$(decision)" = ask ]
   git -C "$REPO" push -q -u origin HEAD 2>/dev/null
   git -C "$REPO" commit -q --allow-empty -m three
+}
+
+# agent_call EPOCH TYPE: add to TRANSCRIPT an Agent call of the subagent type TYPE at
+# the time EPOCH, as Claude Code writes it.
+agent_call() {
+  jq -cn --argjson e "$1" --arg t "$2" \
+    '{type: "assistant", timestamp: ($e | todate | sub("Z$"; ".123Z")),
+      message: {content: [{type: "tool_use", name: "Agent",
+        input: {subagent_type: $t, description: "Review the branch", prompt: "x"}}]}}' >>"$TRANSCRIPT"
+}
+
+# review_repo: branch_repo with commits at the time 1800000000 and an empty transcript.
+review_repo() {
+  export GIT_AUTHOR_DATE='@1800000000 +0000'
+  branch_repo
+  TRANSCRIPT="$BATS_TEST_TMPDIR/transcript.jsonl"
+  : >"$TRANSCRIPT"
 }
 
 compact() { run bash "$SKILL_DIR/hooks/compact.sh" <<<'{"source":"compact"}'; }
@@ -326,6 +344,105 @@ ssh_origin() {
   guard 'git push origin master'
   [ "$status" -eq 0 ]
   [ -z "$output" ]
+}
+
+@test "guard asks for a push when no reviewer started after the commits that it sends" {
+  as_worker
+  review_repo
+  push_feat
+  guard 'git push'
+  [ "$status" -eq 0 ]
+  [ "$(decision)" = ask ]
+  [[ "$(reason)" == *"no reviewer agent started"* ]]
+  agent_call 1800000100 general-purpose
+  guard 'git push'
+  [ "$(decision)" = ask ]
+}
+
+@test "guard asks for a push when the reviewer started before the commits that it sends" {
+  as_worker
+  review_repo
+  push_feat
+  agent_call 1799999000 reviewer
+  guard 'git push'
+  [ "$(decision)" = ask ]
+  [[ "$(reason)" == *"no reviewer agent started"* ]]
+}
+
+@test "guard allows a push when a reviewer started after the commits that it sends" {
+  as_worker
+  review_repo
+  push_feat
+  agent_call 1800000100 reviewer
+  guard 'git push'
+  [ "$(decision)" = allow ]
+}
+
+@test "guard adds the missing review to the reason of a branch question" {
+  as_worker
+  review_repo
+  guard 'git push -u origin HEAD'
+  [ "$(decision)" = ask ]
+  [[ "$(reason)" == *"first push of the branch feat"* ]]
+  [[ "$(reason)" == *"no reviewer agent started"* ]]
+}
+
+@test "guard asks for a push with no review in an allow repo" {
+  as_worker
+  review_repo
+  printf '{"permissions":{"allow":["Bash(git push*)"]}}\n' >"$REPO/.claude/settings.local.json"
+  guard 'git push -u origin feat'
+  [ "$status" -eq 0 ]
+  [ "$(decision)" = ask ]
+  [[ "$(reason)" == *"no reviewer agent started"* ]]
+  agent_call 1800000100 reviewer
+  guard 'git push -u origin feat'
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "guard does not check the review of a push with no new commit or no transcript" {
+  as_worker
+  review_repo
+  printf '{"permissions":{"allow":["Bash(git push*)"]}}\n' >"$REPO/.claude/settings.local.json"
+  git -C "$REPO" push -q -u origin feat 2>/dev/null
+  agent_call 1700000000 reviewer
+  guard 'git push'
+  [ -z "$output" ]
+  git -C "$REPO" commit -q --allow-empty -m four
+  unset TRANSCRIPT
+  guard 'git push'
+  [ -z "$output" ]
+}
+
+@test "guard checks the review from the oldest commit that the push sends" {
+  as_worker
+  review_repo
+  printf '{"permissions":{"allow":["Bash(git push*)"]}}\n' >"$REPO/.claude/settings.local.json"
+  GIT_AUTHOR_DATE='@1800000200 +0000' git -C "$REPO" commit -q --allow-empty -m three
+  agent_call 1800000100 reviewer
+  guard 'git push -u origin feat'
+  [ -z "$output" ]
+  : >"$TRANSCRIPT"
+  agent_call 1800000300 reviewer
+  git -C "$REPO" checkout -q master
+  guard 'git push origin feat'
+  [ -z "$output" ]
+  : >"$TRANSCRIPT"
+  guard 'git push origin feat'
+  [ "$(decision)" = ask ]
+  [[ "$(reason)" == *"no reviewer agent started"* ]]
+}
+
+@test "guard asks for a commit and its push in one call with no review after it" {
+  as_worker
+  review_repo
+  printf '{"permissions":{"allow":["Bash(git push*)"]}}\n' >"$REPO/.claude/settings.local.json"
+  git -C "$REPO" push -q -u origin feat 2>/dev/null
+  agent_call "$(($(date +%s) - 60))" reviewer
+  guard 'git commit --allow-empty -m x && git push'
+  [ "$(decision)" = ask ]
+  [[ "$(reason)" == *"the commit of this call"* ]]
 }
 
 @test "compact speaks only for an orchestrator" {

@@ -9,7 +9,7 @@ AGENT="$REPO/claude/agents/reviewer.md"
 frontmatter() { awk '/^---$/ { n++; next } n == 1' "$AGENT"; }
 
 @test "make links the reviewer agent" {
-  run make -n -C "$REPO" HOME="$BATS_TEST_TMPDIR" "$BATS_TEST_TMPDIR/.claude/agents/reviewer.md"
+  run make -n -C "$REPO" PWD="$REPO" HOME="$BATS_TEST_TMPDIR" "$BATS_TEST_TMPDIR/.claude/agents/reviewer.md"
   [ "$status" -eq 0 ]
   [[ "$output" == *"ln -s $REPO/claude/agents/reviewer.md $BATS_TEST_TMPDIR/.claude/agents/reviewer.md"* ]]
 }
@@ -48,4 +48,9 @@ frontmatter() { awk '/^---$/ { n++; next } n == 1' "$AGENT"; }
   grep -q 'Run the Fable review only when the user asks for it' "$rules"
   run grep -q 'in the same turn as the work' "$rules"
   [ "$status" -eq 1 ]
+}
+
+@test "the reviewer reads the coding standards of the repo" {
+  grep -q '(`CLAUDE.md`, `AGENTS.md`, `CODING_STANDARDS.md`)' "$AGENT"
+  grep -q '`CODING_STANDARDS.md` holds the rules that only a review can check: enforce each one' "$AGENT"
 }

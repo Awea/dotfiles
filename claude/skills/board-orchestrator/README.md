@@ -20,7 +20,7 @@ human. The agent reads `SKILL.md`, and `start.md`, `shorten.md` and `boards.md` 
 | `board-watch.lua` | The board watcher of a Renux session. |
 | `board.sh` | Lists the boards and the running orchestrators for the herdr-app mods board-open and board-stop. `claude-resume.sh` runs `board.sh restart` to start an orchestrator again in its shell after a reboot. |
 | `hooks/compact.sh` | After a compact, tells the orchestrator to read `SKILL.md` again. |
-| `hooks/guard.sh` | Blocks a `herdr-app do` call of a board worker, and a `rex` call that changes the window. A worker leaves the tabs as they are. |
+| `hooks/guard.sh` | Blocks a `herdr-app do` call of a board worker, and a `rex` call that changes the window. A worker leaves the tabs as they are. Asks for a worker push with no review. |
 | `test/*.bats` | The bats tests. `test/skill.bats` checks the skill text. |
 
 ## Workers
@@ -149,7 +149,10 @@ or `rex`) forces the backend of the caller. When it is not set, `HC_TERMINAL_ID`
   `permissions.deny`: `tea pr merge`, `tea pulls merge` and the Forgejo merge tool, and
   `gh pr merge` for an `origin` on `github.com`. For another `origin`, it writes the
   Forgejo rules and removes the `gh` rules that it wrote before. For `branch`,
-  `hooks/guard.sh` decides each worker push.
+  `hooks/guard.sh` decides each worker push. With each policy, the guard asks for a
+  worker push when no `reviewer` agent started in the session after the oldest commit
+  of the push. A squash with `git reset --soft` gives a new author date, and the push
+  asks again.
   The prompt of a task worker gives the policy of its card repo, and a push rule in the
   `CLAUDE.md` of that repo comes first.
 - `last ADDRESS`: the last assistant message of the worker (at most 3000 characters), else

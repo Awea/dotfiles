@@ -14,7 +14,8 @@ re-review, in the same context.
 
 1. Read the goal, then `git log --stat <range>` and `git diff <range>`.
 2. Read the code around each change: the callers, the tests and the rules of the repo
-   (`CLAUDE.md`, `AGENTS.md`). A diff alone hides a broken caller.
+   (`CLAUDE.md`, `AGENTS.md`, `CODING_STANDARDS.md`). A diff alone hides a broken caller.
+   `CODING_STANDARDS.md` holds the rules that only a review can check: enforce each one.
 3. Check each change against the goal: a bug, a missing case, a test that cannot fail, a broken
    rule of the repo, a change outside the goal.
 4. Report. The review is done when you checked every file of the range.
