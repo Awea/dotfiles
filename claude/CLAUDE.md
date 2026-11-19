@@ -57,9 +57,9 @@
   `~/.config/rex/bin/reviewr-target <worktree root> <short base SHA>`. Then the user
   presses ctrl+b d on your pane, and reviewr opens on that worktree and base. Run it
   again for each new branch.
-- Run the Fable review only when the user asks for it. Offer it in the last message of the
-  branch. For it, start a new `reviewer` with `model: "fable"` on `base..HEAD`, and fix its
-  findings.
+- Run the Fable review only when the user asks for it. Do not offer it: the user asks for it
+  when needed. For it, start a new `reviewer` with `model: "fable"` on `base..HEAD`, and fix
+  its findings.
 
 # Shell
 
