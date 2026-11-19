@@ -1,18 +1,28 @@
 #!/usr/bin/env bash
-# Tool of the board orchestrator on herdr-app: run a worker claude as an hc child of the
-# orchestrator, and the board commands that need no Herdr (report, run-add, note-add,
-# log, inbox-clear, policy, policy-set).
+# Tool of the board orchestrator: run a worker claude as a terminal of the orchestrator (an
+# hc child in herdr-app, a window in Renux), talk to the workers (remind, answer, tell),
+# and the board commands that need no terminal (report, run-add, note-add, log,
+# inbox-clear, send, queue, queue-clear, policy, policy-set).
 set -euo pipefail
 here="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 # shellcheck source=lib.sh source-path=SCRIPTDIR
 source "$here/lib.sh"
+# The board resources (board_of, board_file, board_notebooks): a worker gets the MCP
+# servers, the rules and the notebooks folder of the board of its folder.
+if [ -f "$here/../../../board-resources/lib.sh" ]; then
+  # shellcheck source=../../../board-resources/lib.sh source-path=SCRIPTDIR
+  source "$here/../../../board-resources/lib.sh"
+else
+  board_of() { return 1; }
+fi
 
-# The calls that push or write to a forge. policy-set adds each one of the forge.
-GH_PUSH_RULES=('Bash(git push*)' 'Bash(git -C * push*)' 'Bash(git -c * push*)' 'Bash(gh pr create*)'
-  'Bash(gh pr comment*)' 'Bash(gh pr edit*)' 'Bash(gh pr ready*)' 'Bash(gh pr close*)'
-  'Bash(gh issue create*)' 'Bash(gh issue comment*)' 'Bash(gh issue edit*)')
-FORGEJO_PUSH_RULES=('Bash(git push*)' 'Bash(git -C * push*)' 'Bash(git -c * push*)'
-  mcp__forgejo__create_pull_request mcp__forgejo__update_pull_request
+# The calls that push or write to a forge. policy-set adds each one of the forge. The
+# branch policy adds no git push rule: an ask rule wins over the allow of a hook, so
+# hooks/guard.sh decides each push. It asks for the forge calls.
+GIT_PUSH_RULES=('Bash(git push*)' 'Bash(git -C * push*)' 'Bash(git -c * push*)')
+GH_FORGE_RULES=('Bash(gh pr create*)' 'Bash(gh pr comment*)' 'Bash(gh pr edit*)' 'Bash(gh pr ready*)'
+  'Bash(gh pr close*)' 'Bash(gh issue create*)' 'Bash(gh issue comment*)' 'Bash(gh issue edit*)')
+FORGEJO_FORGE_RULES=(mcp__forgejo__create_pull_request mcp__forgejo__update_pull_request
   mcp__forgejo__create_issue mcp__forgejo__update_issue mcp__forgejo__create_issue_comment
   mcp__forgejo__edit_issue_comment mcp__forgejo__issue_state_change)
 # The calls that merge a PR. A worker never merges: policy-set adds each one of the
@@ -26,26 +36,62 @@ OLD_RULES=('Bash(gh pr merge*)' 'Bash(gh pr review*)' 'Bash(gh release*)' 'Bash(
   'Bash(gh gist*)' 'Bash(gh api -X*)' 'Bash(gh api --method*)')
 # The gh rules that policy-set wrote. For Forgejo, policy-set removes each one from
 # allow, ask and deny.
-GH_RULES=('Bash(gh pr create*)' 'Bash(gh pr comment*)' 'Bash(gh pr edit*)' 'Bash(gh pr ready*)'
-  'Bash(gh pr close*)' 'Bash(gh issue create*)' 'Bash(gh issue comment*)' 'Bash(gh issue edit*)'
-  "${OLD_RULES[@]}")
+GH_RULES=("${GH_FORGE_RULES[@]}" "${OLD_RULES[@]}")
 
 set_claude_args() {
   local mode=$1 cwd=$2 report=$3
   local off='{"enabledPlugins":{"obsidian-second-brain@obsidian-second-brain":false}}'
+  local settings board="" f
+  local -a mcp=()
   claude_args=()
-  # The worker reports with hc send to the orchestrator that runs this script.
-  local send="Bash(hc send ${HC_TERMINAL_ID:-} *)"
-  if [ "$mode" != auto ]; then
-    claude_args+=(--settings "$off" --allowedTools "$send")
-    return 0
+  # The worker reports to the orchestrator that runs this script: hc send in herdr-app,
+  # dispatch.sh tell in Renux.
+  local send; send=$(term_tell_rule)
+  board=$(board_of "$cwd") || board=""
+  if [ "$mode" = auto ]; then
+    # One --settings value: the readonly settings with the plugin switch merged in.
+    settings=$(jq -c --argjson off "$off" '. * $off' "$cwd/.claude/settings.readonly.json")
+    [ ! -f "$cwd/.mcp.json" ] || mcp+=("$cwd/.mcp.json")
+  else
+    settings=$off
   fi
-  # One --settings value: the readonly settings with the plugin switch merged in.
-  claude_args+=(--setting-sources user --settings "$(jq -c --argjson off "$off" '. * $off' "$cwd/.claude/settings.readonly.json")" --permission-mode dontAsk)
-  [ ! -f "$cwd/.mcp.json" ] || claude_args+=(--mcp-config "$cwd/.mcp.json")
+  if [ -n "$board" ]; then
+    if f=$(board_file "$board" settings.json); then
+      settings=$(merge_settings "$settings" "$(<"$f")")
+    fi
+    if f=$(board_file "$board" mcp.json); then mcp+=("$f"); fi
+  fi
+  if [ "$mode" = auto ]; then
+    claude_args+=(--setting-sources user --settings "$settings" --permission-mode dontAsk)
+  else
+    claude_args+=(--settings "$settings")
+  fi
+  [ ${#mcp[@]} -eq 0 ] || claude_args+=(--mcp-config "${mcp[@]}")
   # --allowedTools takes many values, so it must be the last option. A claude rule for an
   # absolute path starts with a double slash. Edit also covers Write.
-  claude_args+=(--allowedTools "Edit(/$report)" "$send")
+  if [ "$mode" = auto ]; then
+    claude_args+=(--allowedTools "Edit(/$report)" "$send")
+  else
+    claude_args+=(--allowedTools "$send")
+  fi
+}
+
+# merge_settings A B: the settings JSON A deep-merged with B, with the permissions.allow
+# and permissions.deny lists of both (not the list of B only).
+merge_settings() {
+  jq -cn --argjson a "$1" --argjson b "$2" '
+    ($a * $b)
+    | reduce ("allow", "deny") as $k (.;
+        (($a.permissions[$k] // []) + ($b.permissions[$k] // [])) as $l
+        | if ($l | length) > 0 then .permissions[$k] = $l else . end)'
+}
+
+# board_allow_rules CWD: the allow rules of the board of CWD, one for each line.
+board_allow_rules() {
+  local board f
+  board=$(board_of "$1") || return 0
+  f=$(board_file "$board" settings.json) || return 0
+  jq -r '.permissions.allow // [] | .[] | strings' "$f"
 }
 
 # Print the allow rules of CWD/.claude/settings.readonly.json, one for each line, with no
@@ -185,10 +231,11 @@ card_slug() {
   rmdir "$lock" 2>/dev/null || true
 }
 
-# unique_name SLUG: SLUG, or SLUG-2, SLUG-3 when a live hc terminal has that name.
+# unique_name SLUG: SLUG, or SLUG-2, SLUG-3 when a live terminal (a window label in Renux)
+# has that name.
 unique_name() {
   local names n=2 name=$1
-  names=$("${HC[@]}" ls --json 2>/dev/null | jq -r '.terminals[]?.name // empty' 2>/dev/null) || names=""
+  names=$(term_names) || names=""
   while grep -qxF -- "$name" <<<"$names"; do
     name="$1-$n"
     n=$((n + 1))
@@ -196,16 +243,22 @@ unique_name() {
   printf '%s\n' "$name"
 }
 
-# caller_board: the board of the orchestrator that runs this script, from its hc labels.
+# caller_board: the board of the orchestrator that runs this script, from its labels (the
+# record of the block in Renux).
 caller_board() {
-  local labels
-  if [ -z "${HC_TERMINAL_ID:-}" ]; then
-    printf 'dispatch: HC_TERMINAL_ID is empty. Run this in the board orchestrator, in herdr-app.\n' >&2
+  local labels self
+  self=$(term_self)
+  if [ -z "$self" ]; then
+    if [ "$(term_here)" = rex ]; then
+      printf 'dispatch: REX_BLOCK is empty. Run this in the board orchestrator.\n' >&2
+    else
+      printf 'dispatch: HC_TERMINAL_ID is empty. Run this in the board orchestrator, in herdr-app.\n' >&2
+    fi
     return 2
   fi
-  if ! labels=$(hc_labels "$HC_TERMINAL_ID") ||
+  if ! labels=$(hc_labels "$self") ||
     [ "$(jq -r '.["board.role"] // empty' <<<"$labels")" != orchestrator ]; then
-    printf 'dispatch: %s is not a board orchestrator.\n' "$HC_TERMINAL_ID" >&2
+    printf 'dispatch: %s is not a board orchestrator.\n' "$self" >&2
     return 2
   fi
   jq -r '.board' <<<"$labels"
@@ -243,8 +296,10 @@ other_repos() {
 footer() {
   local mode=$1 cwd=$2 report=$3 slug=$4 vault text others=""
   shift 4
-  text="When you finish, write your report to $report. Do not merge, deploy or change production. Write the report in one Write call, as your last step. Do not edit the vault. When the user asks for a change to the board or to a task note, write it in the report under a heading ## Vault changes, one change for each item. For a new task, write only its title, its project, its priority and one context line: the orchestrator writes the card in the board format, so do not read the vault for it. For a change to existing text, give the note path and the exact old and new text only in the report. Do not show them in the conversation: write there only that the report has vault changes. When the user answers you or asks for more work after your report, write the full report again when you finish. The new report replaces the old one. After the first line, write a section ## Result of at most 10 lines: the result, and the PR, commit or issue links. Do not change the herdr-app window."
-  text="$text After you write the report, run: hc send $HC_TERMINAL_ID \"report $slug $report\""
+  local win="herdr-app"
+  [ "$(term_here)" != rex ] || win="Renux"
+  text="When you finish, write your report to $report. Do not merge, deploy or change production. Write the report in one Write call, as your last step. Do not edit the vault. When the user asks for a change to the board or to a task note, write it in the report under a heading ## Vault changes, one change for each item. For a new task, write only its title, its project, its priority and one context line: the orchestrator writes the card in the board format, so do not read the vault for it. For a change to existing text, give the note path and the exact old and new text only in the report. Do not show them in the conversation: write there only that the report has vault changes. When the user answers you or asks for more work after your report, write the full report again when you finish. The new report replaces the old one. After the first line, write a section ## Result of at most 10 lines: the result, and the PR, commit or issue links. Do not change the $win window."
+  text="$text After you write the report, run: $(term_tell_cmd "report $slug $report")"
   # An auto check can use only its listed tools, so only a task worker gets this.
   [ "$mode" != task ] ||
     text="$text You can start subagents and other claude terminals, for example for an independent review of your work before you push."
@@ -252,6 +307,7 @@ footer() {
   # job lets them find it, and hc refuses a second live terminal with that name. An hc child
   # ends with its parent: --outlive-parent keeps the job when the orchestrator closes the
   # worker that started it.
+  # hc stays installed in Renux, so a Renux worker gets the same rule.
   if [ "$mode" = task ]; then
     text="$text Run a long job (a wait for a deploy, a build) in a named hc terminal, so that other workers can use the same job. Name the job after what it does, not after your card, for example deploy-web-4fb7f80. First run: hc get <job>. When it shows the job, use it and do not start it again. Else start it: hc run --bg --no-notify --outlive-parent --name <job> --cwd <dir> -- <command>. On name_taken, another worker started it first: use that job. To use a job, run hc wait <job> --timeout 3600 as a background Bash call, end your turn with \"I wait for <job>.\", then read exit_code in its JSON and the end of the job with hc read <job> | tail -40. On reason timeout or message, wait again. Do not hc rm or hc kill a shared job: another worker can still use it."
   fi
@@ -263,16 +319,23 @@ footer() {
   # push to another repo with them. So the prompt keeps the worker in its own repo, and in
   # the other repos of its board with the push policy of each.
   [ "$mode" != task ] || others=$(other_repos "$board" "$cwd" "$slug")
+  if [ "$mode" = task ]; then
+    text="$text The push policy of your card repo is $( (push_policy "$cwd") 2>/dev/null || echo invalid). Each push policy: allow, push and open a PR; ask, ask the user before each push and each PR; branch, run each push as one git push command with no cd, pipe or other command, for example git push -u origin HEAD: Claude asks the user for the first push of a branch, and later pushes to that branch have no question; a push to the default branch, a PR and a PR body edit always ask; deny, missing or invalid, do not push and give the branch in the report. A push rule in the CLAUDE.md of the repo comes first."
+  fi
   if [ -z "$others" ]; then
     text="$text Change only the repo of your card: $cwd and its git worktrees. When the work needs another repo, do not change that repo: stop that work. Write it in the report as a new task under ## Vault changes, with the repo, the work and the reason on its context line. The orchestrator starts a worker in that repo."
   else
     text="$text Change only the repo of your card: $cwd and its git worktrees, and the other repos of your board below. When the work needs a repo that is not in that list, do not change that repo: stop that work. Write it in the report as a new task under ## Vault changes, with the repo, the work and the reason on its context line. The orchestrator starts a worker in that repo."
-    text="$text The other repos of your board: ${others%%$'\t'*}. When the work of the card needs one of them, change it too, in a git worktree on your branch: run ${others#*$'\t'}, or use that worktree when it exists. Never change the main checkout of that repo. Follow the push policy of that repo, not the policy of your card: allow, push and open a PR; ask, ask the user before each push and each PR; deny, missing or invalid, do not push and give the branch in the report. Give the PR or commit links of each repo in the report."
+    text="$text The other repos of your board: ${others%%$'\t'*}. When the work of the card needs one of them, change it too, in a git worktree on your branch: run ${others#*$'\t'}, or use that worktree when it exists. Never change the main checkout of that repo. Follow the push policy of that repo, not the policy of your card. Give the PR or commit links of each repo in the report."
+  fi
+  local res_board notebooks
+  if res_board=$(board_of "$cwd") && notebooks=$(board_notebooks "$res_board"); then
+    text="$text You can also write and commit a notebook in $notebooks, the notebooks folder of this board. Use board-ro list to see the live data of this board."
   fi
   if [ "$mode" = task ]; then
     text="$text Start the report with one line: RESULT: DONE when the work of the card is complete, or RESULT: WAITS FOR USER when the user must act (a PR to review or merge, a question, a decision)."
     # The orchestrator keeps a done task worker open: the user closes it by a word to it.
-    text="$text When the user tells you to close, run: hc send $HC_TERMINAL_ID \"close $slug\" and end your turn. The orchestrator then closes you."
+    text="$text When the user tells you to close, run: $(term_tell_cmd "close $slug") and end your turn. The orchestrator then closes you."
   fi
   if [ "$mode" = auto ]; then
     text="$text Start the report with one line: STATUS: OK, STATUS: STOP or STATUS: REFUSED. Write STATUS: REFUSED when claude refused a call that the check needs, and add one line REFUSED: <command> for each refused call. Give each value with OK or STOP. Do not trip a kill switch."
@@ -285,23 +348,23 @@ footer() {
 }
 
 # run_worker MODE BOARD CWD NAME SESSION REPORT PROMPT [CLAUDE_FLAGS...]: start the worker
-# claude as an hc child of the caller. Prints the address.
+# claude as a terminal of the caller (an hc child, a window in Renux). Prints the address.
 run_worker() {
-  local mode=$1 board=$2 cwd=$3 name=$4 session=$5 report=$6 prompt=$7 out envdir
+  local mode=$1 board=$2 cwd=$3 name=$4 session=$5 report=$6 prompt=$7 envdir
   local -a env_cmd=()
   shift 7
   set_claude_args "$mode" "$cwd" "$report"
   # A project with an .envrc (a nix devshell) needs its tools on PATH (bao for the MCP
   # tokens): start the worker claude in that environment.
+  # set_claude_args gives the board flags: the claude wrapper must not add them again.
+  env_cmd=(env BOARD_RESOURCES_OFF=1)
   envdir=$(main_dir "$cwd")
   if [ -f "$envdir/.envrc" ] && command -v direnv >/dev/null 2>&1; then
-    env_cmd=(direnv exec "$envdir")
+    env_cmd+=(direnv exec "$envdir")
   fi
   # --allowedTools takes many values: -- ends the options before the prompt.
-  out=$("${HC[@]}" run --json --bg --name "$(unique_name "$name")" --cwd "$cwd" \
-    --label "board=$board" --label board.role=worker --label "board.session=$session" \
-    -- ${env_cmd[@]+"${env_cmd[@]}"} claude "$@" -n "$name" ${claude_args[@]+"${claude_args[@]}"} -- "$prompt") || return 1
-  jq -r '.address // empty' <<<"$out"
+  term_run_worker "$cwd" "$(unique_name "$name")" "$board" "$session" \
+    -- ${env_cmd[@]+"${env_cmd[@]}"} claude "$@" -n "$name" ${claude_args[@]+"${claude_args[@]}"} -- "$prompt"
 }
 
 # worker_line ADDR: the record line of the worker ADDR, if any.
@@ -311,19 +374,48 @@ worker_line() {
   [ ! -f "$f" ] || awk -F '\t' -v a="$1" '$1 == a { line = $0 } END { if (line != "") print line }' "$f"
 }
 
-# live_session LINE: exit 0 when the worker of the record LINE runs: its address is a
-# live worker of its board with the same session.
-live_session() {
-  local addr board session labels
+# worker_terminal LINE CHECK: exit 0 when the address of the record LINE is a live worker
+# terminal of its board with the same session, and the jq CHECK is true for that terminal.
+# The jq function lost gives a terminal of a worker that claude no longer runs in. A worker
+# terminal that the user opened in a tab is a kept terminal: after a restart or a reboot,
+# hc puts a shell in the place of claude, with the same labels. Its argv is then that
+# shell, not the env, direnv or claude command of run_worker. The worker runs again when
+# claude runs in front of that shell.
+worker_terminal() {
+  local addr board session json
   addr=$(cut -f1 <<<"$1") board=$(cut -f3 <<<"$1") session=$(cut -f5 <<<"$1")
-  labels=$(hc_labels "$addr") || return 1
-  jq -e --arg b "$board" --arg s "$session" \
-    '.board == $b and .["board.role"] == "worker" and .["board.session"] == $s' <<<"$labels" >/dev/null 2>&1
+  json=$(term_get "$addr") || return 1
+  jq -e --arg b "$board" --arg s "$session" "
+    def lost: ((.argv // [])[0] // \"\" | split(\"/\") | last // \"\") as \$p
+      | \$p != \"\" and (\$p | IN(\"env\", \"direnv\", \"claude\") | not)
+        and (.foreground.name // \"\") != \"claude\";
+    .state == \"live\" and .labels.board == \$b and .labels[\"board.role\"] == \"worker\"
+      and .labels[\"board.session\"] == \$s and ($2)" <<<"$json" >/dev/null 2>&1
+}
+
+# live_session LINE: exit 0 when the worker of the record LINE runs: its address is a
+# live worker of its board with the same session, and claude runs in it.
+live_session() { worker_terminal "$1" 'lost | not'; }
+
+# drop_lost LINE: close the terminal of the record LINE when a restart put a shell in the
+# place of its claude, and that shell is idle: a program that the user runs in it stays.
+# Park it first, as close does: no pane, no keep, no empty tab.
+drop_lost() {
+  local addr
+  worker_terminal "$1" 'lost and .foreground.pid != null and .foreground.pid == .pid' || return 0
+  addr=$(cut -f1 <<<"$1")
+  term_park "$addr" || true
+  # In Renux the watcher hears this exit: mark the record, as close does.
+  if [ "$(term_of "$addr")" = rex ]; then
+    rex_record_set "$addr" '{"notice":"exited"}' || true
+  fi
+  term_kill "$addr" || true
+  term_rm "$addr" || true
 }
 
 # agent_state ADDR: the agent status of ADDR (working, blocked, idle, done), or empty.
 agent_state() {
-  "${HC[@]}" get "$1" --json 2>/dev/null | jq -r '.status.state // empty' 2>/dev/null || true
+  term_get "$1" | jq -r '.status.state // empty' 2>/dev/null || true
 }
 
 # rewrite_workers AWK_PROGRAM [VAR=VALUE...]: rewrite the record through awk.
@@ -340,6 +432,17 @@ rewrite_workers() {
 # file_mtime FILE: the modification time in seconds. GNU stat takes -c, macOS stat -f.
 file_mtime() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1"; }
 
+# worker_addr ADDR: the address that the workers file keeps for ADDR. In Renux the notices
+# give the short ID: that is the full block ID.
+worker_addr() {
+  local full
+  if [ "$(term_of "$1")" = rex ] && full=$(rex_full "$1"); then
+    printf '%s\n' "$full"
+  else
+    printf '%s\n' "$1"
+  fi
+}
+
 # need_worker ADDR: exit 1 with "no agent" when ADDR is not a live worker.
 need_worker() {
   local labels
@@ -355,8 +458,8 @@ case "${1:-}" in
     ;;
   policy-set)
     cwd="${2:-}" kind="${3:-}"
-    if [ "$kind" != allow ] && [ "$kind" != ask ]; then
-      printf 'usage: dispatch.sh policy-set CWD allow|ask\n' >&2
+    if [ "$kind" != allow ] && [ "$kind" != ask ] && [ "$kind" != branch ]; then
+      printf 'usage: dispatch.sh policy-set CWD allow|ask|branch\n' >&2
       exit 2
     fi
     if [ ! -d "$cwd" ]; then
@@ -369,23 +472,33 @@ case "${1:-}" in
     host=${host#*@}
     host=${host%%[:/]*}
     if [ "$host" = github.com ]; then
-      push_rules=("${GH_PUSH_RULES[@]}")
+      forge_rules=("${GH_FORGE_RULES[@]}")
       merge_rules=("${GH_MERGE_RULES[@]}")
       gh_rules=()
     else
-      push_rules=("${FORGEJO_PUSH_RULES[@]}")
+      forge_rules=("${FORGEJO_FORGE_RULES[@]}")
       merge_rules=("${FORGEJO_MERGE_RULES[@]}")
       gh_rules=("${GH_RULES[@]}")
+    fi
+    # branch: no git push rule in allow or ask, the forge rules in ask, and the mark.
+    if [ "$kind" = branch ]; then
+      push_rules=("${forge_rules[@]}")
+      drop_rules=("${OLD_RULES[@]}" "${GIT_PUSH_RULES[@]}")
+      list=ask
+    else
+      push_rules=("${GIT_PUSH_RULES[@]}" "${forge_rules[@]}")
+      drop_rules=("${OLD_RULES[@]}")
+      list=$kind
     fi
     file="$cwd/.claude/settings.local.json"
     current=$(read_settings "$file") || exit 2
     mkdir -p "$cwd/.claude"
     tmp=$(mktemp "$file.XXXXXX")
     trap 'rm -f "$tmp"' EXIT
-    if ! jq --arg k "$kind" --argjson push "$(jq -n '$ARGS.positional' --args "${push_rules[@]}")" \
+    if ! jq --arg k "$list" --arg mark "$kind" --argjson push "$(jq -n '$ARGS.positional' --args "${push_rules[@]}")" \
       --argjson merge "$(jq -n '$ARGS.positional' --args "${merge_rules[@]}")" \
-      --argjson drop "$(jq -n '$ARGS.positional' --args "${OLD_RULES[@]}")" \
-      --argjson gh "$(jq -n '$ARGS.positional' --args "${gh_rules[@]}")" '
+      --argjson drop "$(jq -n '$ARGS.positional' --args "${drop_rules[@]}")" \
+      --argjson gh "$(jq -n '$ARGS.positional' --args ${gh_rules[@]+"${gh_rules[@]}"})" '
       def add($k; $r): .permissions[$k] = ((.permissions[$k] // []) as $old | $old + [$r[] | select(. as $x | $old | index([$x]) | not)]);
       reduce ("allow", "ask") as $l (.;
         if .permissions[$l] == null then . else .permissions[$l] |= map(select(. as $x | $drop | index([$x]) | not)) end)
@@ -394,7 +507,11 @@ case "${1:-}" in
       # ask wins over allow: remove the push rules from the other list first.
       | (if $k == "allow" then "ask" else "allow" end) as $o
       | (if .permissions[$o] == null then . else .permissions[$o] |= map(select(. as $x | $push | index([$x]) | not)) end)
-      | add($k; $push) | add("deny"; $merge)' <<<"$current" >"$tmp" || [ ! -s "$tmp" ]; then
+      | add($k; $push) | add("deny"; $merge)
+      # The branch mark: set for branch, else removed, with an env that it leaves empty.
+      | if $mark == "branch" then .env = ((.env // {}) + {BOARD_PUSH_POLICY: "branch"})
+        elif (.env | type) == "object" then del(.env.BOARD_PUSH_POLICY) | if .env == {} then del(.env) else . end
+        else . end' <<<"$current" >"$tmp" || [ ! -s "$tmp" ]; then
       printf 'dispatch: could not write %s.\n' "$file" >&2
       exit 2
     fi
@@ -438,6 +555,23 @@ case "${1:-}" in
         else printf "%s", head
         printf "full report: %s (%d lines)\n", path, NR
       }' "$file"
+    # The last line tells the orchestrator what to say to the user. A done report gives
+    # one done line, once for each report file: a worker writes its report again after
+    # more work, and the user reads that work in the worker. The marker is in the state
+    # folder, never beside a path of a worker message. A failed marker write still gives
+    # the line.
+    first=$(head -n 1 "$file" | tr -d '\r')
+    case "$first" in
+      'RESULT: DONE'* | 'STATUS: OK'*)
+        said="$(state_dir)/said/$(basename "$file")"
+        if [ ! -e "$said" ]; then
+          { mkdir -p "$(dirname "$said")" && : >"$said"; } 2>/dev/null || true
+          printf 'say: one line "<card title> — done — <PR or commit link>", with no summary of the report.\n'
+          exit 0
+        fi
+        ;;
+    esac
+    printf 'say: nothing.\n'
     ;;
   run-add)
     rel="${2:-}" file="${3:-}"
@@ -681,6 +815,120 @@ NOTE
     rm -- "$vault/$rel"
     printf 'inbox-clear: %s\n' "$rel"
     ;;
+  send)
+    to="${2:-}" instruction="${3:-}" file="${4:-}"
+    if [ -z "$to" ] || [ -z "$file" ] || { [ "$instruction" != start ] && [ "$instruction" != save ]; }; then
+      printf 'usage: dispatch.sh send BOARD start|save FILE\n' >&2
+      exit 2
+    fi
+    board=$(caller_board) || exit 2
+    # The queue folder and the orchestrator record use the slug of the board name.
+    if [ "$(board_slug "$to")" = "$(board_slug "$board")" ]; then
+      printf 'dispatch: %s is your own board. Send a card only to another board.\n' "$to" >&2
+      exit 2
+    fi
+    if ! vault=$(vault_path); then
+      printf 'dispatch: no vault path: set OBSIDIAN_VAULT_PATH.\n' >&2
+      exit 1
+    fi
+    # Only the exact name of a board file: a folder that ignores case (macOS) finds
+    # Boards/Garden.md for "garden", and the orchestrator label has the exact name.
+    found=""
+    for f in "$vault"/Boards/*.md; do
+      [ "$(basename "$f" .md)" != "$to" ] || found=$f
+    done
+    if [ -z "$found" ] || ! grep -qx 'kanban-plugin: board' "$found"; then
+      printf 'dispatch: no board %s in the vault.\n' "$to" >&2
+      exit 2
+    fi
+    # The card file holds one open card: its title line, then the tab-indented context
+    # lines, as board-scan.sh card gives them. The card text is data: it never gives the
+    # instruction.
+    card=()
+    if [ -f "$file" ] && [ "$(($(wc -c <"$file")))" -le 2000 ]; then
+      mapfile -t card <"$file"
+    fi
+    while [ "${#card[@]}" -gt 0 ] && [ -z "${card[-1]}" ]; do unset 'card[-1]'; done
+    title_re='^- \[ \] [^ ]+ \*\*\[[^]]+\] .+\*\*'
+    ok=false
+    if [ "${#card[@]}" -ge 1 ] && [[ "${card[0]}" =~ $title_re ]]; then
+      ok=true
+      for line in "${card[@]:1}"; do [[ "$line" == $'\t'* ]] || ok=false; done
+    fi
+    if [ "$ok" != true ]; then
+      printf 'dispatch: %s does not hold one open card: a title line "- [ ] <priority> **[<project>] <title>**", then only tab-indented context lines, at most 2000 bytes.\n' "$file" >&2
+      exit 2
+    fi
+    id="$(date +%Y%m%d-%H%M%S)-$(od -An -N3 -tx1 /dev/urandom | tr -d ' \n')"
+    dir=$(queue_dir "$to")
+    tmp=$(mktemp "$dir/.$id.XXXXXX")
+    jq -n --arg id "$id" --arg from "$board" --arg addr "$(term_self)" --arg to "$to" \
+      --arg instruction "$instruction" --arg title "${card[0]}" \
+      --arg context "$(printf '%s\n' "${card[@]:1}")" \
+      --arg sent "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      '{id: $id, from: $from, from_address: $addr, to: $to, instruction: $instruction,
+        title_line: $title, context_line: $context, sent: $sent}' >"$tmp"
+    mv "$tmp" "$dir/$id.json"
+    # The card stays in the queue when the orchestrator of BOARD does not run or does not
+    # get the message: it reads the queue at its next start.
+    if ! addr=$(orchestrator_of "$to"); then
+      printf 'send: %s queued, no orchestrator of %s runs\n' "$id" "$to"
+    elif term_message "$addr" "card $id"; then
+      printf 'send: %s sent to %s\n' "$id" "$addr"
+    else
+      printf 'send: %s queued, %s send to %s failed\n' "$id" "$(term_of "$addr")" "$addr"
+    fi
+    ;;
+  queue|queue-clear)
+    cmd=$1 id="${2:-}" from="${3:-}"
+    board=$(caller_board) || exit 2
+    dir=$(queue_dir "$board")
+    # print_card FILE LIVE: one JSON line of the queue file FILE, as send checks it: one
+    # open card. Exit 1 for another file. A wrong instruction value is a save: only
+    # "start" starts a worker.
+    print_card() {
+      jq -ce --arg id "$(basename "$1" .json)" --argjson live "$2" '
+        select((.title_line | type == "string" and (contains("\n") | not) and
+            test("^- \\[ \\] [^ ]+ \\*\\*\\[[^\\]]+\\] .+\\*\\*")) and
+          (.context_line | type == "string" and
+            (. == "" or (split("\n") | all(startswith("\t"))))))
+        | {id: $id, from, instruction: (if .instruction == "start" then "start" else "save" end),
+          title_line, context_line, sent, live: $live}' "$1" 2>/dev/null
+    }
+    if [ "$cmd" = queue ] && [ $# -lt 2 ]; then
+      for f in "$dir"/*.json; do
+        [ -f "$f" ] || continue
+        print_card "$f" false || printf 'dispatch: the queue file %s is not valid JSON or holds no open card.\n' "$f" >&2
+      done
+      exit 0
+    fi
+    if ! [[ "$id" =~ ^[0-9]{8}-[0-9]{6}-[0-9a-f]{6}$ ]]; then
+      printf 'usage: dispatch.sh queue [ID FROM] | queue-clear ID\n' >&2
+      exit 2
+    fi
+    f="$dir/$id.json"
+    if [ ! -f "$f" ]; then
+      printf 'dispatch: the card %s is gone from the queue of %s.\n' "$id" "$board" >&2
+      exit 1
+    fi
+    if [ "$cmd" = queue-clear ]; then
+      rm -- "$f"
+      printf 'queue-clear: %s\n' "$id"
+      exit 0
+    fi
+    # live: the message came from the live orchestrator that sent the card.
+    live=false
+    sender=$(jq -r '.from // empty' "$f" 2>/dev/null) || sender=""
+    if [ -n "$from" ] && [ -n "$sender" ] &&
+      [ "$from" = "$(jq -r '.from_address // empty' "$f" 2>/dev/null)" ] &&
+      has_labels "$from" "$sender" orchestrator; then
+      live=true
+    fi
+    if ! print_card "$f" "$live"; then
+      printf 'dispatch: the queue file %s is not valid JSON or holds no open card.\n' "$f" >&2
+      exit 1
+    fi
+    ;;
   start)
     mode="${2:-}" cwd="${3:-}" name="${4:-}" prompt_file="${5:-}"
     if [ "$mode" != task ] && [ "$mode" != auto ] || [ -z "$cwd" ] || [ -z "$name" ] || [ ! -f "$prompt_file" ]; then
@@ -703,7 +951,10 @@ NOTE
       while IFS= read -r rule; do
         rules+=("$rule")
       done <<<"$list"
-      rules+=("Bash(hc send $HC_TERMINAL_ID *)")
+      rules+=("$(term_tell_rule)")
+      while IFS= read -r rule; do
+        [ -z "$rule" ] || rules+=("$rule")
+      done < <(board_allow_rules "$cwd")
     fi
     # A task worker works in its own worktree, on the branch of its card. An auto check
     # reads only: the repo.
@@ -722,7 +973,7 @@ NOTE
       prompt="$prompt Your git worktree is $work, on the branch $(git -C "$work" rev-parse --abbrev-ref HEAD). Do the work there. Rename the branch with git branch -m when the repo wants another name."
     fi
     if ! addr=$(run_worker "$mode" "$board" "$work" "$slug" "$session" "$report" "$prompt" --session-id "$session") || [ -z "$addr" ]; then
-      printf 'dispatch: hc did not start the worker.\n' >&2
+      printf 'dispatch: %s did not start the worker.\n' "$(term_here)" >&2
       exit 1
     fi
     printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$addr" "$mode" "$board" "$report" "$session" "$work" "$slug" >>"$(workers_file)"
@@ -764,6 +1015,8 @@ NOTE
     while IFS= read -r line; do
       [ "$(cut -f3 <<<"$line")" = "$board" ] || continue
       ! live_session "$line" || continue
+      # The record keeps the session: the shell of a lost claude only holds a tab open.
+      drop_lost "$line"
       IFS=$'\t' read -r _ mode _ report session cwd name <<<"$line"
       first="" exists=false
       if [ -f "$report" ]; then
@@ -799,10 +1052,11 @@ NOTE
     if [ "$mode" = auto ]; then
       readonly_rules "$cwd" >/dev/null || exit 2
     fi
+    drop_lost "$line"
     # The orchestrator that started the worker is gone: give the address of this one.
-    prompt="The stop of the board orchestrator cut your turn. Continue the task. If you waited for an answer from the user, ask again."$'\n\n'"The orchestrator has a new address. After you write the report, run: hc send $HC_TERMINAL_ID \"report $name $report\""
+    prompt="The stop of the board orchestrator cut your turn. Continue the task. If you waited for an answer from the user, ask again."$'\n\n'"The orchestrator has a new address. After you write the report, run: $(term_tell_cmd "report $name $report")"
     if ! addr=$(run_worker "$mode" "$board" "$cwd" "$name" "$session" "$report" "$prompt" --resume "$session") || [ -z "$addr" ]; then
-      printf 'dispatch: hc did not start the worker.\n' >&2
+      printf 'dispatch: %s did not start the worker.\n' "$(term_here)" >&2
       exit 1
     fi
     # shellcheck disable=SC2016 # An awk program.
@@ -817,6 +1071,7 @@ NOTE
     while IFS= read -r line; do
       if [ "$(cut -f3 <<<"$line")" = "$board" ] && { [ -z "$only" ] || [ "$(cut -f5 <<<"$line")" = "$only" ]; } &&
         ! live_session "$line"; then
+        drop_lost "$line"
         continue
       fi
       printf '%s\n' "$line"
@@ -824,9 +1079,29 @@ NOTE
     mv "$tmp" "$f"
     ;;
   close)
-    addr="${2:?usage: dispatch.sh close ADDRESS [wait]}"
-    if ! json=$("${HC[@]}" get "$addr" --json 2>/dev/null) ||
-      [ "$(jq -r '.labels["board.role"] // empty' <<<"$json")" != worker ]; then
+    addr=$(worker_addr "${2:?usage: dispatch.sh close ADDRESS [wait]}")
+    if ! json=$(term_get "$addr"); then
+      # A Renux worker window closes when its command ends: nothing to wait for. The
+      # workers line has the session.
+      line=$(worker_line "$addr")
+      if [ "$(term_of "$addr")" != rex ] || [ -z "$line" ]; then
+        printf 'dispatch: no agent in %s.\n' "$addr" >&2
+        exit 1
+      fi
+      # Take the block as gone only when Rex answers and its session does not list it. A
+      # failed call must not remove the record of a worker that still runs.
+      full=$(rex_full "$addr") || full=$addr
+      rex_session=$(jq -r '.rex_session // empty' "$(_rex_rec_file "$full")" 2>/dev/null) || rex_session=""
+      if [ -z "$rex_session" ] ||
+        ! blocks=$(_rex_api session.list_blocks "$(jq -cn --arg s "$rex_session" '{session_id: $s}')") ||
+        ! jq -e '.blocks | type == "array"' <<<"$blocks" >/dev/null 2>&1 ||
+        jq -e --arg b "$full" 'any(.blocks[]; .block_id == $b)' <<<"$blocks" >/dev/null 2>&1; then
+        printf 'dispatch: rex does not say that %s is gone. Close nothing.\n' "$addr" >&2
+        exit 1
+      fi
+      json=$(jq -cn --arg s "$(cut -f5 <<<"$line")" '{state: "gone", labels: {"board.role": "worker", "board.session": $s}}')
+    fi
+    if [ "$(jq -r '.labels["board.role"] // empty' <<<"$json")" != worker ]; then
       printf 'dispatch: no agent in %s.\n' "$addr" >&2
       exit 1
     fi
@@ -837,7 +1112,7 @@ NOTE
       # then. Without "wait", give up after the 90 s check-in or 20 messages.
       tries=20
       while :; do
-        reason=$("${HC[@]}" wait "$addr" --timeout 90 2>/dev/null | jq -r '.reason // empty' 2>/dev/null) || reason=""
+        reason=$(term_wait "$addr" "${BOARD_CLOSE_WAIT:-90}") || reason=""
         [ "$(agent_state "$addr")" = working ] || break
         if [ "${3:-}" != wait ]; then
           if [ "$reason" != message ] || [ "$tries" -le 0 ]; then break; fi
@@ -851,20 +1126,34 @@ NOTE
       # The user gave the worker a pane: herdr-app keeps that terminal and puts a shell
       # in its place when claude ends. Park it first: no pane, no keep, no shell tab.
       if [ -n "$(jq -r '.labels["herdr.tab"] // empty' <<<"$json")" ]; then
-        "${HAPP[@]}" "do" terminal.park --terminal "$addr" >/dev/null 2>&1 || true
+        term_park "$addr" || true
       fi
-      "${HC[@]}" kill "$addr" >/dev/null 2>&1 || true
+      # In Renux the watcher hears the exit of the claude that we kill. Mark the record, so
+      # that the notice does not tell the orchestrator about its own close.
+      if [ "$(term_of "$addr")" = rex ] && [ -f "$(_rex_rec_file "$(rex_full "$addr")")" ]; then
+        rex_record_set "$addr" '{"notice":"exited"}' || true
+      fi
+      term_kill "$addr" || true
     fi
-    "${HC[@]}" rm "$addr" >/dev/null 2>&1 || true
+    term_rm "$addr" || true
     # shellcheck disable=SC2016 # An awk program.
     rewrite_workers '$1 != a { print }' -v a="$addr"
     # The card keeps the session ID: claude --resume <id> opens the worker again.
     printf '%s\n' "$session"
     ;;
   last)
-    addr="${2:?usage: dispatch.sh last ADDRESS}"
-    need_worker "$addr"
-    session=$(hc_labels "$addr" | jq -r '.["board.session"] // empty')
+    addr=$(worker_addr "${2:?usage: dispatch.sh last ADDRESS}")
+    # A worker that exited has no terminal: its workers line keeps the session.
+    gone=false
+    if labels=$(hc_labels "$addr") && [ "$(jq -r '.["board.role"] // empty' <<<"$labels")" = worker ]; then
+      session=$(jq -r '.["board.session"] // empty' <<<"$labels")
+    elif line=$(worker_line "$addr") && [ -n "$line" ]; then
+      gone=true
+      session=$(cut -f5 <<<"$line")
+    else
+      printf 'dispatch: no agent in %s.\n' "$addr" >&2
+      exit 1
+    fi
     text=""
     if [ -n "$session" ]; then
       file=""
@@ -879,12 +1168,15 @@ NOTE
     if [ -n "$text" ]; then
       [ "${#text}" -le 3000 ] || text=${text: -3000}
       printf '%s\n' "$text"
+    elif [ "$gone" = true ]; then
+      printf 'dispatch: the worker in %s exited, and its session %s has no text.\n' "$addr" "${session:-?}" >&2
+      exit 1
     else
-      "${HC[@]}" read "$addr" 2>/dev/null | tail -n 40 || true
+      term_read "$addr" | tail -n 40 || true
     fi
     ;;
   remind)
-    addr="${2:?usage: dispatch.sh remind ADDRESS REPORT}" report="${3:?usage: dispatch.sh remind ADDRESS REPORT}"
+    addr=$(worker_addr "${2:?usage: dispatch.sh remind ADDRESS REPORT}") report="${3:?usage: dispatch.sh remind ADDRESS REPORT}"
     need_worker "$addr"
     status=$(agent_state "$addr")
     case "$status" in
@@ -894,13 +1186,13 @@ NOTE
         exit 1
         ;;
     esac
-    if ! "${HC[@]}" send "$addr" "Write the report again to $report now, in one Write call. Give the full report for the current state, with a new first line in the same form as before. The new report replaces the old one." >/dev/null; then
+    if ! term_message "$addr" "Write the report again to $report now, in one Write call. Give the full report for the current state, with a new first line in the same form as before. The new report replaces the old one."; then
       printf 'dispatch: could not send to the worker in %s.\n' "$addr" >&2
       exit 1
     fi
     ;;
   answer)
-    addr="${2:?usage: dispatch.sh answer ADDRESS FILE}" file="${3:?usage: dispatch.sh answer ADDRESS FILE}"
+    addr=$(worker_addr "${2:?usage: dispatch.sh answer ADDRESS FILE}") file="${3:?usage: dispatch.sh answer ADDRESS FILE}"
     if [ ! -s "$file" ]; then
       printf 'dispatch: the answer file %s is missing or empty.\n' "$file" >&2
       exit 2
@@ -916,13 +1208,71 @@ NOTE
         exit 1
         ;;
     esac
-    if ! "${HC[@]}" send "$addr" "The user answers through the orchestrator:"$'\n\n'"$(<"$file")" >/dev/null; then
+    if ! term_message "$addr" "The user answers through the orchestrator:"$'\n\n'"$(<"$file")"; then
       printf 'dispatch: could not send to the worker in %s.\n' "$addr" >&2
       exit 1
     fi
     ;;
+  tell)
+    # A worker in Renux runs this to message its orchestrator. It reads only the env that
+    # rex_run_worker sets, never a record: the record can come after the worker starts.
+    if [ -z "${REX_SESSION:-}" ] || [ -z "${BOARD_ORCHESTRATOR:-}" ]; then
+      printf 'dispatch: tell runs only in a board worker in Renux.\n' >&2
+      exit 2
+    fi
+    if [ $# -lt 2 ]; then
+      printf 'usage: dispatch.sh tell TEXT\n' >&2
+      exit 2
+    fi
+    if ! term_message "$BOARD_ORCHESTRATOR" "${*:2}"; then
+      printf 'dispatch: could not send to the orchestrator %s.\n' "$BOARD_ORCHESTRATOR" >&2
+      exit 1
+    fi
+    ;;
+  notice)
+    # board-watch.lua runs this for a worker block in Renux. It reads the record file, not
+    # the live block: after "exited" the block is gone, the record is not.
+    block="${2:-}" kind="${3:-}" detail="${4:-}"
+    # The notice is one line: a newline in the detail would break it.
+    detail=$(printf '%s' "$detail" | tr '\n\r' '  ')
+    [ -n "$detail" ] || [ "$kind" != exited ] || detail='?'
+    case "$kind" in
+      blocked | exited | working) ;;
+      *)
+        printf 'usage: dispatch.sh notice BLOCK blocked|exited|working [DETAIL]\n' >&2
+        exit 2
+        ;;
+    esac
+    rec="$(_rex_rec_file "$block")"
+    [ -f "$rec" ] || exit 0
+    [ "$(jq -r '.role // empty' "$rec")" = worker ] || exit 0
+    sent=$(jq -r '.notice // empty' "$rec")
+    if [ "$kind" = working ]; then
+      [ -z "$sent" ] || [ ! -f "$rec" ] || rex_record_set "$block" '{"notice":null}'
+      exit 0
+    fi
+    [ "$sent" != "$kind" ] || exit 0
+    board=$(jq -r '.board // empty' "$rec")
+    name=$(jq -r '.name // empty' "$rec")
+    short=$(rex_short "$block")
+    if ! addr=$(orchestrator_of "$board"); then
+      printf 'dispatch: no orchestrator of the board %s runs.\n' "$board" >&2
+      exit 1
+    fi
+    if [ "$kind" = blocked ]; then
+      text="$short $name is blocked ($detail). See: dispatch.sh last $short"
+    else
+      text="$short $name exited (exit $detail). See: dispatch.sh last $short"
+    fi
+    if ! term_send "$addr" "<rex>$text</rex>"; then
+      printf 'dispatch: could not send to the orchestrator %s.\n' "$addr" >&2
+      exit 1
+    fi
+    # A close may remove the record meanwhile: do not make it again.
+    [ ! -f "$rec" ] || rex_record_set "$block" "$(jq -cn --arg k "$kind" '{notice: $k}')"
+    ;;
   *)
-    printf 'usage: dispatch.sh start|workers|resumable|resume|resume-clear|close|last|remind|answer|policy|policy-set|report|run-add|note-add|log|inbox-clear ...\n' >&2
+    printf 'usage: dispatch.sh start|workers|resumable|resume|resume-clear|close|last|remind|answer|tell|notice|policy|policy-set|report|run-add|note-add|log|inbox-clear|send|queue|queue-clear ...\n' >&2
     exit 2
     ;;
 esac

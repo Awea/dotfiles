@@ -40,6 +40,21 @@ line_of() { grep -n -E -m 1 -- "$1" "$FAKE_LOG" | cut -d: -f1; }
   [ "$(jq -c . <<<"$output")" = '["home"]' ]
 }
 
+@test "running in herdr-app does not list a board that runs in Renux" {
+  export REX_BIN="$BATS_TEST_DIRNAME/fake-rex"
+  mkdir -p "$FAKE_DIR/rex"
+  b=block:00000000-0000-0000-0000-000000000009
+  fake_block session:fake-1 "$b" window:fake-1 orchestrator claude
+  rex_record_file "$b" '{"board":"home","role":"orchestrator","rex_session":"session:fake-1","window":"window:fake-1"}'
+  record_orchestrator home "$b"
+  board running
+  [ "$status" -eq 0 ]
+  [ "$(jq -c . <<<"$output")" = '[]' ]
+  board running all
+  [ "$status" -eq 0 ]
+  [ "$(jq -c . <<<"$output")" = '["home"]' ]
+}
+
 @test "open focuses a running orchestrator" {
   record_orchestrator home t5
   fake_terminal t5 home orchestrator claude
@@ -123,6 +138,26 @@ line_of() { grep -n -E -m 1 -- "$1" "$FAKE_LOG" | cut -d: -f1; }
   [ -s "$STATE/workers" ]
 }
 
+@test "stop kills a terminal that has no herdr.space label" {
+  record_orchestrator home t5
+  fake_terminal t5 home orchestrator claude
+  board stop home
+  [ "$status" -eq 0 ]
+  [ -n "$(calls '^hc kill t5')" ]
+  [ -z "$(calls 'space.close')" ]
+  [ ! -f "$STATE/orchestrator-home" ]
+}
+
+@test "stop exits 1 when herdr-app does not close the space" {
+  record_orchestrator home t5
+  fake_terminal t5 home orchestrator claude '{"herdr.space":"sp9"}'
+  export FAKE_APP_FAIL=1
+  board stop home
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"herdr-app did not close the space"* ]]
+  [ -f "$STATE/orchestrator-home" ]
+}
+
 @test "stop with no orchestrator exits 1" {
   board stop home
   [ "$status" -eq 1 ]
@@ -150,4 +185,77 @@ line_of() { grep -n -E -m 1 -- "$1" "$FAKE_LOG" | cut -d: -f1; }
   board open home
   [ "$status" -eq 0 ]
   [ -n "$(calls 'space.new')" ]
+}
+
+# shell_terminal ADDR BOARD FOREGROUND [TYPED]: the orchestrator terminal ADDR of BOARD, a
+# shell of pid 300 with FOREGROUND in front, and the board.typed label TYPED.
+shell_terminal() {
+  local f="$FAKE_DIR/hc-get-$1.json"
+  fake_terminal "$1" "$2" orchestrator "$3"
+  jq --arg t "${4:-}" '.pid = 300 | .foreground.pid = (if .foreground.name == "claude" then 512 else 300 end)
+    | if $t == "" then . else .labels["board.typed"] = $t end' "$f" >"$f.tmp" && mv "$f.tmp" "$f"
+}
+
+@test "restart starts claude in the shell of the orchestrator, with no focus" {
+  record_orchestrator "my board" t5
+  shell_terminal t5 "my board" zsh
+  board restart "my board" t5
+  [ "$status" -eq 0 ]
+  label=$(line_of '^hc label t5 board.typed=300 [0-9]+$')
+  send=$(line_of '^hc send t5 claude --effort high --autocompact 200k -n my-board-orchestrator -- /board-orchestrator\\ my\\ board$')
+  [ -n "$label" ] && [ -n "$send" ]
+  [ "$label" -lt "$send" ]
+  [ -z "$(calls '^herdr-app')" ]
+}
+
+@test "restart types nothing when claude runs in the orchestrator terminal" {
+  record_orchestrator home t5
+  shell_terminal t5 home claude
+  board restart home t5
+  [ "$status" -eq 0 ]
+  [ -z "$(calls '^hc (send|label)')" ]
+}
+
+@test "restart types nothing when the command went into the same shell a moment ago" {
+  record_orchestrator home t5
+  shell_terminal t5 home zsh "300 $(date +%s)"
+  board restart home t5
+  [ "$status" -eq 0 ]
+  [ -z "$(calls '^hc (send|label)')" ]
+}
+
+@test "restart exits 3 for a terminal that is not the orchestrator of the board" {
+  record_orchestrator home t5
+  shell_terminal t5 home zsh
+  shell_terminal t6 home zsh
+  board restart home t6
+  [ "$status" -eq 3 ]
+  [[ "$output" == *"t6 is not the orchestrator of the board home"* ]]
+  board restart lab t5
+  [ "$status" -eq 3 ]
+  rm "$STATE/orchestrator-home"
+  board restart home t5
+  [ "$status" -eq 3 ]
+  [ -z "$(calls '^hc (send|label)')" ]
+}
+
+@test "open only shows the shell when restart typed the command there a moment ago" {
+  record_orchestrator home t5
+  shell_terminal t5 home zsh "300 $(date +%s)"
+  board open home
+  [ "$status" -eq 0 ]
+  [ -n "$(calls '^herdr-app do pane.focus --terminal t5')" ]
+  [ -z "$(calls '^hc send')" ]
+}
+
+@test "open starts claude again in a shell that got the command long ago, or in another shell" {
+  record_orchestrator home t5
+  shell_terminal t5 home zsh "300 $(($(date +%s) - 120))"
+  board open home
+  [ -n "$(calls '^hc send t5 claude ')" ]
+  : >"$FAKE_LOG"
+  shell_terminal t5 home zsh "299 $(date +%s)"
+  board open home
+  [ -n "$(calls '^hc label t5 board.typed=300 ')" ]
+  [ -n "$(calls '^hc send t5 claude ')" ]
 }

@@ -1,0 +1,188 @@
+#!/usr/bin/env bash
+# A fake rex for the bats tests. It logs each call to $FAKE_LOG and keeps its state in
+# $FAKE_DIR/rex/: blocks.jsonl (one JSON line for each block: session_id, window_id,
+# window_label, block_id), process-<block>.json and status-<block>.json (the defaults are
+# the real answers in test/fixtures/rex), capture.txt. The hook on-api runs at each
+# api call. FAKE_REX_FAIL=1 makes every call fail. FAKE_REX_SEND_FAIL=1 makes only send fail.
+# FAKE_REX_KILL_FAIL=1 makes only kill fail. FAKE_REX_KILL_HUP=1 sends SIGHUP to the caller
+# of kill.
+d="$FAKE_DIR/rex"
+mkdir -p "$d"
+fixtures="$(cd "$(dirname "$0")" && pwd)/fixtures/rex"
+
+# The global flags go first. The log keeps -C CLIENT for the do calls only.
+client=""
+while :; do
+  case "${1:-}" in
+    --autostart=* | --autostart) shift ;;
+    -C) client=$2; shift 2 ;;
+    *) break ;;
+  esac
+done
+cmd=${1:-}
+if [ "$cmd" = "do" ] && [ -n "$client" ]; then
+  printf 'rex -C %s %s\n' "$client" "$*" >>"$FAKE_LOG"
+else
+  printf 'rex %s\n' "$*" >>"$FAKE_LOG"
+fi
+[ "${FAKE_REX_FAIL:-}" != 1 ] || { printf 'rex: the server does not answer\n' >&2; exit 1; }
+shift || true
+
+# next KIND: a counter, 1 for the first call.
+next() {
+  local n
+  n=$(($(cat "$d/n-$1" 2>/dev/null || echo 0) + 1))
+  printf '%s\n' "$n" >"$d/n-$1"
+  printf '%s\n' "$n"
+}
+
+# save_args NAME ARGS...: the exact arguments, NUL-separated, one file for each call.
+save_args() {
+  local name=$1 n
+  shift
+  n=$(next "args-$name")
+  printf '%s\0' "$@" >"$d/rex-$name-$n.args"
+}
+
+block_id() { printf 'block:00000000-0000-0000-0000-%012d\n' "$1"; }
+
+# in_session SESSION BLOCK: exit 0 when the block is live in the session.
+in_session() {
+  [ -f "$d/blocks.jsonl" ] &&
+    jq -e -s --arg s "$1" --arg b "$2" 'any(.[]; .session_id == $s and .block_id == $b)' \
+      "$d/blocks.jsonl" >/dev/null
+}
+
+# in_session_any SESSION: exit 0 when the session has a live block.
+in_session_any() {
+  jq -e -s --arg s "$1" 'any(.[]; .session_id == $s)' "$d/blocks.jsonl" >/dev/null
+}
+
+not_found() { printf 'rex: not found\n' >&2; exit 1; }
+
+# parse ARGS...: sets session, label, cwd, json, window and the array rest (after --).
+parse() {
+  session="" label="" window="" rest=()
+  local pos=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --) shift; rest=("$@"); return ;;
+      -s) session=$2; shift 2 ;;
+      --window) window=$2; shift 2 ;;
+      --label) label=$2; shift 2 ;;
+      -c | --cwd) shift 2 ;;
+      --focus=* | --keep-open | --interactive | --json) shift ;;
+      *) if [ "$pos" = 0 ]; then label=$1; pos=1; fi; shift ;;
+    esac
+  done
+}
+
+add_block() { # SESSION WINDOW WINDOW_LABEL BLOCK
+  jq -cn --arg s "$1" --arg w "$2" --arg l "$3" --arg b "$4" \
+    '{session_id:$s, window_id:$w, window_label:$l, block_id:$b}' >>"$d/blocks.jsonl"
+}
+
+case "$cmd" in
+  new)
+    save_args new "$@"
+    parse "$@"
+    s="session:fake-$(next session)" w="window:fake-$(next window)" b=$(block_id "$(next block)")
+    add_block "$s" "$w" "${window:-main}" "$b"
+    [ -z "$label" ] || jq -cn --arg s "$s" --arg l "$label" '{session_id:$s, label:$l}' >>"$d/labels.jsonl"
+    jq -cn --arg s "$s" --arg w "$w" --arg b "$b" \
+      '{session_id:$s, initial_windows:[{window_id:$w, block_ids:[$b], revision:1}]}'
+    ;;
+  run)
+    save_args run "$@"
+    parse "$@"
+    [ -n "$session" ] || { printf 'rex: no session\n' >&2; exit 1; }
+    touch "$d/blocks.jsonl"
+    in_session_any "$session" || not_found
+    w="window:fake-$(next window)" b=$(block_id "$(next block)")
+    add_block "$session" "$w" "$label" "$b"
+    jq -cn --arg w "$w" --arg b "$b" '{window_id:$w, block_ids:[$b], revision:2}'
+    ;;
+  window)
+    [ "${1:-}" = new ] || exit 0
+    shift
+    save_args window-new "$@"
+    parse "$@"
+    [ -n "$session" ] || { printf 'rex: no session\n' >&2; exit 1; }
+    w="window:fake-$(next window)" b=$(block_id "$(next block)")
+    add_block "$session" "$w" "$label" "$b"
+    jq -cn --arg w "$w" --arg b "$b" '{window_id:$w, block_ids:[$b], revision:2}'
+    ;;
+  api)
+    [ "${1:-}" = call ] || exit 0
+    shift
+    [ ! -x "$d/on-api" ] || "$d/on-api" "$@"
+    method=$1 args=${2:-'{}'}
+    s=$(jq -r '.session_id // empty' <<<"$args")
+    b=$(jq -r '.block_id // empty' <<<"$args")
+    touch "$d/blocks.jsonl"
+    case "$method" in
+      session.list)
+        touch "$d/labels.jsonl"
+        jq -s --slurpfile l "$d/labels.jsonl" '{sessions: (map(.session_id) | unique | map(. as $i
+          | {session_id: $i, label: ((($l | map(select(.session_id == $i)))[0].label) // $i)}))}' "$d/blocks.jsonl"
+        ;;
+      session.list_blocks)
+        jq -s --arg s "$s" '{blocks: [.[] | select(.session_id == $s)
+          | {block_id, label: .window_label, creator_name: "com.superlogical.terminal",
+             flavor: "terminal", placement: "placed", window_id}]}' "$d/blocks.jsonl"
+        ;;
+      session.view)
+        jq -s --arg s "$s" '[.[] | select(.session_id == $s)] as $b
+          | {session_id: $s, label: $s, active_window_id: ($b[0].window_id // null), revision: 1,
+             windows: ($b | map({window_id, label: .window_label}) | unique_by(.window_id))}' "$d/blocks.jsonl"
+        ;;
+      block.method)
+        in_session "$s" "$b" || not_found
+        case "$(jq -r .method <<<"$args")" in
+          process) cat "$d/process-$b.json" 2>/dev/null || cat "$fixtures/process-claude.json" ;;
+          program_status) cat "$d/status-$b.json" 2>/dev/null || cat "$fixtures/status-working.json" ;;
+          *) printf '{}\n' ;;
+        esac
+        ;;
+      block.close)
+        in_session "$s" "$b" || not_found
+        grep -v -F "\"block_id\":\"$b\"" "$d/blocks.jsonl" >"$d/blocks.tmp" || true
+        mv "$d/blocks.tmp" "$d/blocks.jsonl"
+        printf '{}\n'
+        ;;
+      *) printf '{}\n' ;;
+    esac
+    ;;
+  block)
+    [ "${1:-}" = close ] || exit 0
+    shift
+    parse "$@"
+    b=${label:-}
+    in_session "$session" "$b" || not_found
+    grep -v -F "\"block_id\":\"$b\"" "$d/blocks.jsonl" >"$d/blocks.tmp" || true
+    mv "$d/blocks.tmp" "$d/blocks.jsonl"
+    ;;
+  send)
+    [ "${FAKE_REX_SEND_FAIL:-}" != 1 ] || { printf 'rex: send failed\n' >&2; exit 1; }
+    # The -- before the text is not part of the saved arguments.
+    args=()
+    for a in "$@"; do [ "$a" = -- ] || args+=("$a"); done
+    save_args send "${args[@]}"
+    ;;
+  send-key) : ;;
+  capture) cat "$d/capture.txt" 2>/dev/null || true ;;
+  kill)
+    [ "${FAKE_REX_KILL_FAIL:-}" != 1 ] || { printf 'rex: kill failed\n' >&2; exit 1; }
+    touch "$d/blocks.jsonl"
+    jq -e -s --arg s "$1" 'any(.[]; .session_id == $s)' "$d/blocks.jsonl" >/dev/null || not_found
+    jq -c --arg s "$1" 'select(.session_id != $s)' "$d/blocks.jsonl" >"$d/blocks.tmp"
+    mv "$d/blocks.tmp" "$d/blocks.jsonl"
+    # The kill of the session of the caller closes its pane: the caller gets SIGHUP.
+    [ "${FAKE_REX_KILL_HUP:-}" != 1 ] || kill -HUP "$PPID"
+    ;;
+  server)
+    printf 'running\npid: 4242\n'
+    ;;
+  do) : ;;
+  *) : ;;
+esac

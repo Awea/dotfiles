@@ -322,6 +322,56 @@ run_vault() {
   [ "$(jq '.permissions.deny | length' "$f")" -eq 3 ]
 }
 
+@test "dispatch policy is branch with the branch mark and no push rule" {
+  mkdir -p "$BATS_TEST_TMPDIR/.claude"
+  printf '{"env":{"BOARD_PUSH_POLICY":"branch"}}\n' >"$BATS_TEST_TMPDIR/.claude/settings.local.json"
+  run bash "$SKILL_DIR/dispatch.sh" policy "$BATS_TEST_TMPDIR"
+  [ "$status" -eq 0 ]
+  [ "$output" = branch ]
+}
+
+@test "dispatch policy gives a push rule priority over the branch mark" {
+  mkdir -p "$BATS_TEST_TMPDIR/.claude"
+  printf '{"env":{"BOARD_PUSH_POLICY":"branch"}}\n' >"$BATS_TEST_TMPDIR/.claude/settings.local.json"
+  printf '{"permissions":{"ask":["Bash(git push*)"]}}\n' >"$BATS_TEST_TMPDIR/.claude/settings.json"
+  run bash "$SKILL_DIR/dispatch.sh" policy "$BATS_TEST_TMPDIR"
+  [ "$output" = ask ]
+}
+
+@test "dispatch policy-set branch writes the forge rules under ask, no git push rule, and the mark" {
+  forge_remote "$BATS_TEST_TMPDIR"
+  local f="$BATS_TEST_TMPDIR/.claude/settings.local.json"
+  mkdir -p "$BATS_TEST_TMPDIR/.claude"
+  printf '{"env":{"FOO":"1"},"permissions":{"allow":["Read"],"deny":["Bash(rm -rf*)"]}}\n' >"$f"
+  run bash "$SKILL_DIR/dispatch.sh" policy-set "$BATS_TEST_TMPDIR" allow
+  [ "$output" = allow ]
+  run bash "$SKILL_DIR/dispatch.sh" policy-set "$BATS_TEST_TMPDIR" branch
+  [ "$status" -eq 0 ]
+  [ "$output" = branch ]
+  [ "$(jq -c '.permissions.allow' "$f")" = '["Read"]' ]
+  [ "$(jq -c '.permissions.ask' "$f")" = '["Bash(gh pr create*)","Bash(gh pr comment*)","Bash(gh pr edit*)","Bash(gh pr ready*)","Bash(gh pr close*)","Bash(gh issue create*)","Bash(gh issue comment*)","Bash(gh issue edit*)"]' ]
+  [ "$(jq -c '.permissions.deny' "$f")" = '["Bash(rm -rf*)","Bash(gh pr merge*)","Bash(tea pr merge*)","Bash(tea pulls merge*)","mcp__forgejo__merge_pull_request"]' ]
+  [ "$(jq -c '.env' "$f")" = '{"FOO":"1","BOARD_PUSH_POLICY":"branch"}' ]
+  run bash "$SKILL_DIR/dispatch.sh" policy-set "$BATS_TEST_TMPDIR" ask
+  [ "$output" = ask ]
+  [ "$(jq -c '.env' "$f")" = '{"FOO":"1"}' ]
+  [ "$(jq '.permissions.ask | length' "$f")" -eq 11 ]
+}
+
+@test "dispatch policy-set branch on a Forgejo remote asks for the Forgejo tools and removes the empty env" {
+  local f="$BATS_TEST_TMPDIR/.claude/settings.local.json"
+  forge_remote "$BATS_TEST_TMPDIR" ssh://forgejo@git.example.org:2222/o/r.git
+  run bash "$SKILL_DIR/dispatch.sh" policy-set "$BATS_TEST_TMPDIR" branch
+  [ "$status" -eq 0 ]
+  [ "$output" = branch ]
+  [ "$(jq '.permissions.ask | length' "$f")" -eq 7 ]
+  [ "$(jq '.permissions.ask | index("mcp__forgejo__update_pull_request") != null' "$f")" = true ]
+  [ "$(grep -c 'git push\|git -C' "$f")" -eq 0 ]
+  run bash "$SKILL_DIR/dispatch.sh" policy-set "$BATS_TEST_TMPDIR" allow
+  [ "$output" = allow ]
+  [ "$(jq 'has("env")' "$f")" = false ]
+}
+
 @test "dispatch policy-set refuses a bad mode and invalid JSON" {
   run bash "$SKILL_DIR/dispatch.sh" policy-set "$BATS_TEST_TMPDIR" deny
   [ "$status" -eq 2 ]
@@ -498,7 +548,43 @@ run_vault() {
   [[ "$output" == *$'## Vault changes\n- Boards/work.md: old -> new'* ]]
   [[ "$output" == *'REFUSED: gh pr list'* ]]
   [[ "$output" != *'long detail'* ]]
-  [ "${lines[-1]}" = "full report: $r (13 lines)" ]
+  [ "${lines[-2]}" = "full report: $r (13 lines)" ]
+}
+
+@test "a report summary ends with what the orchestrator says: a done line once for each report, else nothing" {
+  r="$BATS_TEST_TMPDIR/report.md"
+  done_line='say: one line "<card title> — done — <PR or commit link>", with no summary of the report.'
+  printf '%s\n' 'RESULT: WAITS FOR USER' '## Result' 'Push?' >"$r"
+  run --separate-stderr bash "$SKILL_DIR/dispatch.sh" report "$r"
+  [ "${lines[-1]}" = 'say: nothing.' ]
+  # The worker writes its report again after more work: the first done gives the line.
+  printf '%s\n' 'RESULT: DONE' '## Result' 'PR 7.' >"$r"
+  run --separate-stderr bash "$SKILL_DIR/dispatch.sh" report "$r"
+  [ "${lines[-1]}" = "$done_line" ]
+  # A later done report of the same worker: the user gave it the work and reads it there.
+  printf '%s\n' 'RESULT: DONE' '## Result' 'PR 7 merged.' >"$r"
+  run --separate-stderr bash "$SKILL_DIR/dispatch.sh" report "$r"
+  [ "${lines[-1]}" = 'say: nothing.' ]
+  # The marker is in the state folder, not beside a report path of a worker message.
+  [ ! -e "$r.said" ]
+  [ -e "$XDG_STATE_HOME/board-orchestrator-hc/said/report.md" ]
+  # An automatic task that is done.
+  printf '%s\n' 'STATUS: OK' 'Fees are ok.' >"$BATS_TEST_TMPDIR/auto.md"
+  run --separate-stderr bash "$SKILL_DIR/dispatch.sh" report "$BATS_TEST_TMPDIR/auto.md"
+  [ "${lines[-1]}" = "$done_line" ]
+  printf '%s\n' 'STATUS: STOP' 'Fees are high.' >"$BATS_TEST_TMPDIR/stop.md"
+  run --separate-stderr bash "$SKILL_DIR/dispatch.sh" report "$BATS_TEST_TMPDIR/stop.md"
+  [ "${lines[-1]}" = 'say: nothing.' ]
+}
+
+@test "a report summary still gives the say line when it cannot write the marker" {
+  r="$BATS_TEST_TMPDIR/report.md"
+  printf '%s\n' 'RESULT: DONE' '## Result' 'PR 7.' >"$r"
+  mkdir -p "$XDG_STATE_HOME/board-orchestrator-hc"
+  : >"$XDG_STATE_HOME/board-orchestrator-hc/said"
+  run --separate-stderr bash "$SKILL_DIR/dispatch.sh" report "$r"
+  [ "$status" -eq 0 ]
+  [[ "${lines[-1]}" == 'say: one line'* ]]
 }
 
 @test "a report with no Result section gives its first 40 lines" {
@@ -506,7 +592,7 @@ run_vault() {
   { printf 'RESULT: DONE\n'; for i in $(seq 2 50); do printf 'line %s\n' "$i"; done; } >"$r"
   run --separate-stderr bash "$SKILL_DIR/dispatch.sh" report "$r"
   [ "$status" -eq 0 ]
-  [ "${#lines[@]}" -eq 41 ]
+  [ "${#lines[@]}" -eq 42 ]
   [ "${lines[39]}" = 'line 40' ]
   [ "${lines[40]}" = "full report: $r (50 lines)" ]
 }

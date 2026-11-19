@@ -17,7 +17,7 @@ hc_setup() {
   export HERDR_APP_BIN="${FAKES:-$BATS_TEST_DIRNAME}/fake-herdr-app"
   mkdir -p "$HOME" "$FAKE_DIR"
   : >"$FAKE_LOG"
-  unset HC_TERMINAL_ID HERDR_ENV HERDR_WORKSPACE_ID HERDR_PANE_ID OBSIDIAN_VAULT_PATH FAKE_HC_FAIL FAKE_APP_FAIL
+  unset HC_TERMINAL_ID HERDR_ENV HERDR_WORKSPACE_ID HERDR_PANE_ID OBSIDIAN_VAULT_PATH FAKE_HC_FAIL FAKE_APP_FAIL REX_BLOCK REX_SESSION REX_CLIENT BOARD_TERM BOARD BOARD_ROLE BOARD_NAME BOARD_ORCHESTRATOR
 }
 
 setup() { hc_setup; }
@@ -84,5 +84,52 @@ record_worker() {
 # live_worker ADDR BOARD SESSION: a live worker terminal with its record.
 live_worker() {
   fake_terminal "$1" "$2" worker claude "{\"board.session\":\"$3\"}"
+  record_worker "$1" "$2" "$3"
+}
+
+# rex_setup: the setup for the tests of the Rex backend. The caller is not in a pane.
+rex_setup() {
+  hc_setup
+  export REX_BIN="${FAKES:-$BATS_TEST_DIRNAME}/fake-rex"
+  export BOARD_REX_POLL=0
+  unset REX_BLOCK REX_SESSION REX_CLIENT BOARD BOARD_ROLE BOARD_NAME BOARD_ORCHESTRATOR FAKE_REX_FAIL FAKE_REX_SEND_FAIL FAKE_REX_KILL_FAIL FAKE_REX_KILL_HUP
+  mkdir -p "$FAKE_DIR/rex"
+}
+
+# fake_block SESSION BLOCK WINDOW LABEL [claude|shell]: a live Rex block.
+fake_block() {
+  local fix="$SKILL_DIR/test/fixtures/rex"
+  jq -cn --arg s "$1" --arg b "$2" --arg w "$3" --arg l "$4" \
+    '{session_id:$s, window_id:$w, window_label:$l, block_id:$b}' >>"$FAKE_DIR/rex/blocks.jsonl"
+  cp "$fix/process-${5:-claude}.json" "$FAKE_DIR/rex/process-$2.json"
+}
+
+# rex_status BLOCK working|blocked|idle [MSG]: the program status of a block.
+rex_status() {
+  jq -cn --arg s "$2" --arg m "${3:-}" \
+    '{records: [{state:$s, app:"claude-code"} + (if $m != "" then {kind:"permission", msg:$m} else {} end)]}' \
+    >"$FAKE_DIR/rex/status-$1.json"
+}
+
+# rex_record_file BLOCK JSON: the record of the block in the state folder.
+rex_record_file() {
+  local dir="$XDG_STATE_HOME/board-orchestrator-hc/rex"
+  mkdir -p "$dir"
+  printf '%s\n' "$2" >"$dir/$1.json"
+}
+
+# rex_orchestrator BLOCK BOARD: the caller is the orchestrator block BLOCK of BOARD.
+rex_orchestrator() {
+  fake_block session:fake-1 "$1" window:fake-1 orchestrator claude
+  rex_record_file "$1" "$(jq -cn --arg b "$2" \
+    '{board:$b, role:"orchestrator", rex_session:"session:fake-1", window:"window:fake-1"}')"
+  export REX_BLOCK=$1 REX_SESSION=session:fake-1
+}
+
+# rex_worker BLOCK BOARD SESSION: a live worker block, with its record and workers line.
+rex_worker() {
+  fake_block session:fake-1 "$1" "window:w-${1: -4}" "worker-${1: -4}" claude
+  rex_record_file "$1" "$(jq -cn --arg b "$2" --arg s "$3" --arg w "window:w-${1: -4}" \
+    '{board:$b, role:"worker", session:$s, typed:"task", rex_session:"session:fake-1", window:$w, name:"worker"}')"
   record_worker "$1" "$2" "$3"
 }
