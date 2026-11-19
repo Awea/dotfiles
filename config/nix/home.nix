@@ -31,7 +31,18 @@ in
     tmux
     # Apt has mosh 1.3.2, which drops OSC 52: a copy in a remote tmux does
     # not reach the local clipboard. mosh 1.4 passes it.
-    mosh
+    # Nix mosh runs the Nix ssh, which has no GSSAPI and no Apple options: it
+    # warns on the GSSAPI line of /etc/ssh/ssh_config, and fails on an Apple
+    # option such as UseKeychain. --ssh=ssh runs the ssh of $PATH, the one
+    # that a plain `ssh` runs. A later --ssh on the command line wins.
+    (symlinkJoin {
+      name = "mosh-system-ssh";
+      paths = [ mosh ];
+      nativeBuildInputs = [ makeWrapper ];
+      postBuild = ''
+        wrapProgram $out/bin/mosh --add-flags --ssh=ssh
+      '';
+    })
     # The editor of the Renux file peek (renux/look.sh): keys as in Sublime
     # Text and VS Code, a file tree and a ctrl+p file finder. Config in
     # config/fresh.
