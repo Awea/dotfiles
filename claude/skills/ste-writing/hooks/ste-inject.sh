@@ -35,8 +35,8 @@ semicolons, phrasal verbs or marketing adjectives. 20 words max for an
 instruction, 25 otherwise. Short common words. One name for one thing. A verb
 for an action. Noun stacks of three words max.
 Shape (the reader has ADHD): lead with the action. Number steps, one action
-each, five max. No preamble, recap or closer. State step N of M. Estimates in
-minutes, hours or days. One issue at a time. Cut a hedge that carries no fact.
+each, five max. No preamble, recap or closer. State step N of M. One issue at a
+time. Cut a hedge that carries no fact.
 Full rules: load the ste-writing skill.
 </ste-writing-standing-rule>
 EOF

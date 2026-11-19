@@ -19,8 +19,7 @@ Layer 2:
 2. Does the first sentence announce what you are about to do? Delete it.
 3. Does the last sentence ask "anything else?" or recap the work? Delete it.
 4. Is there a "by the way" sidebar? Move it to a separate question.
-5. Is any estimate vague ("some work", "a while")? Give minutes, hours, or days.
-6. Does an action list run past five items? Split it into "do now" and "later".
-7. Is the state of multi-turn work restated? Add "step N of M".
+5. Does an action list run past five items? Split it into "do now" and "later".
+6. Is the state of multi-turn work restated? Add "step N of M".
 
 Then read the first line and the last line alone. Do they tell the reader what to do next, and what just happened? If yes, send.

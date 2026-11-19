@@ -138,6 +138,11 @@ class InjectTests(unittest.TestCase):
         self.assertIn("<ste-writing-standing-rule>",
                       out["hookSpecificOutput"]["additionalContext"])
 
+    def test_the_rule_card_has_no_time_estimate_rule(self):
+        out = inject({"session_id": "s9", "hook_event_name": "SessionStart",
+                      "source": "startup"}, self.home)
+        self.assertNotIn("Estimates", out["hookSpecificOutput"]["additionalContext"])
+
     def test_a_prompt_after_a_clean_reply_gets_nothing(self):
         out = inject({"session_id": "s5", "hook_event_name": "UserPromptSubmit",
                       "prompt": "Hi"}, self.home)

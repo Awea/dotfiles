@@ -51,6 +51,16 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "^(startup|resume|clear)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=\"$HOME/.claude/hooks/plugin-skill-overrides.sh\"; [ -f \"$f\" ] || exit 0; bash \"$f\"",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "PreToolUse": [
@@ -161,6 +171,7 @@
     "obsidian-second-brain:obsidian-retrieval-eval": "user-invocable-only",
     "obsidian-second-brain:obsidian-review": "user-invocable-only",
     "obsidian-second-brain:obsidian-save": "user-invocable-only",
+    "obsidian-second-brain:obsidian-second-brain": "user-invocable-only",
     "obsidian-second-brain:obsidian-synthesize": "user-invocable-only",
     "obsidian-second-brain:obsidian-visualize": "user-invocable-only",
     "obsidian-second-brain:obsidian-world": "user-invocable-only",
