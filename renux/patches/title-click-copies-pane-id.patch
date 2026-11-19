@@ -1,0 +1,86 @@
+diff --git a/src/app/app.zig b/src/app/app.zig
+index e5a39ac..549903f 100644
+--- a/src/app/app.zig
++++ b/src/app/app.zig
+@@ -3235,14 +3235,7 @@ pub const App = struct {
+             a.activity.toggle();
+             return true;
+         }
+-        if (eql(u8, name, "copy_id")) {
+-            const t = a.target() orelse return false;
+-            const z = gpa.dupeSentinel(u8, t[2], 0) catch return false;
+-            defer gpa.free(z);
+-            a.window.as(gtk.Widget).getClipboard().setText(z.ptr);
+-            a.toast("Pane ID copied");
+-            return true;
+-        }
++        if (eql(u8, name, "copy_id")) return a.did(copyPaneId);
+         if (eql(u8, name, "close")) return a.did(closePane);
+         if (eql(u8, name, "float")) return a.did(floatPane);
+         if (eql(u8, name, "focus_next")) return a.focusStep(1);
+@@ -3674,6 +3667,7 @@ pub const App = struct {
+             .{ "pane-close", closePane },
+             .{ "pane-float", floatPane },
+             .{ "pane-minimize", minimizePane },
++            .{ "pane-copy-id", copyPaneId },
+         }) |e| {
+             const action = gio.SimpleAction.new(e[0], glib.VariantType.new("s"));
+             const Thunk = struct {
+@@ -3769,6 +3763,15 @@ pub const App = struct {
+         t[0].newSplit(t[1], t[2], false, false);
+     }
+ 
++    /// Copies the ID of the focused pane, for an agent that reads the pane with rex capture.
++    fn copyPaneId(a: *App) void {
++        const t = a.target() orelse return;
++        const z = gpa.dupeSentinel(u8, t[2], 0) catch return;
++        defer gpa.free(z);
++        a.window.as(gtk.Widget).getClipboard().setText(z.ptr);
++        a.toast("Pane ID copied");
++    }
++
+     fn closePane(a: *App) void {
+         const t = a.target() orelse return;
+         t[0].closeBlock(t[1], t[2]);
+diff --git a/src/ui/workspace.zig b/src/ui/workspace.zig
+index 0b71402..f2de133 100644
+--- a/src/ui/workspace.zig
++++ b/src/ui/workspace.zig
+@@ -837,6 +837,25 @@ pub const Workspace = struct {
+         return 0;
+     }
+ 
++    /// A single click on the text of a pane title copies the ID of its pane
++    /// (app.pane-copy-id). A click on the empty part of the header only focuses the pane.
++    fn titleClicked(g: *gtk.GestureClick, n_press: c_int, x: f64, _: f64, ws: *Workspace) callconv(.c) void {
++        if (n_press != 1) return;
++        const label = g.as(gtk.EventController).getWidget() orelse return;
++        const text = gobject.ext.cast(gtk.Label, label) orelse return;
++        var text_x: c_int = 0;
++        var text_w: c_int = 0;
++        var text_h: c_int = 0;
++        text.getLayoutOffsets(&text_x, null);
++        text.getLayout().getPixelSize(&text_w, &text_h);
++        if (x < @as(f64, @floatFromInt(text_x)) or x > @as(f64, @floatFromInt(text_x + text_w))) return;
++        const i = ws.paneOfWidget(label.getParent() orelse return) orelse return;
++        const block = gpa.dupeSentinel(u8, ws.panes.items[i].block_id, 0) catch return;
++        defer gpa.free(block);
++        const app = gio.Application.getDefault() orelse return;
++        app.as(gio.ActionGroup).activateAction("pane-copy-id", glib.Variant.newString(block.ptr));
++    }
++
+     /// A click on a chip brings its pane back.
+     fn chipClicked(button: *gtk.Button, ws: *Workspace) callconv(.c) void {
+         if (ws.chip_let_go) return;
+@@ -1088,6 +1107,11 @@ pub const Workspace = struct {
+         label.as(gtk.Widget).setHexpand(1);
+         label.as(gtk.Widget).setMarginStart(6);
+         row.append(label.as(gtk.Widget));
++        // A click on the title text copies the pane ID. A drag of the title still moves the pane:
++        // the click gesture stops when the pointer moves.
++        const title_click = gtk.GestureClick.new();
++        _ = gtk.GestureClick.signals.released.connect(title_click, *Workspace, &titleClicked, ws, .{});
++        label.as(gtk.Widget).addController(title_click.as(gtk.EventController));
+         const tools = gtk.Box.new(.horizontal, 0);
+         tools.as(gtk.Widget).addCssClass("pane-tools");
+         var float_button: ?*gtk.Widget = null;

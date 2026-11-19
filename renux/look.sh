@@ -7,11 +7,15 @@ set -o pipefail
 [[ "$(uname)" == Linux ]] || { echo "Skip: Linux only"; exit 0; }
 
 # Give Renux the look of herdr-app: the graphite theme, Fira Code at the herdr-app size,
-# no ligatures, the padding of the main-quiet layout, the tabs above the panes. A tab
-# shows its name, not the programs of its panes. And no system notification, as the
+# no ligatures, the padding of the main-quiet layout. And no system notification, as the
 # quiet-toast mod of main-quiet.
+# The tabs go in the sidebar, under their session, and not in a strip above the panes:
+# the strip took 52 px of height. Switch tabs with a sidebar click, ctrl+1..9 or ctrl+tab.
+# A tab row shows the tab label (the tab-label patch), else the title of its focused pane.
+# tab-processes=false acts only on the strip: with tab-position=above, a tab shows its
+# label or its focused pane, not the programs of all its panes.
 # A ctrl+click on a path opens the file in a new pane with bin.symlink/renux-open: a
-# markdown file rendered in md-tui, another file in Fresh. config/nix/home.nix installs
+# markdown file rendered in Leaf, another file in Fresh. config/nix/home.nix installs
 # both. The peek button, seen only for a slow file, reads "Open in renux-open".
 # settings.ini also keeps the state of Renux (hosts, recent folders), so this script sets
 # only its own keys and keeps the other lines. A running Renux reads the file again when
@@ -36,7 +40,7 @@ python3 -I - "$settings" \
   "selection-fg=$((16#d2d4d9))" \
   "padding-x=14" \
   "padding-y=12" \
-  "tab-position=above" \
+  "tab-position=left" \
   "tab-processes=false" \
   "alerts=false" \
   "editor-command=renux-open view {line} {path}" <<'EOF'

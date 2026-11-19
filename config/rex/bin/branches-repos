@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# The repos of the branch view picker (branches-pick.sh, ctrl+b shift+l in Renux). Print
+# one git root for each line: first the root of DIR, then the roots of the frequent
+# folders (folders.sh folders), most frecent first. No duplicate, no folder outside a repo.
+# Each line comes when it is found, so fzf shows the first repos at once.
+#
+#   branches-repos DIR
+set -euo pipefail
+export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}"
+dir=${1:?usage: branches-repos DIR}
+here=$(dirname "$(readlink -f "$0")")
+folders="$here/folders.sh"
+
+seen=$'\n'
+# show DIR: print the git root of DIR once. Nothing when DIR is not in a repo.
+show() {
+  local root
+  root=$(git -C "$1" rev-parse --show-toplevel 2>/dev/null) || return 0
+  [[ -n $root && $seen != *$'\n'"$root"$'\n'* ]] || return 0
+  seen+="$root"$'\n'
+  printf '%s\n' "$root"
+}
+
+show "$dir"
+while IFS= read -r folder; do
+  show "$folder"
+done < <(bash "$folders" folders | jq -r '.[]')

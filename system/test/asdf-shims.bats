@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # Tests that a job shell finds the asdf shims (mix, bats...).
-# The hc core and the Rex server take the PATH of the desktop session, which reads
+# The Rex server takes the PATH of the desktop session, which reads
 # ~/.profile. A `zsh -c` job also reads ~/.zshenv.
 # Run: ASDF_BATS_VERSION=1.8.2 bats system/test/
 
@@ -8,7 +8,7 @@ REPO="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"
 ZSHENV="$REPO/zsh/zshenv.symlink"
 PROFILE="$REPO/system/profile.symlink"
 
-# The PATH of the desktop session before ~/.profile, as the hc core gets it.
+# The PATH of the desktop session before ~/.profile, as the Rex server gets it.
 BARE_PATH=/usr/local/bin:/usr/bin:/bin
 
 setup() {

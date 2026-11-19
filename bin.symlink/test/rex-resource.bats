@@ -9,6 +9,8 @@ setup() {
   export FAKE_DIR="$BATS_TEST_TMPDIR/fake" FAKE_LOG="$BATS_TEST_TMPDIR/log"
   export XDG_STATE_HOME="$BATS_TEST_TMPDIR/state"
   export REX_RESOURCE_POLL=0.1 REX_RESOURCE_STALE=60
+  # The Renux block of the caller. A test sets it: the env of the test run can have one.
+  unset REX_BLOCK
   mkdir -p "$FAKE_DIR"
   : >"$FAKE_LOG"
   LOCK="$XDG_STATE_HOME/rex-resource/lock"
@@ -135,6 +137,29 @@ setup() {
   [ "$(jq -r 'keys | join(",")' <<<"$output")" = argv,block,cwd,ended,exit_code,session,started ]
   grep -qF "rex block close -s $session $block" "$FAKE_LOG"
   [ "$(grep -c '^rex run ' "$FAKE_LOG")" -eq 2 ]
+}
+
+@test "an ended resource that no live block uses closes at the next call" {
+  REX_BLOCK=block:gone run "$RR" shop-postgres /tmp/x -- postgres
+  session=$(jq -r .session <<<"$output")
+  block=$(jq -r .block <<<"$output")
+  [ -f "$XDG_STATE_HOME/rex-resource/shop-postgres.users" ]
+  cp "$BATS_TEST_DIRNAME/../../claude/skills/board-orchestrator/test/fixtures/rex/process-exited.json" \
+    "$FAKE_DIR/rex/process-$block.json"
+  REX_BLOCK=block:gone run "$RR" docs /tmp/x -- make docs
+  [ "$status" -eq 0 ]
+  grep -qF "rex block close -s $session $block" "$FAKE_LOG"
+  [ ! -e "$XDG_STATE_HOME/rex-resource/shop-postgres.json" ]
+}
+
+@test "--sweep with --keep-ended or a name is a usage error" {
+  run "$RR" --sweep --keep-ended
+  [ "$status" -eq 2 ]
+  run "$RR" --keep-ended --sweep
+  [ "$status" -eq 2 ]
+  run "$RR" --sweep shop-postgres /tmp/x -- postgres
+  [ "$status" -eq 2 ]
+  [ ! -s "$FAKE_LOG" ]
 }
 
 @test "the fake rex skips --interactive before a window label" {

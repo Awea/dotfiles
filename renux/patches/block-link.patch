@@ -1,0 +1,143 @@
+diff --git a/src/app/app.zig b/src/app/app.zig
+index e5a39ac..c19caaa 100644
+--- a/src/app/app.zig
++++ b/src/app/app.zig
+@@ -2494,6 +2494,28 @@ pub const App = struct {
+         a.window.as(gtk.Window).present();
+     }
+ 
++    /// Shows the pane whose block ID ends with `id`, on any host: the target of a
++    /// `renux://block/` link. No such pane: nothing happens.
++    fn jumpBlock(a: *App, id: []const u8) void {
++        if (id.len == 0) return;
++        for (a.hosts.items) |h| for (h.server.sessions.items) |session| {
++            const v = h.server.sessionView(session.id) orelse continue;
++            for (v.windows) |w| for (w.layers) |l| for (l.blocks) |b| {
++                if (!std.mem.endsWith(u8, b.id, id)) continue;
++                // jumpTo can refresh the view that owns these IDs, so keep copies.
++                const sid = gpa.dupe(u8, session.id) catch return;
++                defer gpa.free(sid);
++                const wid = gpa.dupe(u8, w.id) catch return;
++                defer gpa.free(wid);
++                const bid = gpa.dupe(u8, b.id) catch return;
++                defer gpa.free(bid);
++                a.jumpTo(h, sid, wid, bid);
++                a.window.as(gtk.Window).present();
++                return;
++            };
++        };
++    }
++
+     fn selectSidebarRow(a: *App) void {
+         const want = a.shownRow();
+         // The highlight is only touched when it has to move, so it never blinks.
+@@ -3711,7 +3733,9 @@ pub const App = struct {
+             _ = gio.SimpleAction.signals.activate.connect(action, *App, &Thunk.run, a, .{});
+             a.app.as(gio.ActionMap).addAction(action.as(gio.Action));
+         }
+-        inline for (.{ .{ "new-window-in", newWindowIn }, .{ "toggle-session", toggleSession }, .{ "filter", filterAction }, .{ "move-session-up", moveSessionUp }, .{ "move-session-down", moveSessionDown }, .{ "rename-session", renameSessionFromMenu }, .{ "delete-session", deleteSessionFromMenu } }) |e| {
++        inline for (.{ .{ "new-window-in", newWindowIn }, .{ "toggle-session", toggleSession }, .{ "filter", filterAction }, .{ "move-session-up", moveSessionUp }, .{ "move-session-down", moveSessionDown }, .{ "rename-session", renameSessionFromMenu }, .{ "delete-session", deleteSessionFromMenu },
++            .{ "jump-block", jumpBlock },
++        }) |e| {
+             const action = gio.SimpleAction.new(e[0], glib.VariantType.new("s"));
+             const Thunk = struct {
+                 fn run(_: *gio.SimpleAction, param: ?*glib.Variant, app: *App) callconv(.c) void {
+diff --git a/src/terminal/links.zig b/src/terminal/links.zig
+index 0b29149..2d2659e 100644
+--- a/src/terminal/links.zig
++++ b/src/terminal/links.zig
+@@ -19,6 +19,15 @@ pub const Link = struct {
+     }
+ };
+ 
++/// Renux's own link to a pane: `renux://block/ID`, where ID is a block ID or its end.
++pub const block_prefix = "renux://block/";
++
++/// The block ID of a `renux://block/` link, or null for any other link.
++pub fn blockId(url: []const u8) ?[]const u8 {
++    if (!std.mem.startsWith(u8, url, block_prefix) or url.len == block_prefix.len) return null;
++    return url[block_prefix.len..];
++}
++
+ fn notUrl(c: u21) bool {
+     return switch (c) {
+         ' ', '\t', '<', '>', '"', '\'', '`', '|', '\\', '^', '{', '}', 0 => true,
+@@ -144,3 +153,13 @@ test "a link ending at the right edge doesn't swallow the next line" {
+     defer cut.deinit(gpa);
+     try std.testing.expectEqualStrings("https://a.example/lo", cut.url);
+ }
++
++test "a renux block link names a block, not a file" {
++    try std.testing.expectEqualStrings("01a1ef15", blockId("renux://block/01a1ef15").?);
++    try std.testing.expectEqualStrings("block:01a1f42f-1590", blockId("renux://block/block:01a1f42f-1590").?);
++    try std.testing.expect(blockId("renux://block/") == null);
++    try std.testing.expect(blockId("https://example.com/01a1ef15") == null);
++    // An ID of digits only must not read as a file with a line number.
++    const paths = @import("paths.zig");
++    try std.testing.expect((try paths.fromHref(std.testing.allocator, "renux://block/12345678")) == null);
++}
+diff --git a/src/terminal/termview.zig b/src/terminal/termview.zig
+index fc31b58..20d0d3c 100644
+--- a/src/terminal/termview.zig
++++ b/src/terminal/termview.zig
+@@ -259,6 +259,13 @@ test "clipboard upload integration" {
+     _ = clipboard.setContent(null);
+ }
+ 
++test "a block link stays with Renux, and the menu does not call it a file" {
++    try std.testing.expect(TermView.keepsClick("renux://block/01a1ef15"));
++    try std.testing.expect(TermView.keepsClick("file:///tmp/a.txt"));
++    try std.testing.expect(!TermView.keepsClick("https://example.com"));
++    try std.testing.expect(!TermView.isFileLink("renux://block/01a1ef15"));
++}
++
+ test "file hover targets preserve web and OSC8 links without reading files" {
+     const t = term_mod.Term.create(80, 4) orelse return error.NoTerminal;
+     defer t.destroy();
+@@ -1880,7 +1887,7 @@ pub const TermView = struct {
+                 const cell = v.cellAt(v.pointer[0], v.pointer[1]);
+                 if (v.linkAt(t, cell[0], cell[1])) |url| {
+                     defer gpa.free(url);
+-                    armed = !t.frame.mouse or v.linksOpenHere() or isFileLink(url);
++                    armed = !t.frame.mouse or v.linksOpenHere() or keepsClick(url);
+                     hand = armed;
+                 }
+             } else armed = false;
+@@ -2210,7 +2217,7 @@ pub const TermView = struct {
+         if (mods & keys.ctrl == 0 or !v.programHasMouse(mods)) return false;
+         const url = v.linkAt(t, cell[0], cell[1]) orelse return false;
+         defer gpa.free(url);
+-        return isFileLink(url) or v.linksOpenHere();
++        return keepsClick(url) or v.linksOpenHere();
+     }
+ 
+     fn hyperlinkTarget(t: *term_mod.Term, col: u16, row: u16) ?[:0]u8 {
+@@ -2584,6 +2591,20 @@ pub const TermView = struct {
+         return std.mem.startsWith(u8, url, paths.prefix) or std.mem.startsWith(u8, url, "file://");
+     }
+ 
++    /// A link that Renux opens itself, even when the program in the pane takes the mouse:
++    /// a file, or a pane of a `renux://block/` link.
++    fn keepsClick(url: []const u8) bool {
++        return links.blockId(url) != null or isFileLink(url);
++    }
++
++    /// Shows the pane of a `renux://block/` link. The app looks for it on each host.
++    fn openBlock(_: *TermView, id: []const u8) void {
++        const app = gio.Application.getDefault() orelse return;
++        const param = gpa.dupeSentinel(u8, id, 0) catch return;
++        defer gpa.free(param);
++        app.as(gio.ActionGroup).activateAction("jump-block", glib.Variant.newString(param.ptr));
++    }
++
+     fn menuOpenLink(v: *TermView) void {
+         const l = v.menu_link orelse return;
+         v.link_cell = v.menu_cell;
+@@ -2593,6 +2614,7 @@ pub const TermView = struct {
+     /// Opens a link. Web, mail and file links open at once; one that opens an app, such as
+     /// vscode:, asks first unless its scheme was trusted with Always Open.
+     fn openLink(v: *TermView, url: [:0]const u8) void {
++        if (links.blockId(url)) |id| return v.openBlock(id);
+         if (std.mem.startsWith(u8, url, paths.prefix)) return v.peekFile(url[paths.prefix.len..]);
+         if (std.mem.startsWith(u8, url, "file://")) {
+             // OSC 8 file links belong to this pane's host, not the desktop's filesystem.

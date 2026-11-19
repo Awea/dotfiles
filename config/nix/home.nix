@@ -36,9 +36,10 @@ in
     # Text and VS Code, a file tree and a ctrl+p file finder. Config in
     # config/fresh.
     fresh-editor
-    # The markdown view of the Renux file peek (bin.symlink/renux-open): headings,
-    # tables and links rendered in the terminal. Its e key opens Fresh.
-    md-tui
+    # The markdown view of the Renux file peek (bin.symlink/renux-open): Leaf, the
+    # release pinned in leaf.nix. A drag selects text and copies it without the
+    # wrap, and @ asks an agent pane about the selection. Config in config/leaf.
+    (callPackage ./leaf.nix { })
   ] ++ [
     inputs.hunk.packages.${system}.default
   ];

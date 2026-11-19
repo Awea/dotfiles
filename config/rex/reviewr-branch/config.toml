@@ -1,4 +1,0 @@
-# The config of herdr-reviewr for ctrl+b d when the agent set a base with reviewr-target:
-# config/rex/bin/reviewr.sh DIR BASE points HERDR_PLUGIN_CONFIG_DIR here.
-# reviewr opens in the branch scope, on the base that --base gives.
-default_scope = "branch"

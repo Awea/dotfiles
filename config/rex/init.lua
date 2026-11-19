@@ -1,13 +1,11 @@
--- The Rex config: the keys of herdr-app (herdr-app/keys.json and the ctrl+b prefix mod),
--- for Renux. A herdr-app space is a Rex session, a herdr-app tab is a Rex tab (a session
--- window), a pane is a pane.
+-- The Rex config for Renux: the keys, with ctrl+b as a prefix as in tmux, the popups and
+-- the actions. A session holds the tabs (session windows), a tab holds the panes.
 --
 -- Renux matches the typed character and names it as a US keyboard does: on AZERTY, the "
 -- key is shift+' and % is shift+5. Renux does not read physical names such as [Digit1].
 --
--- Not here yet: alt-1..9 (Renux has no action to go to a session by number), agent
--- next/previous, help, the go-to picker, layout switch, paste image, and the ctrl+b keys
--- that open a herdr-app popup and are not ported yet (shift+g).
+-- Not here: alt-1..9 (Renux has no action to go to a session by number), agent
+-- next/previous, help, the go-to picker, layout switch and paste image.
 
 local function bind_all(keys, action, args)
   for _, key in ipairs(keys) do rex.bind(key, action, args) end
@@ -36,7 +34,7 @@ rex.bind("ctrl+shift+t", "client.tab.new")
 rex.bind("ctrl+shift+w", "client.tab.close")
 rex.bind("f2", "client.tab.rename")
 
--- Sessions (herdr-app spaces)
+-- Sessions
 rex.bind("ctrl+shift+pagedown", "session.next")
 rex.bind("ctrl+shift+pageup", "session.previous")
 rex.bind("ctrl+shift+n", "session.new")
@@ -58,7 +56,7 @@ bind_all({ "ctrl+shift+c", "ctrl+insert" }, "pane.copy")
 bind_all({ "ctrl+shift+v", "shift+insert" }, "pane.paste")
 rex.bind("ctrl+shift+f", "client.find.open")
 
--- ctrl+b: the prefix keys of herdr-app that need no popup
+-- ctrl+b: the prefix keys that need no popup
 local prefix = {
   c = { "client.tab.new" },
   v = { "pane.split", { direction = "right" } },
@@ -154,14 +152,45 @@ rex.action{
 }
 rex.bind("ctrl+b>shift+x", "board_stop")
 
--- ctrl+b d: herdr-reviewr on the git root to review (bin/reviewr-pick), zoomed. That is the
--- worktree and base that an agent set with bin/reviewr-target, else the git root of the
--- focused folder. It shows the reviewr of that root in the window, else opens one in a
--- split on the right (bin/reviewr.sh). A reviewr pane has the label "reviewr ROOT", or
--- "reviewr ROOT BASE" in the branch scope.
+-- ctrl+b shift+l: the branch view of a picked repo (bin/branches-pick.sh): serie, a graph
+-- of the branches and their commits. It opens a pane on the right of the focused pane,
+-- with serie on the repo of the focused pane. q in serie shows a list of repos in that
+-- pane, and Esc in the list closes the pane. Not ctrl+b g: it stays free for the go-to
+-- picker.
+rex.action{
+  name = "branches",
+  title = "Git Branch View (serie)",
+  run = function(ctx)
+    local session = ctx.session_id
+    local block, cwd = pane(ctx)
+    local _, err = rex.call("session.new_split", {
+      session_id = session,
+      anchor_id = block.block_id,
+      direction = "horizontal",
+      side = "after",
+      focus = true,
+      layout = rex.layout.block{
+        flavor = "com.superlogical.terminal.shell",
+        options = {
+          command = { bin .. "branches-pick.sh", cwd, session, ctx.block_id, ctx.client_id or "" },
+          cwd = cwd,
+        },
+      },
+    })
+    if err ~= nil then error(err, 0) end
+  end,
+}
+rex.bind("ctrl+b>shift+l", "branches")
+
+-- ctrl+b d: herdr-reviewr in the branch scope on the git root to review (bin/reviewr-pick),
+-- zoomed. That is the worktree and base that an agent set with bin/reviewr-target, else the
+-- git root of the focused folder and the commit where its branch left the default branch
+-- (the upstream on the default branch). It shows the reviewr of that root in the window,
+-- else opens one in a split on the right (bin/reviewr.sh). A reviewr pane has the label
+-- "reviewr ROOT", or "reviewr ROOT BASE" with a base.
 rex.action{
   name = "reviewr",
-  title = "Review the Last Claude Turn",
+  title = "Review the Branch",
   run = function(ctx)
     local session = ctx.session_id
     local block, cwd = pane(ctx)
@@ -213,11 +242,12 @@ rex.bind("ctrl+b>d", "reviewr")
 -- config load starts the loop. A second loop exits at once.
 rex.exec.start({ bin .. "claude-resume.sh", "loop" }, { detach = true })
 
--- ctrl+b i: the activity view of the sidebar, the nearest view to the herdr-app agents
--- list. It shows which program works, is blocked or needs you. ctrl+b I groups it by
+-- ctrl+b i: the activity view of the sidebar, a list of the agents. It shows which program works, is blocked or needs you. ctrl+b I groups it by
 -- session. Renux runs these actions only from a key: rex do -C does nothing.
 rex.bind("ctrl+b>i", "client.sidebar.activity.toggle")
 rex.bind("ctrl+b>shift+i", "client.sidebar.activity.by_session")
 
--- A second ctrl+b sends nothing to the program, as in herdr-app.
-rex.bind("ctrl+b>ctrl+b", function() return true end)
+-- A second ctrl+b sends ctrl+b to the program, as tmux send-prefix does: in a tmux of the
+-- pane, ctrl+b ctrl+b c opens a tmux window. Use pane.send_key, not a Lua function: Renux
+-- drops a key bound to a Lua function (client.key.forward), so the program gets nothing.
+rex.bind("ctrl+b>ctrl+b", "pane.send_key", { key = "ctrl+b" })

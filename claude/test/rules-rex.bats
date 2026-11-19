@@ -72,3 +72,7 @@ rules="$BATS_TEST_DIRNAME/../CLAUDE.md"
   grep -qF '~/.bin/rex-summary "<sentence>"' "$rules"
   grep -qF 'A subagent skips it' "$rules"
 }
+
+@test "the Rex block has the branches-open line" {
+  grep -qF '~/.config/rex/bin/branches-open <repo>' "$rules"
+}

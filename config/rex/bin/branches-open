@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# An agent runs this in its Renux pane to show the user the branch view of a repo: serie,
+# a graph of the branches and their commits. It opens a tab labeled
+# "branches <name of the repo>" in the space of the agent, with no focus: the window of the
+# user does not change. When that tab is open, it opens no second tab for that repo. The
+# tab closes when serie quits (q).
+#
+#   branches-open DIR
+# Exit 2: not in a Renux pane, or DIR is not in a git repo. Exit 1: serie is not
+# installed, or rex fails. REX_BIN is the rex command (default rex).
+set -euo pipefail
+export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}"
+
+say() { printf 'branches-open: %s\n' "$*" >&2; }
+
+if [ -z "${REX_SESSION:-}" ]; then
+  say "run this in a Renux pane (REX_SESSION is not set)."
+  exit 2
+fi
+dir=${1:?usage: branches-open DIR}
+root=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null) || {
+  say "$dir is not in a git repo."
+  exit 2
+}
+# The full path: the Rex server starts the tab with its own PATH.
+serie=$(command -v serie) || {
+  say "serie is not installed."
+  exit 1
+}
+label="branches ${root##*/}"
+
+# This function is named rex: "command rex" skips it, or it would call itself.
+rex() {
+  if [ -n "${REX_BIN:-}" ]; then "$REX_BIN" --autostart=false "$@"; else command rex --autostart=false "$@"; fi
+}
+
+blocks=$(rex api call session.list_blocks "$(jq -cn --arg s "$REX_SESSION" '{session_id: $s}')" 2>/dev/null) || {
+  say "rex does not answer."
+  exit 1
+}
+
+# open: exit 0 when a tab with the label runs a live program in the repo. Two repos can
+# have the same name, so the label alone does not tell the repo.
+open() {
+  local block args
+  while IFS= read -r block; do
+    args=$(jq -cn --arg s "$REX_SESSION" --arg b "$block" '{session_id: $s, block_id: $b, method: "process"}')
+    rex api call block.method "$args" 2>/dev/null |
+      jq -e --arg r "$root" '.last_exit == null and .child.cwd == $r' >/dev/null && return 0
+  done < <(jq -r --arg l "$label" '.blocks[] | select(.label == $l) | .block_id' <<<"$blocks")
+  return 1
+}
+
+if ! open; then
+  # -p kitty: Renux draws the graph with kitty images. serie does not detect it alone.
+  rex run -s "$REX_SESSION" --focus=false --label "$label" --cwd "$root" --json -- "$serie" -p kitty >/dev/null 2>&1 || {
+    say "rex does not answer."
+    exit 1
+  }
+fi
+printf 'branches-open: the tab "%s" is open in this space.\n' "$label"

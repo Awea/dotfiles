@@ -4,8 +4,8 @@
 #
 #   Usage: rex-tab-name NAME
 #
-# The tab is the Rex window of REX_BLOCK. Renux shows the label of a tab in place of the
-# programs of its panes (with the tab-label patch of renux/patches). Outside Renux
+# The tab is the Rex window of REX_BLOCK. Renux shows the label of a tab in its sidebar row
+# in place of the title of its focused pane (with the tab-label patch of renux/patches). Outside Renux
 # (REX_BLOCK not set) and in a board worker, whose tab has the card name, the script does
 # nothing.
 # Exit 1: Rex fails. Exit 2: a usage error. REX_BIN is the rex command (default rex).
