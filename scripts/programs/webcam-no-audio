@@ -8,9 +8,17 @@ set -o pipefail
 
 # The "HD Web Camera" (05a3:9331) firmware can hang when PipeWire sets its
 # microphone to 16 kHz ("cannot set freq 16000 to ep 0x83"). The video then
-# hangs too, until a power cycle. This rule blocks the camera audio interface
-# (class 01), so snd-usb-audio never binds to it. Replug the camera after.
+# hangs too, until a power cycle. The first rule blocks the camera audio
+# interface (class 01), so snd-usb-audio never binds to it.
+#
+# The firmware can also hang when an app starts a stream ("Failed to set UVC
+# commit control: -110"). The LED then stays on until a replug: the root hub
+# port cannot cut the power. The second rule turns off USB autosuspend for the
+# camera, so it does not go through a suspend and resume cycle at each use.
+#
+# Replug the camera after.
 sudo tee /etc/udev/rules.d/70-webcam-no-audio.rules > /dev/null <<'RULES'
 ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_interface", ATTRS{idVendor}=="05a3", ATTRS{idProduct}=="9331", ATTR{bInterfaceClass}=="01", ATTR{authorized}="0"
+ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="05a3", ATTR{idProduct}=="9331", ATTR{power/control}="on"
 RULES
 sudo udevadm control --reload-rules
