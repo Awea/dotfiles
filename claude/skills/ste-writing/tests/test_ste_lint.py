@@ -172,6 +172,11 @@ class MarkdownTests(unittest.TestCase):
         result = STE.lint("1. " + " ".join(["Read the guide."] * 7) + "\n2. Read the log.")
         self.assertEqual(result["violations"]["long_paragraph(>6s)"], 1)
 
+    def test_a_time_estimate_is_not_a_shape_count(self):
+        result = STE.lint("This needs some work. Read the guide in a while.")
+        self.assertNotIn("vague_estimate", result["shape"])
+        self.assertEqual(result["shape_total"], 0)
+
     def test_shape_counts_stay_separate(self):
         result = STE.lint("\n".join(f"{n}. Read the guide." for n in range(1, 7)))
         self.assertEqual(result["shape"]["action_list(>5)"], 1)

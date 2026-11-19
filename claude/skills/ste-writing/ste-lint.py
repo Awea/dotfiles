@@ -60,8 +60,6 @@ RECAP = ["to summarize","in summary","to recap","as a recap","in conclusion","to
 # Only hedges that carry no fact. A qualifier that bounds a claim is not here.
 HEDGE = ["perhaps","arguably","presumably","conceivably","ostensibly","somewhat",
     "kind of","sort of","more or less","it seems that","it appears that","fairly straightforward"]
-VAGUE = ["some work","a bit of work","a while","shortly","fairly soon","a few moments",
-    "not too long","some time","in no time","quite quick","pretty quick"]
 SOFTENER = ["uh oh","oh no","there seems to be a problem","there seems to be an issue",
     "unfortunately","i apologize","apologies","my apologies","sorry about that"]
 
@@ -228,10 +226,9 @@ def shape(raw, count_quotes=False):
     s["closer"], ch = count_ci(text, CLOSERS)
     s["recap_marker"], rh = count_ci(text, RECAP)
     s["hedge"], hh = count_ci(text, HEDGE)
-    s["vague_estimate"], vh = count_ci(text, VAGUE)
     s["error_softener"], sh = count_ci(text, SOFTENER)
     s["action_list(>5)"] = long_lists(re.sub(r"```.*?```", "\n", raw, flags=re.S))
-    return s, list(dict.fromkeys(ch + rh + hh + vh + sh))[:6]
+    return s, list(dict.fromkeys(ch + rh + hh + sh))[:6]
 
 
 def lint(text, strict=False, count_quotes=False):

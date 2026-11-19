@@ -5,7 +5,7 @@ argument-hint: "Repo path (default: the current repo)"
 disable-model-invocation: true
 ---
 
-Safety comes from the tools. A well-built tool reaches production only when someone asks for it by name. This check finds each tool that reaches production, money or real data, and makes it **explicit**: its own command, a name that says what it touches, and the target given on the command line. The tool shape is the whole protection: the result is tool fixes and docs.
+This check finds each tool that reaches production, money or real data, and makes it **explicit**: its own command, a name that says what it touches, and the target given on the command line. The tool shape is the whole protection: the result is tool fixes and docs.
 
 Read the repo only. Run no script, target or CLI of the repo during the check.
 
@@ -35,6 +35,6 @@ Read the repo only. Run no script, target or CLI of the repo during the check.
    - README: a section "Production commands", one line for each explicit production command and what it touches. Correct each README line that describes a command wrongly.
    - The repo `CLAUDE.md` (or `AGENTS.md`): one line, "The commands that act on production are in README.md, section Production commands. Run one when the user names it."
    - The fixes from step 4: on a branch, as a PR when the user agrees.
-   - The project note in the vault: the date, the production commands, the side effects found and the PR link. Under the board orchestrator, put this text in the report as a vault change.
+   - The project note `Projects/<project>.md` in the vault (`$OBSIDIAN_VAULT_PATH`): the date, the production commands, the side effects found and the PR link. Under the board orchestrator, put this text in the report as a vault change.
 
-   Done: the user has the side effects with file and line, the PR link and the doc text.
+   Done: the user has the side effects with file and line, the PR link (or the decision of the user to open no PR) and the doc text.
