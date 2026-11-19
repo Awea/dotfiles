@@ -269,3 +269,153 @@ board_vault() {
   run_args
   [[ "${RUN_ARGS[-1]}" != *"other repos of your board"* ]]
 }
+
+# with_setup_target: origin/main gets a Makefile with a worktree-setup target. Its recipe
+# leaves a file, so a test sees when make ran.
+with_setup_target() {
+  git -C "$REPO" checkout -q main
+  printf 'worktree-setup:\n\ttouch setup-ran\n' >"$REPO/Makefile"
+  git -C "$REPO" add Makefile
+  git -C "$REPO" commit -q -m make
+  git -C "$REPO" push -q origin main
+  git -C "$REPO" checkout -q other
+}
+
+# setup_index: the index in RUN_ARGS of the worktree-setup.sh command, else -1.
+setup_index() {
+  local i
+  for i in "${!RUN_ARGS[@]}"; do
+    [ "${RUN_ARGS[$i]}" != "$SKILL_DIR/worktree-setup.sh" ] || { echo "$i"; return 0; }
+  done
+  echo -1
+}
+
+@test "start task runs make worktree-setup in the worker terminal, before claude" {
+  with_setup_target
+  start
+  [ "$status" -eq 0 ]
+  # dispatch opens the terminal at once: make runs there, not in dispatch.
+  [ ! -e "$WT/setup-ran" ]
+  run_args
+  i=$(setup_index)
+  [ "$i" -ge 0 ]
+  [ "${RUN_ARGS[$((i + 1))]}" = "$WT" ]
+  [[ "${RUN_ARGS[$((i + 2))]}" == "$XDG_STATE_HOME/board-orchestrator-hc/fix-login-"*-worktree-setup.log ]]
+  [ "${RUN_ARGS[$((i + 3))]}" = -- ]
+  [ "${RUN_ARGS[$((i + 4))]}" = claude ]
+}
+
+@test "start task tells the worker about the worktree-setup log" {
+  with_setup_target
+  start
+  run_args
+  i=$(setup_index)
+  log=${RUN_ARGS[$((i + 2))]}
+  [[ "${RUN_ARGS[-1]}" == *"Your terminal ran make worktree-setup in $WT before claude started. Its output is in $log."* ]]
+}
+
+@test "start task runs no worktree-setup when the repo has no such target" {
+  start
+  [ "$status" -eq 0 ]
+  run_args
+  [ "$(setup_index)" = -1 ]
+  [[ "${RUN_ARGS[-1]}" != *"worktree-setup"* ]]
+}
+
+@test "start task runs no worktree-setup for a worktree it uses again" {
+  with_setup_target
+  start
+  [ "$status" -eq 0 ]
+  start
+  [ "$status" -eq 0 ]
+  run_args 2
+  [ "$(setup_index)" = -1 ]
+}
+
+@test "start task runs worktree-setup of the worktree root when the start folder has no target" {
+  with_setup_target
+  mkdir -p "$REPO/sub"
+  repo_with_push_policy "$REPO/sub"
+  start task "$REPO/sub"
+  [ "$status" -eq 0 ]
+  run_args
+  i=$(setup_index)
+  [ "$i" -ge 0 ]
+  [ "${RUN_ARGS[$((i + 1))]}" = "$WT" ]
+}
+
+@test "start task does not run make in dispatch for an included makefile" {
+  git -C "$REPO" checkout -q main
+  printf 'include gen.mk\ngen.mk:\n\ttouch gen-ran; echo X=1 >gen.mk\nworktree-setup:\n\ttouch setup-ran\n' >"$REPO/Makefile"
+  git -C "$REPO" add Makefile
+  git -C "$REPO" commit -q -m make
+  git -C "$REPO" push -q origin main
+  git -C "$REPO" checkout -q other
+  start
+  [ "$status" -eq 0 ]
+  [ ! -e "$WT/gen-ran" ]
+  run_args
+  [ "$(setup_index)" -ge 0 ]
+}
+
+@test "start task runs no worktree-setup when the Makefile only names the target" {
+  git -C "$REPO" checkout -q main
+  printf '.PHONY: worktree-setup\nall:\n\ttrue\n' >"$REPO/Makefile"
+  git -C "$REPO" add Makefile
+  git -C "$REPO" commit -q -m make
+  git -C "$REPO" push -q origin main
+  git -C "$REPO" checkout -q other
+  start
+  [ "$status" -eq 0 ]
+  run_args
+  [ "$(setup_index)" = -1 ]
+}
+
+@test "start task runs worktree-setup of the start folder when it has the target" {
+  with_setup_target
+  git -C "$REPO" checkout -q main
+  mkdir -p "$REPO/sub"
+  printf 'worktree-setup:\n\ttrue\n' >"$REPO/sub/Makefile"
+  git -C "$REPO" add sub/Makefile
+  git -C "$REPO" commit -q -m sub
+  git -C "$REPO" push -q origin main
+  git -C "$REPO" checkout -q other
+  repo_with_push_policy "$REPO/sub"
+  start task "$REPO/sub"
+  [ "$status" -eq 0 ]
+  run_args
+  i=$(setup_index)
+  [ "${RUN_ARGS[$((i + 1))]}" = "$WT/sub" ]
+}
+
+@test "worktree-setup.sh runs the command after a Ctrl-C stops make" {
+  d="$BATS_TEST_TMPDIR/d"
+  mkdir -p "$d"
+  # On Ctrl-C the terminal sends SIGINT to the script, make and tee. The recipe sends it to
+  # the script (the parent of make) and its children, not to bats.
+  printf 'worktree-setup:\n\t@s=$$(ps -o ppid= -p $$PPID); pkill -INT -P $$s; kill -INT $$s; sleep 5\n' >"$d/Makefile"
+  run bash "$SKILL_DIR/worktree-setup.sh" "$d" "$BATS_TEST_TMPDIR/s.log" -- echo next
+  [ "${lines[-1]}" = next ]
+}
+
+@test "worktree-setup.sh runs make, keeps its output, then runs the command" {
+  d="$BATS_TEST_TMPDIR/d"
+  mkdir -p "$d"
+  printf 'worktree-setup:\n\t@echo deps ok\n' >"$d/Makefile"
+  run bash "$SKILL_DIR/worktree-setup.sh" "$d" "$BATS_TEST_TMPDIR/s.log" -- echo next
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"deps ok"* ]]
+  [ "${lines[-1]}" = next ]
+  grep -q 'deps ok' "$BATS_TEST_TMPDIR/s.log"
+  [ "$(tail -n 1 "$BATS_TEST_TMPDIR/s.log")" = "worktree-setup: exit 0" ]
+}
+
+@test "worktree-setup.sh runs the command when make fails" {
+  d="$BATS_TEST_TMPDIR/d"
+  mkdir -p "$d"
+  printf 'worktree-setup:\n\t@echo broken; exit 3\n' >"$d/Makefile"
+  run bash "$SKILL_DIR/worktree-setup.sh" "$d" "$BATS_TEST_TMPDIR/s.log" -- echo next
+  [ "$status" -eq 0 ]
+  [ "${lines[-1]}" = next ]
+  [ "$(tail -n 1 "$BATS_TEST_TMPDIR/s.log")" = "worktree-setup: exit 2" ]
+}

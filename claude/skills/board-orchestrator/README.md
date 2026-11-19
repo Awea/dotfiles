@@ -30,6 +30,10 @@ human. The agent reads `SKILL.md`, and `start.md`, `shorten.md` and `boards.md` 
 - A worker has an address such as `t7`. A Ctrl-click on the address peeks at the worker.
 - A task worker gets the slug of its card: its branch, worktree and agent name. When 2
   card titles give the same slug, the second card gets the slug with `-2`.
+- When `start` makes a new worktree and the repo has a make target `worktree-setup`, the
+  worker terminal runs `worktree-setup.sh` before claude. It runs `make worktree-setup`
+  in the start folder (else the worktree root) and keeps the output in a log beside the
+  report. The prompt gives the worker that log. A worktree used again gets no setup.
 - An automatic worker gets the allow rules of `<repo>/.claude/settings.readonly.json`,
   the allow rules and MCP servers of its board, the `hc send` rule and an edit rule for
   its report.
