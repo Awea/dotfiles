@@ -1,0 +1,23 @@
+# The graphite theme of herdr-app, as a Ghostty theme file for Renux.
+# Read from herdr-app theme() on 2026-11-18: background, terminal_foreground, cursor,
+# selection and ansi0 to ansi15.
+background = #17191d
+foreground = #d2d4d9
+cursor-color = #d2d4d9
+selection-background = #394454
+palette = 0=#45484f
+palette = 1=#dc8c95
+palette = 2=#a6bd91
+palette = 3=#d8be87
+palette = 4=#96b2d7
+palette = 5=#b5a2ce
+palette = 6=#8cbdc3
+palette = 7=#d2d4d9
+palette = 8=#818793
+palette = 9=#f0a5ad
+palette = 10=#bad5a2
+palette = 11=#ead2a1
+palette = 12=#b0cbef
+palette = 13=#cbb7e6
+palette = 14=#a4d5db
+palette = 15=#f0f0f2
