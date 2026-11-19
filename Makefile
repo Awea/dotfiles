@@ -23,7 +23,7 @@ endif
 
 ## Create symbolic links for files/folders with a .symlink suffix
 .PHONY: links
-links: $(symlink_paths) $(sublime_links) antibody/zsh_plugins.sh $(HOME)/.config/direnv $(HOME)/.config/nix config/nix/os.conf $(HOME)/.config/zed/settings.json $(HOME)/.config/zed/keymap.json $(HOME)/.claude/CLAUDE.md $(HOME)/.claude/rules/elixir.md $(HOME)/.claude/settings.json $(HOME)/.config/ghostty/config.ghostty $(HOME)/.config/ghostty/os.ghostty $(HOME)/.claude/skills/handoff $(HOME)/.claude/skills/ste-writing $(HOME)/.claude/skills/writing-for-agents $(HOME)/.claude/skills/project-tool-check $(HOME)/.claude/skills/board-orchestrator
+links: $(symlink_paths) $(sublime_links) antibody/zsh_plugins.sh $(HOME)/.config/direnv $(HOME)/.config/nix config/nix/os.conf $(HOME)/.config/zed/settings.json $(HOME)/.config/zed/keymap.json $(HOME)/.claude/CLAUDE.md $(HOME)/.claude/rules/elixir.md $(HOME)/.claude/settings.json $(HOME)/.claude/agents/reviewer.md $(HOME)/.claude/hooks/plugin-skill-overrides.sh $(HOME)/.config/ghostty/config.ghostty $(HOME)/.config/ghostty/os.ghostty $(HOME)/.claude/skills/handoff $(HOME)/.claude/skills/ste-writing $(HOME)/.claude/skills/writing-for-agents $(HOME)/.claude/skills/project-tool-check $(HOME)/.claude/skills/board-orchestrator
 
 # Create all symlink
 # Documentation: https://www.gnu.org/software/make/manual/html_node/Automatic-Variables.html#Automatic-Variables
@@ -70,6 +70,15 @@ $(HOME)/.claude/settings.json:
 	@mkdir -p $(dir $@)
 	ln -s $(PWD)/claude/settings.json $@
 
+$(HOME)/.claude/agents/reviewer.md:
+	@mkdir -p $(dir $@)
+	ln -s $(PWD)/claude/agents/reviewer.md $@
+
+# A SessionStart hook: skillOverrides "user-invocable-only" for plugin entries
+$(HOME)/.claude/hooks/plugin-skill-overrides.sh:
+	@mkdir -p $(dir $@)
+	ln -s $(PWD)/claude/hooks/plugin-skill-overrides.sh $@
+
 $(HOME)/.config/ghostty/config.ghostty:
 	@mkdir -p $(dir $@)
 	ln -s $(PWD)/ghostty/config.ghostty $@
@@ -112,6 +121,15 @@ herdr-app:
 	ln -sfn $(PWD)/herdr-app/bin $(HERDR_APP_HOME)/bin
 	for m in board-open board-stop quiet-toast prefix new-agent-tab handoff new-space claude-resume; do \
 	  ln -sfn $(PWD)/herdr-app/mods/$$m $(HERDR_APP_HOME)/mods/$$m; done
+
+## Give Renux, the Linux client of Rex, the herdr-app look and keys: link the Rex config,
+## link the graphite theme and set the look keys in settings.ini (Linux only).
+RENUX_HOME ?= $(HOME)/.config/renux
+.PHONY: renux
+renux: $(HOME)/.config/rex
+	@mkdir -p $(RENUX_HOME)/themes
+	ln -sfn $(PWD)/renux/themes/herdr-graphite $(RENUX_HOME)/themes/herdr-graphite
+	renux/look.sh
 
 $(HOME)/.config/%:
 	@mkdir -p $(dir $@)

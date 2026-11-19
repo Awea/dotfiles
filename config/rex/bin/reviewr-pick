@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Pick what ctrl+b d reviews. Print two lines: the git root, and the base (an empty line
+# for no base). The record of reviewr-target for BLOCK wins when its folder is still there.
+# Else use the folder CWD of the pane.
+#
+#   reviewr-pick BLOCK CWD
+set -euo pipefail
+export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}"
+block=${1:?usage: reviewr-pick BLOCK CWD}
+cwd=${2:?usage: reviewr-pick BLOCK CWD}
+record="${XDG_STATE_HOME:-$HOME/.local/state}/rex/reviewr/$block.json"
+
+# root DIR: the git root of DIR, else DIR.
+root() {
+  git -C "$1" rev-parse --show-toplevel 2>/dev/null || (cd "$1" && pwd -P)
+}
+
+if [ -f "$record" ]; then
+  dir=$(jq -r '.dir // empty' "$record" 2>/dev/null) || dir=
+  # The base stays even when dir is the pane folder (herdr-app drops it there).
+  if [ -n "$dir" ] && [ -d "$dir" ]; then
+    printf '%s\n%s\n' "$(root "$dir")" "$(jq -r '.base // empty' "$record")"
+    exit 0
+  fi
+fi
+printf '%s\n\n' "$(root "$cwd")"

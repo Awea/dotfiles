@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+# The herdr CLI of Herdr 0.9.5, for herdr-reviewr in Rex: the 7 calls that
+# herdr-reviewr 0.37.1 makes (src/herdr.rs), answered from Rex. reviewr.sh sets
+# HERDR_BIN_PATH to this file. A Herdr workspace is a Rex session, a tab is a Rex window,
+# a pane is a Rex block.
+#
+# pane send-text presses Enter, as the herdr-app shim does: reviewr's Send submits the
+# comments at once.
+set -euo pipefail
+export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}"
+here=$(dirname "$(readlink -f "$0")")
+
+api() { rex api call "$1" "$2"; }
+
+# blocks: one JSON line for each terminal block of each session, with its session.
+blocks() {
+  local session
+  for session in $(api session.list '{}' | jq -r '.sessions[].session_id'); do
+    api session.list_blocks "$(jq -cn --arg s "$session" '{session_id: $s}')" |
+      jq -c --arg s "$session" '.blocks[] | select(.creator_name == "com.superlogical.terminal")
+        | {session_id: $s, block_id, window_id, label: .label}'
+  done
+}
+
+# method SESSION BLOCK METHOD: the JSON of a terminal method of BLOCK.
+method() {
+  api block.method "$(jq -cn --arg s "$1" --arg b "$2" --arg m "$3" \
+    '{session_id: $s, block_id: $b, method: $m}')" 2>/dev/null || echo '{}'
+}
+
+# session_of BLOCK: the session that holds BLOCK.
+session_of() {
+  blocks | jq -r --arg b "$1" 'select(.block_id == $b) | .session_id' | head -1
+}
+
+# agents: {"result":{"agents":[...]}}, one entry for each block whose program reports an
+# agent status, with the fields of `herdr agent list`. When the tab of reviewr
+# (HERDR_TAB_ID) has an agent, only the agents of that tab: reviewr sends to a sole agent
+# at once.
+agents() {
+  local b s id status cwd
+  blocks | while IFS= read -r b; do
+    s=$(jq -r .session_id <<<"$b")
+    id=$(jq -r .block_id <<<"$b")
+    status=$(method "$s" "$id" program_status | jq -c '[.records[]? | select(.app != null)][0] // empty')
+    [ -n "$status" ] || continue
+    cwd=$(method "$s" "$id" process | jq -r '.foreground.cwd // .child.cwd // ""')
+    jq -cn --argjson b "$b" --argjson st "$status" --arg cwd "$cwd" '{
+      agent: (if $st.app == "claude-code" then "claude" else $st.app end),
+      agent_status: $st.state, pane_id: $b.block_id, tab_id: $b.window_id,
+      workspace_id: $b.session_id, cwd: $cwd, name: $b.label}'
+  done | jq -sc --arg tab "${HERDR_TAB_ID:-}" '
+    [.[] | select(.tab_id == $tab and $tab != "")] as $here
+    | {result: {agents: (if $here == [] then . else $here end)}}'
+}
+
+# unpaste TEXT: TEXT without the bracketed paste markers that reviewr adds.
+unpaste() {
+  local text=$1
+  text=${text#$'\e[200~'}
+  text=${text%$'\e[201~'}
+  printf '%s' "$text"
+}
+
+case "${1:-} ${2:-}" in
+  "agent list") agents ;;
+  "agent focus")
+    api session.focus_block "$(jq -cn --arg s "$(session_of "$3")" --arg b "$3" \
+      '{session_id: $s, block_id: $b}')" >/dev/null
+    ;;
+  "pane send-text")
+    s=$(session_of "$3")
+    rex send -s "$s" -b "$3" "$(unpaste "$4")"
+    rex send-key -s "$s" -b "$3" enter
+    ;;
+  "pane list") printf '{"result":{"panes":[]}}\n' ;;
+  "pane rename") : ;;
+  "tab list")
+    [ "${3:-}" = --workspace ] || { printf 'herdr-shim: tab list needs --workspace\n' >&2; exit 2; }
+    api session.view "$(jq -cn --arg s "$4" '{session_id: $s}')" |
+      jq -c '{result: {tabs: [.windows[]? | {tab_id: .window_id, label: .label}]}}'
+    ;;
+  # The reviewr config of the dotfiles: herdr-app/reviewr/config.toml.
+  "plugin config-dir") printf '%s\n' "$(cd "$here/../../../herdr-app/reviewr" && pwd)" ;;
+  *)
+    printf 'herdr-shim: herdr %s is not supported in Rex.\n' "$*" >&2
+    exit 1
+    ;;
+esac

@@ -1,0 +1,18 @@
+#!/bin/zsh
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+# Linux only. The Linux package holds the rex command and the Rex servers.
+[[ "$(uname)" == Linux ]] || { echo "Skip: Linux only"; exit 0; }
+
+# [Rex](https://www.superlogical.com/rex/) - a terminal multiplexer with Mac and iOS apps
+# https://www.superlogical.com/rex/docs/linux/installation
+# The installer adds the Rex apt repository and pins it above the unrelated Perl
+# package (R)?ex. Run it again to upgrade Rex.
+curl -fsSL https://pkgs.superlogical.com/rex/install.sh | sh
+
+# Start a Rex server for this account at boot, with no sudo. Renux and the Rex apps
+# connect to it.
+rex server install

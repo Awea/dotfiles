@@ -1,0 +1,58 @@
+#!/bin/zsh
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+[[ "$(uname)" == Linux ]] || { echo "Skip: Linux only"; exit 0; }
+
+# The v0.1.0 tag needs a Zig 0.17 dev build. Nixpkgs has Zig 0.17.0, which builds this
+# commit of main.
+renux_rev=4d11fd9ee63ae42dde6caeaf42db7fcd59cd405c
+src_dir="$HOME/.local/src/renux"
+gc_root="$HOME/.local/state/renux/nix-libs"
+flake_dir="${0:A:h:h:h}/config/nix"
+
+# [Renux](https://github.com/zenodea/renux) - a native Linux client for Rex, in Zig and GTK4
+# Renux has no packages yet, so this script builds it from source into ~/.local.
+# It needs libadwaita 1.5+, and Pop!_OS 22.04 has 1.1. So Zig, GTK and libadwaita come
+# from the nixpkgs of config/nix/flake.lock. Run scripts/programs/nix-home-manager
+# first: it links the GPU drivers for Nix programs. Without them, GTK draws on the CPU.
+nixpkgs=$(nix eval --raw --impure --expr "(builtins.getFlake \"$flake_dir\").inputs.nixpkgs.outPath")
+libs="gtk4 libadwaita librsvg poppler fontconfig libepoxy pango"
+
+if [[ ! -d "$src_dir/.git" ]]; then
+  git init --quiet "$src_dir"
+  git -C "$src_dir" remote add origin https://github.com/zenodea/renux
+fi
+git -C "$src_dir" fetch --depth 1 origin "$renux_rev"
+git -C "$src_dir" checkout --quiet --detach "$renux_rev"
+git -C "$src_dir" submodule update --init --depth 1
+
+# renux links to these libraries in /nix/store. prune-disk runs nix-collect-garbage,
+# so keep them with a GC root.
+mkdir -p "${gc_root:h}"
+nix-build --out-link "$gc_root" --expr \
+  "with import $nixpkgs {}; buildEnv { name = \"renux-libs\"; paths = [ $libs ]; }"
+
+# The arocc dependency comes from codeberg.org, which gave NXDOMAIN on 2026-11-18.
+# Fetch the same commit from the GitHub mirror: Zig checks its hash and skips Codeberg.
+# Zig links to the Nix glibc but sets the loader of Pop!_OS, so patchelf sets the Nix
+# loader. The -Ddynamic-linker option of Zig 0.17.0 gives the compiler a broken path.
+cd "$src_dir"
+nix-shell -I nixpkgs="$nixpkgs" -p zig_0_17 pkg-config patchelf ${=libs} --run '
+  set -e
+  zig fetch "git+https://github.com/Vexu/arocc#d0c8c4d9c55daa7ef6e40cf0f630a5b5e900989b"
+  zig build -Doptimize=ReleaseFast -p "$HOME/.local"
+  patchelf --set-interpreter "$(cat "$NIX_CC/nix-support/dynamic-linker")" "$HOME/.local/bin/renux"
+'
+
+# GTK trusts an icon cache that is as new as its folder, and an install into a size
+# folder does not change that date. A stale cache hides the Renux icon from the
+# launcher and alt-tab, so refresh it. The folder has no index.theme: -t skips it.
+icon_dir="$HOME/.local/share/icons/hicolor"
+if [[ -f "$icon_dir/icon-theme.cache" ]]; then
+  gtk-update-icon-cache --force --ignore-theme-index "$icon_dir"
+fi
+
+echo "Installed Renux ${renux_rev:0:7} into ~/.local/bin/renux"

@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+
+# Find or start a shared resource (a database, a docs server) in Renux, once for all agents.
+#
+#   Usage: rex-resource NAME DIR -- CMD [ARGS...]
+#
+# The resource runs in a block labeled NAME, in the Rex session labeled "resources". A
+# lock makes the look-up and the start one step, so two agents cannot start it twice.
+# The block stays open when its command ends. The next call closes such a block and
+# starts the command again. CMD runs with the PATH of ~/.zshrc (rex run --interactive).
+# Prints one JSON line: {"block", "session", "started", "cwd", "argv"}. cwd and argv are
+# those of the start, kept in the state folder next to the lock.
+# Exit 1: Rex fails, or the lock stays taken. Exit 2: a usage error.
+#
+# REX_BIN is the rex command (default rex). REX_RESOURCE_STALE is the age in seconds after
+# which a lock is stale (default 60). REX_RESOURCE_POLL is the seconds between two lock
+# tries (default 0.2). The script waits at most 30 seconds for the lock.
+
+set -euo pipefail
+
+say() { printf 'rex-resource: %s\n' "$*" >&2; }
+
+if [ $# -lt 4 ] || [ -z "${1:-}" ] || [ "${3:-}" != -- ]; then
+  say "usage: rex-resource NAME DIR -- CMD [ARGS...]"
+  exit 2
+fi
+name=$1 cwd=$2 dir_arg=$2
+shift 3
+# An absolute cwd, when DIR exists.
+cwd=$(cd "$cwd" 2>/dev/null && pwd) || cwd=$dir_arg
+
+stale=${REX_RESOURCE_STALE:-60}
+poll=${REX_RESOURCE_POLL:-0.2}
+dir="${XDG_STATE_HOME:-$HOME/.local/state}/rex-resource"
+lock="$dir/lock"
+# The cwd and argv of the start of NAME. A "/" in NAME becomes "_".
+start_file="$dir/$(printf '%s' "$name" | tr '/' '_').json"
+mkdir -p "$dir"
+
+# This function is named rex: "command rex" skips it, or it would call itself.
+rex() {
+  if [ -n "${REX_BIN:-}" ]; then "$REX_BIN" --autostart=false "$@"; else command rex --autostart=false "$@"; fi
+}
+
+# rex_out ARGS...: print the output of rex. Exit 1 with a message when rex fails.
+rex_out() {
+  rex "$@" 2>/dev/null || { say "rex does not answer"; exit 1; }
+}
+
+# age PATH: the seconds since PATH changed. GNU stat first, then BSD stat (macOS).
+age() {
+  local m
+  m=$(stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null) || { echo 0; return; }
+  echo $(($(date +%s) - m))
+}
+
+owner=""
+release() { [ -z "$owner" ] || rmdir "$lock" 2>/dev/null || true; }
+trap release EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+# take_lock: mkdir is the lock. A lock older than the stale time is removed.
+take_lock() {
+  local tries=0 max
+  max=$(awk -v p="$poll" 'BEGIN { printf "%d", 30 / p }')
+  while ! mkdir "$lock" 2>/dev/null; do
+    if [ -d "$lock" ] && [ "$(age "$lock")" -gt "$stale" ]; then
+      rmdir "$lock" 2>/dev/null || true
+      continue
+    fi
+    tries=$((tries + 1))
+    if [ "$tries" -gt "$max" ]; then
+      say "$name is locked"
+      exit 1
+    fi
+    sleep "$poll"
+  done
+  owner=1
+}
+
+take_lock
+
+# The session "resources": use it, or make it. A new session does not switch the view.
+session=$(rex_out api call session.list '{}' | jq -r '[.sessions[] | select(.label == "resources")][0].session_id // empty')
+if [ -z "$session" ]; then
+  session=$(rex_out new resources --json | jq -r '.session_id')
+fi
+
+args=$(jq -cn --arg s "$session" '{session_id: $s}')
+block=$(rex_out api call session.list_blocks "$args" |
+  jq -r --arg n "$name" '[.blocks[] | select(.label == $n)][0].block_id // empty')
+
+# A found block whose command ended is gone: close it, then start the command again.
+if [ -n "$block" ]; then
+  info=$(rex_out api call block.method \
+    "$(jq -cn --arg s "$session" --arg b "$block" '{session_id: $s, block_id: $b, method: "process"}')")
+  if jq -e '.last_exit != null or .child == null' <<<"$info" >/dev/null; then
+    rex_out block close -s "$session" "$block" >/dev/null
+    block=""
+  fi
+fi
+
+if [ -n "$block" ]; then
+  started=false
+  if [ -f "$start_file" ]; then
+    start=$(cat "$start_file")
+  else
+    # No saved start: use the cwd and the program of the process.
+    start=$(jq -c '{cwd: (.child.cwd // ""), argv: (if .child.invoked_path then [.child.invoked_path] else [] end)}' <<<"$info")
+  fi
+else
+  started=true
+  block=$(rex_out run -s "$session" --focus=false --keep-open --interactive --label "$name" --cwd "$cwd" --json -- "$@" |
+    jq -r '.block_ids[0]')
+  # After --args --, jq 1.6 and 1.7 keep each word of CMD as it is, also a word such as -D.
+  start=$(jq -cn --arg cwd "$cwd" '{cwd: $cwd, argv: $ARGS.positional}' --args -- "$@")
+  printf '%s\n' "$start" >"$start_file"
+fi
+
+jq -cn --arg block "$block" --arg session "$session" --argjson started "$started" --argjson start "$start" \
+  '{block: $block, session: $session, started: $started, cwd: $start.cwd, argv: $start.argv}'

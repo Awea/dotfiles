@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# An agent runs this in its Renux pane. ctrl+b d then opens reviewr on DIR, in the branch
+# scope from BASE. The record is ~/.local/state/rex/reviewr/<block>.json, read by
+# reviewr-pick.
+#
+#   reviewr-target DIR [BASE]
+set -euo pipefail
+export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}"
+if [ -z "${REX_BLOCK:-}" ]; then
+  printf 'reviewr-target: run this in a Renux pane (REX_BLOCK is not set).\n' >&2
+  exit 2
+fi
+dir=$(cd "${1:?usage: reviewr-target DIR [BASE]}" 2>/dev/null && pwd -P) || {
+  printf 'reviewr-target: %s is not a folder.\n' "$1" >&2
+  exit 2
+}
+base=${2:-}
+state="${XDG_STATE_HOME:-$HOME/.local/state}/rex/reviewr"
+mkdir -p "$state"
+tmp=$(mktemp "$state/.tmp.XXXXXX")
+jq -n --arg d "$dir" --arg b "$base" '{dir: $d, base: (if $b == "" then null else $b end)}' >"$tmp"
+mv "$tmp" "$state/$REX_BLOCK.json"
