@@ -44,12 +44,32 @@ line() { bash "$SCRIPT" <<<"$1" | sed $'s/\x1b\\[[0-9;]*m//g'; }
   [ "$output" = "ctx ?" ]
 }
 
-@test "the percent is green below 50, yellow below 80, red from 80" {
-  for p in 10:32 60:33 85:31; do
-    out=$(bash "$SCRIPT" <<<"{\"context_window\":{\"context_window_size\":100000,
-      \"used_percentage\":${p%%:*},\"current_usage\":null}}")
-    [[ "$out" == *$'\e['"${p##*:}m"* ]] || return 1
+# color JSON: the color code before the used tokens, and before the percent.
+color() {
+  bash "$SCRIPT" <<<"$1" | sed -E $'s/^ctx \x1b\\[([0-9]+)m[^\x1b]*\x1b\\[0m\\/[^ ]* \x1b\\[([0-9]+)m.*/\\1 \\2/'
+}
+
+@test "the tokens and the percent are green below 100k, yellow to 150k, red over 150k" {
+  for t in 50000:32 99400:32 99600:33 150000:33 150400:33 150600:31 400000:31; do
+    run color "{\"context_window\":{\"context_window_size\":1000000,
+      \"used_percentage\":10,\"current_usage\":{\"input_tokens\":${t%%:*}}}}"
+    [ "$output" = "${t##*:} ${t##*:}" ] || { echo "${t%%:*}: $output"; return 1; }
   done
+}
+
+@test "a 200k window uses the same token thresholds" {
+  run color '{"context_window":{"context_window_size":200000,"used_percentage":78,
+    "current_usage":{"input_tokens":155000}}}'
+  [ "$output" = "31 31" ]
+  run color '{"context_window":{"context_window_size":200000,"used_percentage":60,
+    "current_usage":{"input_tokens":120000}}}'
+  [ "$output" = "33 33" ]
+}
+
+@test "the status line is green before the first message" {
+  run color '{"context_window":{"context_window_size":200000,"used_percentage":null,
+    "current_usage":null}}'
+  [ "$output" = "32 32" ]
 }
 
 @test "make links the status line script" {
@@ -71,5 +91,5 @@ line() { bash "$SCRIPT" <<<"$1" | sed $'s/\x1b\\[[0-9;]*m//g'; }
   ln -s "$SCRIPT" "$BATS_TEST_TMPDIR/.claude/statusline.sh"
   run env HOME="$BATS_TEST_TMPDIR" sh -c "$cmd" <<<'{"context_window":{"context_window_size":200000}}'
   [ "$status" -eq 0 ]
-  [[ "$output" == "ctx 0k/200k "* ]]
+  [[ "$(sed $'s/\x1b\\[[0-9;]*m//g' <<<"$output")" == "ctx 0k/200k "* ]]
 }

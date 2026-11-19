@@ -46,7 +46,7 @@
   finding, send the rejected findings with their reasons. Stop when the reviewer writes
   only `no findings`, or after 3 rounds. Report the open findings.
 - The reviewer runs in the background, so the loop spans several turns. When the loop
-  ends, tell the user to review the branch in herdr reviewr and send the comments from it.
+  ends, tell the user to review the branch in reviewr and send the comments from it.
   In Renux (`REX_BLOCK` set), first run
   `~/.config/rex/bin/reviewr-target <worktree root> <short base SHA>`. Then the user
   presses ctrl+b d on your pane, and reviewr opens on that worktree and base. Run it
@@ -96,7 +96,8 @@
 - Start a shared resource once for all agents with `~/.bin/rex-resource <n> <dir> -- <cmd>`.
   Its JSON tells the block, the session, `started`, `cwd` and `argv`: check `cwd` and
   `argv` when `started` is false. Read it with
-  `rex capture -s <session> -b <block> --trim | tail -40`. Do not close a shared resource.
+  `rex capture -s <session> -b <block> --trim | tail -40`. Do not close a shared resource:
+  `rex-resource` closes an ended resource when no live Renux block uses it.
 - When you start work on a branch, run `~/.bin/rex-tab-name <branch>`: your Renux tab then
   shows the task. A board worker skips it: its tab has the card name.
 - When you start a task, and when its goal changes, run `~/.bin/rex-summary "<sentence>"`
@@ -120,8 +121,13 @@
 # Replies
 
 - In Renux, write the tab name of a job, not its block ID.
+- In Renux, write the block ID of a pane or a worker as a link, for example
+  `[e0760707](renux://block/e0760707)`. A Ctrl-click on it shows that pane.
 - Write each file path in a reply as a link to the absolute path:
   `[docs/spec.md](file:///home/awea/repo/docs/spec.md)`. Add a line as `#L12`.
+- In a reply to the user, do not show a change as a diff, a code snippet or a config
+  entry, unless the user asks for it. Give the file link and tell the change in words.
+  The user reads the changes in reviewr. A subagent report can quote code.
 
 # Plugins
 
