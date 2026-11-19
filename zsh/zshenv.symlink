@@ -1,0 +1,12 @@
+# ~/.zshenv: every zsh reads it, also a non-interactive `zsh -c` job.
+# Keep it small: ~/.zshrc does the interactive setup.
+
+# asdf: a job finds mix, bats and the other asdf tools.
+# system/path.zsh puts the shims first again in an interactive shell.
+export ASDF_DATA_DIR="${ASDF_DATA_DIR:-$HOME/.asdf}"
+if [[ ":$PATH:" != *":$ASDF_DATA_DIR/shims:"* ]]; then
+  export PATH="$ASDF_DATA_DIR/shims:$PATH"
+fi
+
+# Radicle
+export PATH="$PATH:$HOME/.radicle/bin"
