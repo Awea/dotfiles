@@ -36,6 +36,29 @@ in
     inputs.hunk.packages.${system}.default
   ];
 
+  # Nix programs find the GPU drivers in /run/opengl-driver, as on NixOS.
+  # scripts/programs/nix-home-manager runs the root setup that makes the link.
+  # The version must be the version of the host driver (nvidia-smi). After an apt
+  # update of the driver, set the new version and the hash that this prints:
+  #   nix store prefetch-file https://download.nvidia.com/XFree86/Linux-x86_64/<version>/NVIDIA-Linux-x86_64-<version>.run
+  targets.genericLinux.gpu = lib.mkIf isLinux {
+    enable = true;
+    # The NVIDIA driver is unfree: allow it, and only it. The host already runs
+    # this driver from apt, under the same NVIDIA license.
+    packages = import inputs.nixpkgs {
+      inherit system;
+      config = {
+        allowUnfreePredicate = p: lib.getName p == "nvidia-x11";
+        nvidia.acceptLicense = true;
+      };
+    };
+    nvidia = {
+      enable = true;
+      version = "580.178.04";
+      sha256 = "sha256-WXWobuRb/8tib1GuM9EWmxCBhqLqR61lHnLxP6S21vk=";
+    };
+  };
+
   # macOS has no systemd: these services are Linux only.
   systemd.user = lib.mkIf isLinux {
     # Start/restart changed systemd user services automatically on `switch`.
