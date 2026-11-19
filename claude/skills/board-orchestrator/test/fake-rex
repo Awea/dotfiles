@@ -3,7 +3,8 @@
 # $FAKE_DIR/rex/: blocks.jsonl (one JSON line for each block: session_id, window_id,
 # window_label, block_id), process-<block>.json and status-<block>.json (the defaults are
 # the real answers in test/fixtures/rex), capture.txt. The hook on-api runs at each
-# api call. FAKE_REX_FAIL=1 makes every call fail. FAKE_REX_SEND_FAIL=1 makes only send fail.
+# api call. FAKE_REX_FAIL=1 makes every call fail. FAKE_REX_SEND_FAIL=1 makes only send fail,
+# FAKE_REX_KEY_FAIL=1 only send-key. FAKE_REX_WINDOW_FAIL=1 makes only window new fail.
 # FAKE_REX_KILL_FAIL=1 makes only kill fail. FAKE_REX_KILL_HUP=1 sends SIGHUP to the caller
 # of kill.
 d="$FAKE_DIR/rex"
@@ -106,6 +107,7 @@ case "$cmd" in
     [ "${1:-}" = new ] || exit 0
     shift
     save_args window-new "$@"
+    [ "${FAKE_REX_WINDOW_FAIL:-}" != 1 ] || { printf 'rex: window new failed\n' >&2; exit 1; }
     parse "$@"
     [ -n "$session" ] || { printf 'rex: no session\n' >&2; exit 1; }
     w="window:fake-$(next window)" b=$(block_id "$(next block)")
@@ -174,7 +176,7 @@ case "$cmd" in
     for a in "$@"; do [ "$a" = -- ] || args+=("$a"); done
     save_args send "${args[@]}"
     ;;
-  send-key) : ;;
+  send-key) [ "${FAKE_REX_KEY_FAIL:-}" != 1 ] || { printf 'rex: send-key failed\n' >&2; exit 1; } ;;
   capture) cat "$d/capture.txt" 2>/dev/null || true ;;
   kill)
     [ "${FAKE_REX_KILL_FAIL:-}" != 1 ] || { printf 'rex: kill failed\n' >&2; exit 1; }

@@ -19,8 +19,9 @@ human. The agent reads `SKILL.md`, and `start.md`, `shorten.md` and `boards.md` 
 | `term.sh` | The terminal functions for Renux. `lib.sh` sources it. |
 | `board-watch.lua` | The board watcher of a Renux session. |
 | `board.sh` | Lists the boards and the running orchestrators, and opens and stops them for the Renux popups. `claude-resume.sh` runs `board.sh restart` to start an orchestrator again in its shell after a reboot. |
-| `hooks/compact.sh` | After a compact, tells the orchestrator to read `SKILL.md` again. |
-| `hooks/guard.sh` | Blocks a `rex` call that changes the window. A worker leaves the tabs as they are. Asks for a worker push with no review. |
+| `hooks/compact.sh` | After a compact, tells the orchestrator to read `SKILL.md` again, and a worker to read its first prompt again. |
+| `hooks/guard.sh` | Blocks a `rex` call that changes the window. A worker leaves the tabs as they are, but it can open a job tab with `rex run --focus=false` in its session and close a tab with `rex block close`. Refuses a worker push when the session started no reviewer. |
+| `hooks/scan.awk` | The command scan of `hooks/guard.sh`, in POSIX awk: bash reads a big command too slowly. |
 | `test/*.bats` | The bats tests. `test/skill.bats` checks the skill text. |
 
 ## Workers
@@ -34,11 +35,41 @@ human. The agent reads `SKILL.md`, and `start.md`, `shorten.md` and `boards.md` 
   worker terminal runs `worktree-setup.sh` before claude. It runs `make worktree-setup`
   in the start folder (else the worktree root) and keeps the output in a log beside the
   report. The prompt gives the worker that log. A worktree used again gets no setup.
+- A done worker keeps its worktree and branch: the user can still refuse the changes.
+  `dispatch.sh close` removes them after it ends the worker, also the worktree of the card
+  in each other repo of the board (`REPO-SLUG`):
+  1. When the worktree has changes that are not committed, or a detached HEAD with
+     commits that the default branch does not have, it stays as it is.
+  2. When the repo has a make target `worktree-teardown`, `close` runs it in the start
+     folder (else the worktree root), for example to stop a database. The output goes to
+     a log beside the report. When make fails, the worktree stays.
+  3. `git worktree remove` removes the worktree. The link to the push policy goes first.
+  4. The branch goes only when the default branch (`origin/HEAD`, its local branch, or
+     the branch of the main checkout) has all its commits. Else it stays: a close never
+     deletes work. A squash-merged branch stays.
+
+  `close` keeps all the worktrees of a worker with no report: it ended before the end of
+  its work. It does not touch a linked worktree that it did not make (a `start` in a
+  linked worktree), or a worktree that another worker of the card uses. It tells each
+  kept worktree or branch on stderr.
+- A worker that a stop of the orchestrator ended gets no `close`. `resume-clear` drops
+  the worktrees of a worker with `RESULT: DONE` in the same steps, but only when the
+  default branch has all the commits of the worktree. Else they stay with no line.
+- To resume a closed worker with `claude --resume <session>`, the worktree must be
+  there. When `close` removed it, first run `git worktree add <same path> <kept branch>`.
 - An automatic worker gets the allow rules of `<repo>/.claude/settings.readonly.json`,
   the allow rules and MCP servers of its board, the `dispatch.sh tell` rule and an edit rule for
   its report.
 - Only one orchestrator of a board runs at a time. To restart, close the old orchestrator
   first (alt-shift-x). Each start is a new session that starts at rule 1.
+- `dispatch.sh start` keeps the full first prompt of a worker (the card and the footer) in
+  `prompts/<session>.md` in the state folder. A compact keeps only a summary of it:
+  `hooks/compact.sh` tells the worker to read that file again. An auto worker gets a Read
+  rule for it. `dispatch.sh resume` names the file in its prompt. `dispatch.sh close` and
+  `dispatch.sh resume-clear` remove the file with the record.
+- The footer of a task worker gives the order of the sources of truth, most trusted
+  first: the words of the user, the issue and the PR, the code and git after a fetch, the
+  vault task note, the card. On a conflict that changes the work, the worker asks the user.
 - `SKILL.md` keeps `disable-model-invocation: true`. It stops worker claudes from loading
   the skill and its `Bash(dispatch.sh *)` permission. `test/skill.bats` checks it.
 
@@ -69,6 +100,30 @@ The state folder keeps the old name `board-orchestrator-hc`: it holds live state
   `<rex>SHORT NAME is blocked (MSG). See: dispatch.sh last SHORT</rex>` or
   `<rex>SHORT NAME exited (exit CODE). See: dispatch.sh last SHORT</rex>`. These notices
   have no `from` attribute.
+- When the user closes the tab of a running worker, Rex sends `block_closed` and no
+  `terminal.child_exited`. The watcher then calls `dispatch.sh notice BLOCK closed`, which
+  sends `<rex>SHORT NAME exited (tab closed). See: dispatch.sh last SHORT</rex>`. The
+  record keeps one exit notice: an exit and a closed tab of the same worker send one
+  notice. `dispatch.sh close` marks the record first, so its own block close sends none.
+- A `tell` or `notice` message to the orchestrator, and an `answer` to a busy worker,
+  wait in a queue, `$STATE/rex/outbox-SESSION.jsonl`. Rex types a message at the cursor,
+  and its Enter would send the text that the user types with it. Rex does not tell when
+  a user types. So each second, while the queue has lines, the watcher runs
+  `dispatch.sh deliver SESSION`. `deliver` reads the input box of Claude Code in the VT
+  format and skips the dim suggestion text. It sends when the box stayed empty for 2
+  seconds (`BOARD_OUTBOX_QUIET`) and the orchestrator is not blocked. All waiting
+  messages go as one input, one per line. A worker line has `role: "worker"`: the worker
+  gets its words only when it is idle or done, as text in a permission prompt can select
+  an option. A message to a gone orchestrator goes to the new orchestrator of its board.
+  With no orchestrator, and for a gone worker, the message is dropped, and the watcher
+  log `$STATE/rex/watch-SESSION.log` says so. The log also tells a message that waits for
+  more than 5 minutes, and an Enter that failed after the text went in: the user then
+  presses Enter. A broken line of the queue is dropped. The lock of the queue is the
+  folder `outbox-SESSION.jsonl.lock` with the pid of its holder: a lock of a dead process
+  does not count.
+- A watcher from before the queue has no `outbox=` argument. With such a watcher,
+  `tell` and `notice` send at once, and `answer` sends nothing to a busy worker. The next
+  `board.sh open` or `board.sh restart` stops it and starts the new watcher.
 - In Renux, ctrl+b B opens a board, with one key for each board. ctrl+b X stops a board.
   When only one board runs, it stops at once. `board.sh running` lists the boards that run.
 - `rex send` types raw text, and a newline submits the line. So a message with a newline
@@ -77,7 +132,14 @@ The state folder keeps the old name `board-orchestrator-hc`: it holds live state
 - After a Rex restart, `claude-resume.sh` runs `board.sh restart` for an orchestrator. It
   does not start the workers again.
 - The Rex guard in `hooks/guard.sh` blocks the `rex` calls that change the window for a
-  worker.
+  worker. A job tab stays free: `rex run --focus=false`, with no session or the session
+  of the worker, and `rex block close`. The guard cannot tell who started a block, so a
+  worker can also close a tab of another agent. A read stays free: `rex ls`, `rex wait`,
+  `rex capture`, `--help` and the read methods of `rex api call`.
+- The guard splits a command as the shell does. A quoted `|` or `;`, a quoted heredoc
+  body, a comment and an arithmetic `$(( ))` hold no command. A `$( )`, a `` ` ``, an
+  unquoted heredoc body, a shell `-c` text, `eval`, a heredoc fed to a shell and the
+  command of a job tab hold commands, and the guard checks them.
 
 ## Script output
 
@@ -143,10 +205,9 @@ The state folder keeps the old name `board-orchestrator-hc`: it holds live state
   `permissions.deny`: `tea pr merge`, `tea pulls merge` and the Forgejo merge tool, and
   `gh pr merge` for an `origin` on `github.com`. For another `origin`, it writes the
   Forgejo rules and removes the `gh` rules that it wrote before. For `branch`,
-  `hooks/guard.sh` decides each worker push. With each policy, the guard asks for a
-  worker push when no `reviewer` agent started in the session after the oldest commit
-  of the push. A squash with `git reset --soft` gives a new author date, and the push
-  asks again.
+  `hooks/guard.sh` decides each worker push. With each policy, the guard refuses a
+  worker push when no `reviewer` agent started in the session, and tells the worker to
+  start one. A branch delete has no review check.
   The prompt of a task worker gives the policy of its card repo, and a push rule in the
   `CLAUDE.md` of that repo comes first.
 - `last ADDRESS`: the last assistant message of the worker (at most 3000 characters), else
@@ -154,11 +215,17 @@ The state folder keeps the old name `board-orchestrator-hc`: it holds live state
 - `remind ADDRESS REPORT`: asks an idle or done worker to write its report again. Exit 1:
   the worker is gone or works.
 - `answer ADDRESS FILE`: sends FILE after the line "The user answers through the
-  orchestrator:", only to an idle or done worker. Exit 1: gone, works or blocked. Exit 2:
-  FILE missing or empty.
+  orchestrator:" to an idle or done worker with an empty input box, and prints
+  `answer: sent to SHORT.`. Else the words go into the queue of the board watcher, and it
+  prints `answer: queued for SHORT: REASON`. Words for an idle worker also go into the
+  queue when older words wait for it, so the order stays. Exit 1: gone, or busy with no
+  watcher that delivers the queue. Exit 2: FILE missing or empty.
 - `close ADDRESS [wait]`: waits up to 90 seconds for the end of the turn (no limit with
   `wait`), ends the worker and prints its session ID, or an empty line. The report stays.
-  Exit 1 with "no agent": not a worker. Exit 1 with "still working": it closed nothing.
+  Then it removes the worktrees of a task worker (see "Workers") and tells on stderr each
+  worktree or branch that it keeps.
+  Exit 1 with "no agent": not a worker. Exit 1 with "still working" or "words of the user
+  wait" (a queued `answer`): it closed nothing.
 - `log BOARD FILE`: adds one line to `Dev Logs/YYYY-MM-DD - BOARD (board orchestrator).md`
   and a link to it in the daily note.
 - `inbox-clear FILE`: deletes one `_inbox/<name>.md` file. Exit 2: another path. Exit 1:

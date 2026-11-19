@@ -233,6 +233,41 @@ rex_lost() {
   [[ "${RUN_ARGS[-1]}" == *'dispatch.sh tell "report fix-login /r.md"'* ]]
 }
 
+@test "resume tells the worker the file of its first prompt (Rex)" {
+  rsetup
+  rex_orchestrator "$O" garden
+  repo_with_push_policy "$BATS_TEST_TMPDIR/repo"
+  record_worker "$W" garden s1 /r.md
+  f=$(prompt_file s1 'Fix the login bug.')
+  dispatch resume garden s1
+  [ "$status" -eq 0 ]
+  rex_args window-new
+  [[ "${RUN_ARGS[-1]}" == *"Your first prompt is in $f."*"read that file with the Read tool before any other action"* ]]
+}
+
+@test "resume of a worker with no prompt file names no file (Rex)" {
+  rsetup
+  rex_orchestrator "$O" garden
+  repo_with_push_policy "$BATS_TEST_TMPDIR/repo"
+  record_worker "$W" garden s1 /r.md
+  dispatch resume garden s1
+  [ "$status" -eq 0 ]
+  rex_args window-new
+  [[ "${RUN_ARGS[-1]}" != *"Your first prompt is in"* ]]
+  [ ! -e "$STATE/prompts/s1.md" ]
+}
+
+@test "resume-clear removes the prompt file of a dropped record (Rex)" {
+  rsetup
+  record_worker "$W2" garden s0
+  rex_worker "$W" garden s1
+  f0=$(prompt_file s0 one) f1=$(prompt_file s1 two)
+  dispatch resume-clear garden
+  [ "$status" -eq 0 ]
+  [ ! -e "$f0" ]
+  [ -f "$f1" ]
+}
+
 @test "resume exits 1 for an unknown session (Rex)" {
   rsetup
   rex_orchestrator "$O" garden

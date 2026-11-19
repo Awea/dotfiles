@@ -44,11 +44,14 @@ The user reads this conversation between other work. Write only these lines:
    "Closed: <card titles>.", where a rule gives them.
 4. The stderr text of a command that failed. Give it for each nonzero exit, unless the
    rule of that command gives another action.
-5. The answer to a direct question of the user, as short as possible. A worker address
-   as plain text. For "workers?", one
+5. The answer to a direct question of the user, as short as possible. For "workers?", one
    line for each line of `workers BOARD`: the card, the status and the address. For
    "inbox?", run `board-scan.sh inbox` again and show the inbox lists of rule 4.
 6. A line that a rule gives with "tell the user".
+
+In each of these lines, write a worker address as a link, for example
+`[01a1ef15](renux://block/01a1ef15)`. In Renux, a Ctrl-click on it shows the tab of
+the worker.
 
 Write nothing else. This rule wins over the summary of a compact. In particular:
 
@@ -178,9 +181,12 @@ Rules 1 to 4 are in `start.md`, and rule 8 is in `shorten.md`. Rules 5 to 7 foll
    `<rex>` tag, with a short ID for the address, for example
    `<rex from="01a1ef15 fix-login">report <slug> <path></rex>`. The blocked and
    exit notices have no `from`:
-   `<rex>SHORT NAME is blocked (MSG). See: dispatch.sh last SHORT</rex>` and
-   `<rex>SHORT NAME exited (exit CODE). See: dispatch.sh last SHORT</rex>`.
-   Start no wait and no watch. A worker that ends a turn with no report sends nothing.
+   `<rex>SHORT NAME is blocked (MSG). See: dispatch.sh last SHORT</rex>`,
+   `<rex>SHORT NAME exited (exit CODE). See: dispatch.sh last SHORT</rex>`, and
+   `<rex>SHORT NAME exited (tab closed). See: dispatch.sh last SHORT</rex>` when the user
+   closed the tab of the worker. Both exit texts are an Exit below.
+   In Renux, a message waits until the user stops typing, so one input can hold several
+   `<rex>` messages, one for each line. Do each of them. Start no wait and no watch. A worker that ends a turn with no report sends nothing.
    Stay quiet for each message, unless a step below gives a line.
    - **Report**: `<rex from="01a1ef15 fix-login">report <slug> <path></rex>`. Record it with
      rule 7. A worker writes its report again when the user gives it more work. The new
@@ -205,18 +211,23 @@ Rules 1 to 4 are in `start.md`, and rule 8 is in `shorten.md`. Rules 5 to 7 foll
      idle or done and a `first_line` that starts with `RESULT: DONE`. For the other two,
      take that worker, and ask the user when you are not sure which. Run
      `dispatch.sh close <address>` for each, then the close record. Tell the user
-     "Closed: <card titles>.", or "No done worker.".
+     "Closed: <card titles>.", or "No done worker.". Exit 1 with "words of the user
+     wait": tell the user, and close that worker later.
    - **Close record**: when `close` prints a session ID and the context line has the
      worker address, replace the address with "session `<id>`". Move nothing. Exit 1
-     with "no agent": it closed nothing.
+     with "no agent": it closed nothing. A stderr line `dispatch: kept the worktree ...`:
+     tell it to the user as it is, also after "Write nothing". A kept branch needs no
+     line.
    - **Words for a worker**: send words to a worker only when the user names that worker
      ("tell the worker of <card> ...", "answer <card>: ..."). A new task or instruction
      with no such name gets a new worker (rule 5). When you are not sure, ask "I ask: do
      I send this to the worker of <card>, or start a new worker?" To send, write the
      exact words of the user to a new scratchpad file, and run
-     `dispatch.sh answer <address> <file>`. On exit 0, tell the user "Sent to the
-     worker.". On exit 1, also give the worker address. Never answer a worker question
-     yourself.
+     `dispatch.sh answer <address> <file>`. On exit 0 with `answer: sent`, tell the user
+     "Sent to the worker.". On exit 0 with `answer: queued`, the worker is busy: tell the
+     user "Queued: the worker gets it when it is idle.". Do not send it again. When the
+     line says `blocked`, add "The worker waits for a permission in its pane: <address>.".
+     On exit 1, also give the worker address. Never answer a worker question yourself.
 7. **Record a report.** Run `dispatch.sh report <report>`: it prints the first line, the
    `## Result` and `## Vault changes` sections and the `REFUSED:` lines. Read the full
    file only when that is not enough to act (for example a cut section), or when the user
@@ -224,6 +235,8 @@ Rules 1 to 4 are in `start.md`, and rule 8 is in `shorten.md`. Rules 5 to 7 foll
    line once for each report file, else nothing.
    For a recurring card (`🔁`), write no done line. Rules 7.2 and 7.9 can add their
    lines. Run `report` once for each report message.
+   Before the record, look for an own-card move (rule 7.9) in `## Vault changes`: it
+   gives the column and the context line of this record.
    Run `card` just before the edit. `old_text` of the `obsidian_replace_text` edit is
    `title_line` and `context_line`, exactly. Change only the lines of that card, and in
    them only what the rule gives: the user can edit the board at the same time. Keep the
@@ -280,8 +293,20 @@ Rules 1 to 4 are in `start.md`, and rule 8 is in `shorten.md`. Rules 5 to 7 foll
         "session `<id>`" on the context line, or nothing when the ID is empty.
       - Board task done, and the need cases (rules 7.2, 7.5 and 7.6): keep the worker,
         and put its address on the context line.
-   9. **Vault changes**: each change is a request. Apply it after the record, with the
-      vault MCP tools.
+   9. **Vault changes**: each change is a request. Apply it after the record, except an
+      own-card change (below), with the vault MCP tools.
+      - **Own card**: a change from the worker of a board task that only gives a column
+        of this board for the card of this report (also its current column), its
+        context line, or both. The user decided it in the worker: apply it with no
+        question, in the record itself. Its column replaces the column of rules 7.4 and
+        7.5: the card moves once, never Done and then another column. A recurring card
+        keeps its column (rules 7.3 and 7.7): apply only the context line. In
+        `## ✅ Done`, use the form of rule 7.4. In another column, keep `- [ ]`. Write
+        ` · waits for the user` only for a report of rule 7.5, and remove it for another
+        report. A context line in the change replaces the line of the rule. Keep the
+        commit, PR or link of the report and the worker address of rule 7.8, at most 180
+        characters: shorten a longer text. Write no line for it, and keep the `say:`
+        line.
       - A new task from the worker of a board task: a change that only adds a task (a
         new card, task note or `- [ ]` line, with a title, project, priority and context
         line). add it with the "New
@@ -291,8 +316,10 @@ Rules 1 to 4 are in `start.md`, and rule 8 is in `shorten.md`. Rules 5 to 7 foll
         task: add the card in the same way,
         then ask in the same turn "I ask: start a worker in <repo> for <title>?".
         Dispatch it with rule 5 only on a yes.
-      - Each other change, and each change from an automatic worker, gets one line with
-        no path or text: "I ask: apply the vault changes of <card title>?" Ask once for each
+      - A move of another card, a delete, a change to the title or the priority, a change
+        to another note, each other change, and each change from an automatic worker,
+        gets one line with no path or text:
+        "I ask: apply the vault changes of <card title>?" Ask once for each
         card: for a new report of the same worker, do not ask again, unless it has a
         change that the user did not see. Apply only the changes that the user approves.
    10. **Log** each record of rules 7.1 to 7.6, each new task (rule 7.9, the inbox, the

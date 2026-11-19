@@ -259,3 +259,45 @@ rex_args() { mapfile -d '' RUN_ARGS <"$FAKE_DIR/rex/rex-$1-${2:-1}.args"; }
   rex_args send
   [ "${RUN_ARGS[4]}" = '-n text' ]
 }
+
+@test "rex_prompt_state: an empty input box is empty" {
+  source "$SKILL_DIR/lib.sh"
+  screen "$PROMPT"
+  [ "$(rex_prompt_state "$O")" = empty ]
+}
+
+@test "rex_prompt_state: typed text is typed, also after a cursor move or a color with a 2" {
+  source "$SKILL_DIR/lib.sh"
+  screen "${PROMPT}hello"
+  [ "$(rex_prompt_state "$O")" = typed ]
+  screen "${PROMPT}"$'\e[1Cx'
+  [ "$(rex_prompt_state "$O")" = typed ]
+  screen "${PROMPT}"$'\e[38;2;2;2;2mhello\e[0m'
+  [ "$(rex_prompt_state "$O")" = typed ]
+}
+
+@test "rex_prompt_state: the dim suggestion of Claude Code is not typed text" {
+  source "$SKILL_DIR/lib.sh"
+  screen "${PROMPT}"$'\e[2mTry "refactor vm.py"\e[0m'
+  [ "$(rex_prompt_state "$O")" = empty ]
+  screen "${PROMPT}"$'abc\e[0m\e[2m ghost\e[0m'
+  [ "$(rex_prompt_state "$O")" = typed ]
+  screen "${PROMPT}"$'\e[2mghost\e[22mtyped'
+  [ "$(rex_prompt_state "$O")" = typed ]
+}
+
+@test "rex_prompt_state: text on the second line of the box is typed" {
+  source "$SKILL_DIR/lib.sh"
+  screen "$PROMPT" '  second line'
+  [ "$(rex_prompt_state "$O")" = typed ]
+}
+
+@test "rex_prompt_state: no input box is none" {
+  source "$SKILL_DIR/lib.sh"
+  screen ' Do you want to proceed?' ' 1. Yes'
+  [ "$(rex_prompt_state "$O")" = none ]
+  : >"$FAKE_DIR/rex/capture.txt"
+  [ "$(rex_prompt_state "$O")" = none ]
+  # A gone block has no input box.
+  [ "$(rex_prompt_state block:00000000-0000-0000-0000-00000000dead)" = none ]
+}
