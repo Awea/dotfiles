@@ -1,0 +1,1 @@
+{"last_exit":null,"child":{"pid":929020,"user_id":1000,"user":"user","name":"zsh","path":"/usr/bin/zsh","invoked_path":"/usr/bin/zsh","argv0":"-zsh","cwd":"/tmp"},"foreground":{"pid":929020,"user_id":1000,"user":"user","name":"zsh","path":"/usr/bin/zsh","invoked_path":"/usr/bin/zsh","argv0":"-zsh","cwd":"/tmp"},"home":"/home/user"}

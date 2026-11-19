@@ -7,6 +7,17 @@ load helper
 dispatch() { run bash "$SKILL_DIR/dispatch.sh" "$@"; }
 records() { cat "$XDG_STATE_HOME/board-orchestrator-hc/workers"; }
 
+# lost_worker ADDR BOARD SESSION [FOREGROUND [EXTRA_LABELS_JSON]]: a worker record and its
+# kept terminal after a restart: hc put a shell in the place of claude, with the same
+# labels. FOREGROUND is the program in front of that shell (default: the shell).
+lost_worker() {
+  local f="$FAKE_DIR/hc-get-$1.json" extra=${5:-'{}'}
+  fake_terminal "$1" "$2" worker "${4:-zsh}" "$(jq -c --arg s "$3" '{"board.session":$s} + .' <<<"$extra")"
+  jq --arg fg "${4:-zsh}" '.argv = ["/usr/bin/zsh"] | .pid = 300 | .keep = true
+    | .foreground.pid = (if $fg == "zsh" then 300 else 512 end)' "$f" >"$f.tmp" && mv "$f.tmp" "$f"
+  record_worker "$1" "$2" "$3"
+}
+
 @test "workers lists a live worker of the board" {
   live_worker t9 garden s1
   set_status t9 idle
@@ -42,6 +53,92 @@ records() { cat "$XDG_STATE_HOME/board-orchestrator-hc/workers"; }
   fake_terminal t9 garden worker claude '{"board.session":"s2"}'
   dispatch workers garden
   [ -z "$output" ]
+}
+
+@test "workers skips a worker that a restart replaced with a shell" {
+  lost_worker t9 garden s1
+  dispatch workers garden
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "workers lists a worker that the user started again in its shell" {
+  lost_worker t9 garden s1 claude
+  dispatch workers garden
+  [ "$(jq -r .address <<<"$output")" = t9 ]
+}
+
+@test "workers lists a worker that runs the program of dispatch" {
+  live_worker t9 garden s1
+  f="$FAKE_DIR/hc-get-t9.json"
+  jq '.argv = ["env", "BOARD_RESOURCES_OFF=1", "claude"] | .pid = 300 | .foreground = {name: "claude", pid: 300}' \
+    "$f" >"$f.tmp" && mv "$f.tmp" "$f"
+  dispatch workers garden
+  [ "$(jq -r .address <<<"$output")" = t9 ]
+}
+
+@test "resumable lists a worker that a restart replaced with a shell, and closes that shell" {
+  lost_worker t9 garden s1 zsh '{"herdr.tab":"tb3"}'
+  dispatch resumable garden
+  [ "$status" -eq 0 ]
+  [ "$(jq -r .session <<<"$output")" = s1 ]
+  park=$(grep -n -m 1 'terminal.park --terminal t9' "$FAKE_LOG" | cut -d: -f1)
+  kill=$(grep -n -m 1 '^hc kill t9' "$FAKE_LOG" | cut -d: -f1)
+  [ -n "$park" ] && [ -n "$kill" ]
+  [ "$park" -lt "$kill" ]
+  [ -n "$(calls '^hc rm t9')" ]
+  [ "$(records | cut -f5)" = s1 ]
+}
+
+@test "resumable closes no terminal of another session" {
+  lost_worker t9 garden s2
+  : >"$XDG_STATE_HOME/board-orchestrator-hc/workers"
+  record_worker t9 garden s0
+  dispatch resumable garden
+  [ "$(jq -r .session <<<"$output")" = s0 ]
+  [ -z "$(calls '^hc (kill|rm)')" ]
+}
+
+@test "resume closes the shell that a restart left in the place of the worker" {
+  orchestrator t5 garden
+  repo_with_push_policy "$BATS_TEST_TMPDIR/repo"
+  lost_worker t9 garden s1
+  FAKE_RUN_ADDR=t12 dispatch resume garden s1
+  [ "$status" -eq 0 ]
+  kill=$(grep -n -m 1 '^hc kill t9' "$FAKE_LOG" | cut -d: -f1)
+  run=$(grep -n -m 1 '^hc run' "$FAKE_LOG" | cut -d: -f1)
+  [ -n "$kill" ] && [ -n "$run" ]
+  [ "$kill" -lt "$run" ]
+  [ -n "$(calls '^hc rm t9')" ]
+  [ "$(records | cut -f1)" = t12 ]
+}
+
+@test "resume-clear drops the record of a worker that a restart replaced with a shell, and closes that shell" {
+  lost_worker t9 garden s1
+  dispatch resume-clear garden
+  [ "$status" -eq 0 ]
+  [ -z "$(records)" ]
+  [ -n "$(calls '^hc kill t9')" ]
+  [ -n "$(calls '^hc rm t9')" ]
+}
+
+@test "a worker terminal with no argv and a shell in front still runs" {
+  live_worker t9 garden s1
+  f="$FAKE_DIR/hc-get-t9.json"
+  jq '.foreground = {name: "zsh", pid: 300} | .pid = 300' "$f" >"$f.tmp" && mv "$f.tmp" "$f"
+  dispatch workers garden
+  [ "$(jq -r .address <<<"$output")" = t9 ]
+  dispatch resumable garden
+  [ -z "$output" ]
+  [ -z "$(calls '^hc (kill|rm)')" ]
+}
+
+@test "resumable lists a lost worker shell that runs a program, and does not close it" {
+  lost_worker t9 garden s1 vim
+  dispatch resumable garden
+  [ "$(jq -r .session <<<"$output")" = s1 ]
+  [ -z "$(calls '^hc (kill|rm)')" ]
+  [ -z "$(calls 'terminal.park')" ]
 }
 
 @test "resumable lists a worker whose terminal is gone" {
@@ -212,6 +309,22 @@ records() { cat "$XDG_STATE_HOME/board-orchestrator-hc/workers"; }
   printf 'line on screen\n' >"$FAKE_DIR/hc-read.txt"
   dispatch last t9
   [ "$output" = "line on screen" ]
+}
+
+@test "last of an exited worker reads the session jsonl of its workers line" {
+  record_worker t9 garden s1
+  mkdir -p "$HOME/.claude/projects/p"
+  printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"text","text":"Done, see the PR."}]}}' \
+    >"$HOME/.claude/projects/p/s1.jsonl"
+  dispatch last t9
+  [ "$status" -eq 0 ]
+  [ "$output" = "Done, see the PR." ]
+}
+
+@test "last of a terminal with no workers line says no agent" {
+  dispatch last t9
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"no agent in t9"* ]]
 }
 
 @test "remind asks an idle worker for its report again" {

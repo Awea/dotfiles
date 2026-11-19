@@ -51,7 +51,8 @@ start() { run bash "$SKILL_DIR/dispatch.sh" start "${1:-task}" "$REPO" "Fix logi
   [[ "$session" =~ ^[0-9a-f-]{36}$ ]]
   has_arg "board.session=$session"
   [ "$(arg_after -n)" = fix-login ]
-  [ "$(arg_after --)" = claude ]
+  [ "$(arg_after --)" = env ]
+  [ "$(arg_after BOARD_RESOURCES_OFF=1)" = claude ]
 }
 
 @test "start puts -- before the prompt, after --allowedTools" {
@@ -179,6 +180,27 @@ start() { run bash "$SKILL_DIR/dispatch.sh" start "${1:-task}" "$REPO" "Fix logi
   [ "$status" -eq 0 ]
 }
 
+@test "start task tells the worker the push policy of its repo" {
+  orchestrator t5 garden
+  start
+  run_args
+  [[ "${RUN_ARGS[-1]}" == *"The push policy of your card repo is allow. Each push policy: allow,"* ]]
+  [[ "${RUN_ARGS[-1]}" == *"give the branch in the report. A push rule in the CLAUDE.md of the repo comes first."* ]]
+  printf '{"env":{"BOARD_PUSH_POLICY":"branch"}}\n' >"$REPO/.claude/settings.local.json"
+  start
+  run_args 2
+  [[ "${RUN_ARGS[-1]}" == *"The push policy of your card repo is branch."* ]]
+  [[ "${RUN_ARGS[-1]}" == *"Claude asks the user for the first push of a branch, and later pushes to that branch have no question"* ]]
+}
+
+@test "start auto tells the worker no push policy" {
+  orchestrator t5 garden
+  printf '{"permissions":{"allow":["Bash(make test)"]}}\n' >"$REPO/.claude/settings.readonly.json"
+  start auto
+  run_args
+  [[ "${RUN_ARGS[-1]}" != *"push policy"* ]]
+}
+
 @test "start task exits 2 with no push policy" {
   orchestrator t5 garden
   rm "$REPO/.claude/settings.local.json"
@@ -203,4 +225,84 @@ start() { run bash "$SKILL_DIR/dispatch.sh" start "${1:-task}" "$REPO" "Fix logi
   run_args
   has_arg 'Bash(hc send t5 *)'
   [[ "${RUN_ARGS[-1]}" == *$'\n''Bash(hc send t5 *)'* ]]
+}
+
+# alpha_board: REPO goes under the root of a test board alpha, with board MCP servers,
+# allow rules and a notebooks folder.
+alpha_board() {
+  export BOARD_RESOURCES_HOME="$BATS_TEST_TMPDIR/board-resources"
+  mkdir -p "$BOARD_RESOURCES_HOME/alpha" "$BATS_TEST_TMPDIR/ws/alpha"
+  printf '%s\n' "$BATS_TEST_TMPDIR/ws/alpha" >"$BOARD_RESOURCES_HOME/alpha/roots"
+  printf '%s\n' "$BATS_TEST_TMPDIR/ws/alpha/notebooks" >"$BOARD_RESOURCES_HOME/alpha/notebooks"
+  printf '{"mcpServers":{}}\n' >"$BOARD_RESOURCES_HOME/alpha/mcp.json"
+  printf '{"permissions":{"allow":["Bash(board-ro *)","mcp__appsignal"],"deny":["Bash(pass show beta/*)"]}}\n' \
+    >"$BOARD_RESOURCES_HOME/alpha/settings.json"
+  REPO="$BATS_TEST_TMPDIR/ws/alpha/repo"
+  repo_with_push_policy "$REPO"
+  printf '{"permissions":{"allow":["Bash(make test)"]}}\n' >"$REPO/.claude/settings.readonly.json"
+}
+
+@test "start gives a task worker in a board folder the board MCP and rules" {
+  orchestrator t5 alpha
+  alpha_board
+  start
+  [ "$status" -eq 0 ]
+  run_args
+  [ "$(arg_after --mcp-config)" = "$BOARD_RESOURCES_HOME/alpha/mcp.json" ]
+  settings=$(arg_after --settings)
+  jq -e '.permissions.allow == ["Bash(board-ro *)","mcp__appsignal"]' <<<"$settings"
+  jq -e '.permissions.deny == ["Bash(pass show beta/*)"]' <<<"$settings"
+  jq -e '.enabledPlugins["obsidian-second-brain@obsidian-second-brain"] == false' <<<"$settings"
+}
+
+@test "start auto mode adds the board rules to the repo readonly rules" {
+  orchestrator t5 alpha
+  alpha_board
+  start auto
+  [ "$status" -eq 0 ]
+  run_args
+  jq -e '.permissions.allow == ["Bash(make test)","Bash(board-ro *)","mcp__appsignal"]' <<<"$(arg_after --settings)"
+  [[ "${RUN_ARGS[-1]}" == *"Bash(board-ro *)"* ]]
+}
+
+@test "start auto mode keeps the repo .mcp.json and adds the board one" {
+  orchestrator t5 alpha
+  alpha_board
+  printf '{"mcpServers":{}}\n' >"$REPO/.mcp.json"
+  start auto
+  run_args
+  [ "$(arg_after --mcp-config)" = "$REPO/.mcp.json" ]
+  [ "$(arg_after "$REPO/.mcp.json")" = "$BOARD_RESOURCES_HOME/alpha/mcp.json" ]
+}
+
+@test "start gives a worker outside a board no board flags" {
+  orchestrator t5 garden
+  alpha_board
+  REPO="$BATS_TEST_TMPDIR/other"
+  repo_with_push_policy "$REPO"
+  start
+  [ "$status" -eq 0 ]
+  run_args
+  ! has_arg --mcp-config
+  ! jq -e '.permissions' <<<"$(arg_after --settings)"
+  [[ "${RUN_ARGS[-1]}" != *"notebooks"* ]]
+}
+
+@test "start runs the worker claude with BOARD_RESOURCES_OFF=1" {
+  orchestrator t5 alpha
+  alpha_board
+  start
+  run_args
+  [ "$(arg_after --)" = env ]
+  [ "$(arg_after env)" = BOARD_RESOURCES_OFF=1 ]
+  [ "$(arg_after BOARD_RESOURCES_OFF=1)" = claude ]
+}
+
+@test "start tells the worker the notebooks folder of its board" {
+  orchestrator t5 alpha
+  alpha_board
+  start
+  run_args
+  [[ "${RUN_ARGS[-1]}" == *"You can also write and commit a notebook in $BATS_TEST_TMPDIR/ws/alpha/notebooks"* ]]
+  [[ "${RUN_ARGS[-1]}" == *"board-ro list"* ]]
 }

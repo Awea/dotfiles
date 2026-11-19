@@ -17,6 +17,9 @@ fi
 
 # The tests point these at fakes.
 HC=("${HC_BIN:-hc}")
+# --autostart=false: a call from herdr-app must not start a Rex server.
+# shellcheck disable=SC2034 # Used by term.sh.
+REX=("${REX_BIN:-rex}" --autostart=false)
 # shellcheck disable=SC2034 # Used by the scripts that source this file.
 HAPP=("${HERDR_APP_BIN:-herdr-app}")
 
@@ -31,7 +34,7 @@ state_dir() {
 # terminal is gone or finished.
 hc_labels() {
   local json
-  json=$("${HC[@]}" get "$1" --json 2>/dev/null) || return 1
+  json=$(term_get "$1") || return 1
   jq -e '.state == "live"' <<<"$json" >/dev/null 2>&1 || return 1
   jq -c '.labels // {}' <<<"$json"
 }
@@ -43,6 +46,27 @@ has_labels() {
   labels=$(hc_labels "$1") || return 1
   jq -e --arg b "$2" --arg r "$3" '.board == $b and .["board.role"] == $r' \
     <<<"$labels" >/dev/null 2>&1
+}
+
+# record_file BOARD: "ADDRESS<tab>BOARD" of the orchestrator of BOARD.
+record_file() { printf '%s/orchestrator-%s\n' "$(state_dir)" "$(board_slug "$1")"; }
+
+# orchestrator_of BOARD: the address of the live orchestrator of BOARD, or exit 1.
+orchestrator_of() {
+  local f addr
+  f=$(record_file "$1")
+  [ -f "$f" ] || return 1
+  addr=$(cut -f1 "$f")
+  [ -n "$addr" ] && has_labels "$addr" "$1" orchestrator || return 1
+  printf '%s\n' "$addr"
+}
+
+# queue_dir BOARD: the folder of the cards that other boards sent to BOARD. Make it.
+queue_dir() {
+  local dir
+  dir="$(state_dir)/queue/$(board_slug "$1")"
+  mkdir -p "$dir"
+  printf '%s\n' "$dir"
 }
 
 # board_slug NAME: a short lowercase name of a-z, 0-9 and -, as agent_slug of agent-tabs.
@@ -114,7 +138,9 @@ project_repo() {
   [ -z "$repo" ] || [ ! -d "$repo" ] || printf '%s\n' "$repo"
 }
 
-# push_policy CWD: deny, ask, allow or missing, from the git push rules of the repo.
+# push_policy CWD: deny, ask, allow, branch or missing, from the git push rules of the
+# repo. branch has no git push rule: the env mark BOARD_PUSH_POLICY=branch, and
+# hooks/guard.sh decides each push of a worker.
 push_policy() {
   local cwd="$1" f kind json
   local -a files=()
@@ -136,5 +162,15 @@ push_policy() {
       fi
     done
   done
+  for json in "${files[@]}"; do
+    if [ "$(jq -r '(.env | objects | .BOARD_PUSH_POLICY) // ""' <<<"$json")" = branch ]; then
+      printf 'branch\n'
+      return
+    fi
+  done
   printf 'missing\n'
 }
+
+# The terminal layer: it needs HC and HAPP.
+# shellcheck source=term.sh
+source "$(dirname "${BASH_SOURCE[0]}")/term.sh"
