@@ -12,16 +12,18 @@
 # default branch, main or master, a push that the hook cannot read and a PR body edit
 # always ask.
 #
-# In each repo, a git push of a worker asks when no reviewer agent started in the session
-# after the oldest commit that the push sends: the worker reviews before a push.
+# In each repo, a git push of a worker needs at least one reviewer agent start in the
+# session. With none, the hook refuses the push and tells the agent to start the
+# reviewer. A branch delete has no review check.
 set -uo pipefail
 # Decide only on Renux (REX_BLOCK set): the role is in the env of the pane. The hook never
 # reads a record and never calls rex, so that it stays fast when Rex is slow.
 if [ -z "${REX_BLOCK:-}" ] || [ -z "${BOARD:-}" ] || [ "${BOARD_ROLE:-}" != worker ]; then
   exit 0
 fi
+hooks=$(dirname "$(readlink -f "$0")")
 # shellcheck source=SCRIPTDIR/../lib.sh
-source "$(dirname "$(readlink -f "$0")")/../lib.sh"
+source "$hooks/../lib.sh"
 
 input=$(cat)
 command=$(jq -r '.tool_input.command // empty' 2>/dev/null <<<"$input") || exit 0
@@ -32,70 +34,75 @@ block() {
   exit 2
 }
 
-# decide allow|ask REASON: the permission decision for the call. A push with no review
-# asks, and the reason tells it.
-review_reason=""
+# decide allow|ask|deny REASON: the permission decision for the call.
 decide() {
   local d=$1 r=$2
-  if [ -n "$review_reason" ]; then
-    if [ "$d" = allow ]; then d=ask r=$review_reason; elif [ "$r" != "$review_reason" ]; then r="$r Also, $review_reason"; fi
-  fi
   jq -cn --arg d "$d" --arg r "board-orchestrator: $r" \
     '{hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: $d, permissionDecisionReason: $r}}'
   exit 0
 }
 
-# rex_check PART: block a rex call that changes the Renux window. The first word is
-# the first one after the VAR=value words and the prefix words (do, time, xargs...);
-# rex is matched by its basename, without quotes.
-rex_check() {
-  local -a words
-  local j=0 sub w
-  read -ra words <<<"$1"
-  while [ "$j" -lt "${#words[@]}" ]; do
-    w=${words[$j]//[\"\']/}
-    if [[ "$w" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then :
-    else
-      case "$w" in do | then | else | elif | if | while | until | '!' | time | command | env | exec | nohup | xargs | sudo) ;; *) break ;; esac
-    fi
-    j=$((j + 1))
+# delete_only WORD...: exit 0 when the words after "push" only delete branches: an
+# option --delete or -d, or only :DST refspecs after the remote.
+delete_only() {
+  local w n=0 refs=0 dels=0
+  for w in "$@"; do
+    case "$w" in
+      --delete | -d) return 0 ;;
+      -*) ;;
+      *)
+        n=$((n + 1))
+        [ "$n" -gt 1 ] || continue
+        refs=$((refs + 1))
+        [[ "$w" != :* ]] || dels=$((dels + 1))
+        ;;
+    esac
   done
-  w=${words[$j]:-}
-  w=${w//[\"\']/}
-  [ "${w##*/}" = rex ] || return 0
-  sub=${words[$((j + 1))]:-}
-  sub=${sub//[\"\']/}
-  case "$sub" in
-    # wait reads the end of a block: a worker waits for a shared job of rex-job.
-    capture | wait | help | --help | version | keymap) return 0 ;;
-    server)
-      [ "${words[$((j + 2))]:-}" = status ] && return 0
-      sub="server ${words[$((j + 2))]:-}"
-      ;;
-    api)
-      if [ "${words[$((j + 2))]:-}" = call ]; then
-        case "${words[$((j + 3))]:-}" in
-          session.list | session.list_blocks | session.view | session.describe_block | target.resolve | help.all | session.help) return 0 ;;
-        esac
-        sub="api call ${words[$((j + 3))]:-}"
-      fi
-      ;;
-  esac
-  block "change the Renux window (rex${sub:+ $sub})"
+  [ "$refs" -gt 0 ] && [ "$refs" -eq "$dels" ]
 }
 
-# Each part of the command between ; & | and newlines.
-push="" edit="" commit=""
+# The scan of the command in hooks/scan.awk (bash reads a big command too slowly). It
+# follows the quotes of the shell, and blocks a rex call that changes the Renux window.
+# A command with no rex, after quote removal, needs no scan. An awk error lets the
+# command run, as an unreadable call does.
+plain=${command//[\"\'\\]/}
+if [[ "$plain" == *rex* ]]; then
+  sessfree=""
+  # shellcheck disable=SC2016 # the text of the command, not expanded
+  rest=${command//\$REX_SESSION/}
+  [[ "$rest" == *REX_SESSION* ]] || sessfree=1
+  reason=$(LC_ALL=C awk -v sess="${REX_SESSION:-}" -v sessfree="$sessfree" -f "$hooks/scan.awk" <<<"$command" 2>/dev/null) || reason=""
+  [ -z "$reason" ] || block "$reason"
+fi
+
+# Each part of the command between ; & | and newlines. review: a push that needs a review.
+# A quote in a part makes the push ask.
+push="" edit="" review=""
 while IFS= read -r part; do
-  read -ra words <<<"$part"
-  while IFS= read -r sp; do rex_check "$sp"; done < <(tr '`(){}' '\n' <<<"$part")
   # A git push, also after git options. A gh pr edit.
-  [[ ! "$part" =~ (^|[[:space:]])git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*[[:space:]]+push([[:space:]]|$) ]] || push=1
+  if [[ "$part" =~ (^|[[:space:]])git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*[[:space:]]+push([[:space:]]|$) ]]; then
+    push=1
+    after=${part#*"${BASH_REMATCH[0]}"}
+    read -ra args <<<"$after"
+    delete_only ${args[@]+"${args[@]}"} || review=1
+  fi
   [[ ! "$part" =~ (^|[[:space:]])gh[[:space:]]+pr[[:space:]]+edit([[:space:]]|$) ]] || edit=1
-  # A git commit or merge: the push of the same call sends a commit that no reviewer saw.
-  [[ ! "$part" =~ (^|[[:space:]])git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*[[:space:]]+(commit|merge)([[:space:]]|$) ]] || commit=1
 done < <(tr ';&|' '\n' <<<"$command")
 [ -n "$push$edit" ] || exit 0
+
+# The review: a push needs at least one reviewer agent call in the transcript of the
+# session, in or out of a repo. A line that is not JSON does not count. With no
+# transcript, the hook does not check.
+transcript=$(jq -r '.transcript_path // empty' <<<"$input")
+if [ -n "$review" ] && [ -n "$transcript" ]; then
+  reviews=$( (grep -F '"subagent_type":"reviewer"' "$transcript" 2>/dev/null || true) | jq -Rn '
+    [inputs | fromjson? | select(.type == "assistant")
+      | select(any(.message.content[]?; .type == "tool_use" and (.name == "Agent" or .name == "Task")
+          and .input.subagent_type == "reviewer"))] | length' 2>/dev/null) || reviews=0
+  if [ "${reviews:-0}" -eq 0 ]; then
+    decide deny "no reviewer agent started in this session. Start the reviewer agent (subagent_type reviewer) on the commit range of the branch, with the goal, then push again."
+  fi
+fi
 
 # The folder of the call: the cwd of the hook, then a leading "cd DIR &&", then git -C.
 dir=$(jq -r '.cwd // empty' <<<"$input")
@@ -131,55 +138,10 @@ if [ -n "$simple" ] && [ "${words[0]:-}" = git ]; then
 else
   simple=""
 fi
-# The source branches of a simple push, for the review check: the words after the
-# remote, with no + and no :DST. Else HEAD.
-srcs=()
-if [ -n "$simple" ]; then
-  n=0
-  for ((k = i + 1; k < ${#words[@]}; k++)); do
-    case "${words[$k]}" in -*) continue ;; esac
-    n=$((n + 1))
-    [ "$n" -gt 1 ] || continue
-    src=${words[$k]#+}
-    src=${src%%:*}
-    [ -z "$src" ] || srcs+=("$src")
-  done
-fi
-[ "${#srcs[@]}" -gt 0 ] || srcs=(HEAD)
-
 # The policy of the folder of the call, or of a parent folder up to the top of the repo:
 # the card folder can be a sub-folder.
 top=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null) || exit 0
 
-# The review of the push: a reviewer agent call in the transcript of the session, after
-# the oldest commit that the push sends. The commits are the commits of the source
-# branches that no local origin ref has. The author date of a commit stays the same
-# after a rebase, a fixup or an amend, but not after a squash with git reset --soft. A
-# commit in the same call is newer than each review. With no transcript or no new
-# commit, the hook does not check.
-transcript=$(jq -r '.transcript_path // empty' <<<"$input")
-if [ -n "$push" ] && [ -n "$transcript" ]; then
-  since="" what=""
-  if [ -n "$commit" ]; then
-    since=$(date +%s) what="the commit of this call"
-  else
-    oldest=$(git -C "$top" rev-list --reverse "${srcs[@]}" --not --remotes=origin 2>/dev/null | head -n 1)
-    if [ -n "$oldest" ]; then
-      since=$(git -C "$top" log -1 --format=%at "$oldest" 2>/dev/null) || since=""
-      what="the commit $(git -C "$top" rev-parse --short "$oldest"), the oldest commit of this push"
-    fi
-  fi
-  if [ -n "$since" ]; then
-    last=$( (grep -F '"subagent_type":"reviewer"' "$transcript" 2>/dev/null || true) | jq -rs '
-      [.[] | select(.type == "assistant")
-        | select(any(.message.content[]?; .type == "tool_use" and (.name == "Agent" or .name == "Task")
-            and .input.subagent_type == "reviewer"))
-        | .timestamp | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601] | max // 0' 2>/dev/null) || last=0
-    if [ "${last:-0}" -lt "$since" ]; then
-      review_reason="no reviewer agent started in this session after $what. A squash with git reset --soft gives a new author date: squash with git rebase -i, or start the reviewer again."
-    fi
-  fi
-fi
 policy=missing
 at=$(cd -- "$dir" 2>/dev/null && pwd -P) || at=$top
 top=$(cd -- "$top" && pwd -P)
@@ -188,10 +150,7 @@ while :; do
   if [ "$policy" != missing ] || [ "$at" = "$top" ] || [ "$at" = / ]; then break; fi
   at=$(dirname "$at")
 done
-if [ "$policy" != branch ]; then
-  [ -z "$review_reason" ] || decide ask "$review_reason"
-  exit 0
-fi
+[ "$policy" = branch ] || exit 0
 
 [ -z "$edit" ] || decide ask "the branch push policy always asks for a PR body edit (gh pr edit)."
 [ -n "$simple" ] || decide ask "the branch push policy allows only one git push command, with no other command, quote or variable. Ask the user."

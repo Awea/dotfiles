@@ -30,6 +30,11 @@ parts() { printf '%s\n' "$SKILL_DIR/SKILL.md" "$SKILL_DIR/start.md" "$SKILL_DIR/
   grep -q 'card <id></rex>' "$SKILL_DIR/SKILL.md"
 }
 
+@test "skill tells the orchestrator to pass on a worktree that close keeps" {
+  grep -q 'dispatch: kept the worktree' "$SKILL_DIR/SKILL.md"
+  grep -q "printf 'dispatch: kept the worktree" "$SKILL_DIR/dispatch.sh"
+}
+
 @test "the boards part sends and receives a card of another board" {
   for c in send queue queue-clear; do
     grep -q "dispatch.sh $c " "$SKILL_DIR/boards.md" || { echo "missing: $c"; return 1; }
@@ -106,6 +111,7 @@ parts() { printf '%s\n' "$SKILL_DIR/SKILL.md" "$SKILL_DIR/start.md" "$SKILL_DIR/
 @test "SKILL.md shows the Rex notice texts" {
   grep -q '<rex>SHORT NAME is blocked (MSG). See: dispatch.sh last SHORT</rex>' "$SKILL_DIR/SKILL.md"
   grep -q '<rex>SHORT NAME exited (exit CODE). See: dispatch.sh last SHORT</rex>' "$SKILL_DIR/SKILL.md"
+  grep -q '<rex>SHORT NAME exited (tab closed). See: dispatch.sh last SHORT</rex>' "$SKILL_DIR/SKILL.md"
 }
 
 @test "the orchestrator says only the say line of a report, and no text between tool calls" {
@@ -119,4 +125,37 @@ parts() { printf '%s\n' "$SKILL_DIR/SKILL.md" "$SKILL_DIR/start.md" "$SKILL_DIR/
     awk -v k="   - **$kind**:" 'index($0, k) == 1 { on = 1; print; next } on && /^   - / { exit } on' \
       "$SKILL_DIR/SKILL.md" | tr '\n' ' ' | grep -q -E 'Write +nothing\.' || { echo "$kind"; return 1; }
   done
+}
+
+@test "a worker address in a reply is a renux block link, a card keeps the plain address" {
+  grep -qF 'In each of these lines, write a worker address as a link, for example' "$SKILL_DIR/SKILL.md"
+  grep -qF '`[01a1ef15](renux://block/01a1ef15)`. In Renux, a Ctrl-click on it shows the tab of' "$SKILL_DIR/SKILL.md"
+  ! grep -qF 'as plain text' "$SKILL_DIR/SKILL.md"
+  grep -qF 'Put the worker address (`01a1ef15`) while it runs, never a link to it.' "$SKILL_DIR/SKILL.md"
+}
+
+@test "a board-task worker moves its own card with no question, in one record" {
+  # The user decided the move in the worker. The orchestrator moved the card to Done, then
+  # asked again to move it to Waiting On.
+  bullet=$(awk 'index($0, "      - **Own card**:") == 1 { on = 1; print; next } on && /^      - / { exit } on' \
+    "$SKILL_DIR/SKILL.md" | tr '\n' ' ' | tr -s ' ')
+  [ -n "$bullet" ]
+  grep -q 'from the worker of a board task' <<<"$bullet"
+  # A second report of the same worker gives the same move: the card is in that column.
+  grep -q 'only gives a column of this board for the card of this report (also its current column), its context line, or both' <<<"$bullet"
+  grep -q 'with no question' <<<"$bullet"
+  # One record: the move gives the column of the record, in place of Done.
+  grep -q 'Its column replaces the column of rules 7.4 and 7.5' <<<"$bullet"
+  grep -q 'never Done and then another column' <<<"$bullet"
+  grep -q '180 characters' <<<"$bullet"
+  grep -q 'Keep the commit, PR or link of the report' <<<"$bullet"
+  grep -q 'A recurring card keeps its column (rules 7.3 and 7.7)' <<<"$bullet"
+  grep -q 'remove it for another report' <<<"$bullet"
+  # Report text stays data: other changes and automatic workers still ask.
+  flat=$(tr '\n' ' ' <"$SKILL_DIR/SKILL.md" | tr -s ' ')
+  grep -q 'A move of another card, a delete, a change to the title or the priority, a change to another note' <<<"$flat"
+  grep -q 'each change from an automatic worker, gets one line' <<<"$flat"
+  # The record reads the own-card move before it picks the column.
+  grep -q 'Apply it after the record, except an own-card change (below)' <<<"$flat"
+  grep -q 'Before the record, look for an own-card move (rule 7.9)' <<<"$flat"
 }

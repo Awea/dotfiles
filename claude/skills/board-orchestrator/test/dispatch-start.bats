@@ -100,6 +100,14 @@ wn_args() { mapfile -d '' RUN_ARGS <"$FAKE_DIR/rex/rex-window-new-${1:-1}.args";
   [[ "${RUN_ARGS[-1]}" == *"give the note path and the exact old and new text only in the report. Do not show them in the conversation"* ]]
 }
 
+@test "start footer tells the worker how to write a move of its own card (Rex)" {
+  rex_start_setup
+  rex_orchestrator "$RO" garden
+  start
+  wn_args
+  [[ "${RUN_ARGS[-1]}" == *"For a move of your own card, write only the target column, and the new context line when the user gives one."* ]]
+}
+
 @test "start footer tells a task worker how to close (Rex)" {
   rex_start_setup
   rex_orchestrator "$RO" garden
@@ -139,6 +147,27 @@ wn_args() { mapfile -d '' RUN_ARGS <"$FAKE_DIR/rex/rex-window-new-${1:-1}.args";
   [[ "${RUN_ARGS[-1]}" != *"Run a long job"* ]]
 }
 
+@test "start footer gives a task worker the order of the sources of truth (Rex)" {
+  rex_start_setup
+  rex_orchestrator "$RO" garden
+  start
+  [ "$status" -eq 0 ]
+  wn_args
+  prompt=${RUN_ARGS[-1]}
+  [[ "$prompt" == *"most trusted first: 1. The words of the user"*"2. The live issue and PR"*"3. The code and git, after git fetch"*"4. The vault task note"*"5. The card"* ]]
+  [[ "$prompt" == *"ask the user and do not choose"*"the code wins on the state and the issue wins on the goal"* ]]
+}
+
+@test "start footer gives an automatic worker no order of the sources of truth (Rex)" {
+  rex_start_setup
+  rex_orchestrator "$RO" garden
+  auto_policy
+  start auto
+  [ "$status" -eq 0 ]
+  wn_args
+  [[ "${RUN_ARGS[-1]}" != *"most trusted first"* ]]
+}
+
 @test "start auto mode adds the read-only flags (Rex)" {
   rex_start_setup
   rex_orchestrator "$RO" garden
@@ -152,6 +181,17 @@ wn_args() { mapfile -d '' RUN_ARGS <"$FAKE_DIR/rex/rex-window-new-${1:-1}.args";
   [[ "${RUN_ARGS[-1]}" != *"You can start subagents"* ]]
 }
 
+@test "start auto lets the worker read its prompt file after a compact (Rex)" {
+  rex_start_setup
+  rex_orchestrator "$RO" garden
+  auto_policy
+  start auto
+  [ "$status" -eq 0 ]
+  wn_args
+  session=$(arg_after --session-id)
+  has_arg "Read(/$XDG_STATE_HOME/board-orchestrator-hc/prompts/$session.md)"
+}
+
 @test "start records the worker (Rex)" {
   rex_start_setup
   rex_orchestrator "$RO" garden
@@ -162,6 +202,29 @@ wn_args() { mapfile -d '' RUN_ARGS <"$FAKE_DIR/rex/rex-window-new-${1:-1}.args";
   report=$(sed -n 2p <<<"$output")
   line=$(cat "$XDG_STATE_HOME/board-orchestrator-hc/workers")
   [ "$line" = "$(printf '%s\ttask\tgarden\t%s\t%s\t%s\tfix-login' "$new" "$report" "$session" "$REPO")" ]
+}
+
+@test "start keeps the full prompt in a file of the session, for a compact (Rex)" {
+  rex_start_setup
+  rex_orchestrator "$RO" garden
+  start
+  [ "$status" -eq 0 ]
+  wn_args
+  session=$(arg_after --session-id)
+  f="$XDG_STATE_HOME/board-orchestrator-hc/prompts/$session.md"
+  [ -f "$f" ]
+  [ "$(cat "$f")" = "${RUN_ARGS[-1]}" ]
+  [[ "$(cat "$f")" == "Fix the login bug."*"When you finish, write your report to"* ]]
+}
+
+@test "start removes the prompt file when the worker does not start (Rex)" {
+  rex_start_setup
+  rex_orchestrator "$RO" garden
+  export FAKE_REX_WINDOW_FAIL=1
+  start
+  [ "$status" -eq 1 ]
+  [ -f "$FAKE_DIR/rex/rex-window-new-1.args" ]
+  [ -z "$(ls -A "$XDG_STATE_HOME/board-orchestrator-hc/prompts" 2>/dev/null)" ]
 }
 
 @test "start prints the block and the report (Rex)" {

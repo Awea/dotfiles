@@ -27,6 +27,14 @@ state_dir() {
   printf '%s\n' "$dir"
 }
 
+# prompt_path SESSION: the file that keeps the full first prompt of the worker SESSION
+# (dispatch.sh start). After a compact, hooks/compact.sh gives the worker this path.
+# Exit 1 for a session that is not a plain ID.
+prompt_path() {
+  [[ "$1" =~ ^[A-Za-z0-9_-]+$ ]] || return 1
+  printf '%s/prompts/%s.md\n' "$(state_dir)" "$1"
+}
+
 # term_labels ADDR: the labels (a JSON object) of a live terminal. Exit 1 when the
 # terminal is gone or finished.
 term_labels() {

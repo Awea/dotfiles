@@ -141,7 +141,7 @@ rex_orch() {
   fake_spawners
   rex_orch home claude
   mkdir -p "$STATE/rex"
-  bash -c 'exec -a "rex --autostart=false do -s session:fake-1 /x/board-watch.lua" sleep 30' &
+  bash -c 'exec -a "rex --autostart=false do -s session:fake-1 /x/board-watch.lua dispatch=/x/dispatch.sh session=session:fake-1 outbox=/x/o" sleep 30' &
   pid=$!
   printf '%s\n' "$pid" >"$STATE/rex/watch-session:fake-1.pid"
   board open home
@@ -165,25 +165,15 @@ EOS
   [[ "$output" == *"rex did not start claude in $O"* ]]
 }
 
-# fake_spawners: setsid and nohup that log their arguments and start nothing. lib.sh puts
-# $HOME/.local/bin first in PATH, so they go there.
-fake_spawners() {
-  mkdir -p "$HOME/.local/bin"
-  for p in setsid nohup; do
-    printf '#!/bin/sh\nprintf "%s %%s\\n" "$*" >>"$FAKE_DIR/spawn.log"\n' "$p" >"$HOME/.local/bin/$p"
-    chmod +x "$HOME/.local/bin/$p"
-  done
-}
-
 @test "open on Rex starts the watcher once" {
   fake_spawners
   board open "my board"
   [ "$status" -eq 0 ]
   [ "$(wc -l <"$FAKE_DIR/spawn.log")" -eq 1 ]
-  grep -Eq 'do -s session:[^ ]+ .*board-watch.lua dispatch=.*dispatch.sh session=session:' "$FAKE_DIR/spawn.log"
+  grep -Eq 'do -s session:[^ ]+ .*board-watch.lua dispatch=.*dispatch.sh session=session:[^ ]+ outbox=.*/rex/outbox-session:[^ ]+\.jsonl$' "$FAKE_DIR/spawn.log"
   # A live watcher: the pid file names a process that runs "rex do ... board-watch.lua".
   session=$(sed -E 's/.* do -s ([^ ]+) .*/\1/' "$FAKE_DIR/spawn.log")
-  bash -c 'exec -a "rex do -s $0 /x/board-watch.lua" sleep 30' "$session" &
+  bash -c 'exec -a "rex do -s $0 /x/board-watch.lua dispatch=/x/dispatch.sh session=$0 outbox=/x/o" sleep 30' "$session" &
   pid=$!
   printf '%s\n' "$pid" >"$STATE/rex/watch-$session.pid"
   : >"$FAKE_DIR/spawn.log"
@@ -239,4 +229,33 @@ EOS
   board open home
   [ "$status" -eq 1 ]
   [[ "$output" == *"Renux did not open the session"* ]]
+}
+
+@test "open and stop fail fast when Rex does not answer" {
+  export FAKE_REX_FAIL=1
+  for cmd in open stop; do
+    : >"$FAKE_LOG"
+    start=$(date +%s)
+    board "$cmd" home
+    [ "$status" -eq 1 ]
+    [ $(($(date +%s) - start)) -le 1 ]
+    [ "${#lines[@]}" -eq 1 ]
+    [[ "$output" == *"rex does not answer"* ]]
+    [ -z "$(grep -E '^rex (new|kill)' "$FAKE_LOG")" ]
+  done
+}
+
+@test "open on Rex replaces an old watcher that does not deliver the queue" {
+  fake_spawners
+  rex_orch home claude
+  mkdir -p "$STATE/rex"
+  bash -c 'exec -a "rex do -s session:fake-1 /x/board-watch.lua dispatch=/x/dispatch.sh session=session:fake-1" sleep 30' &
+  pid=$!
+  printf '%s\n' "$pid" >"$STATE/rex/watch-session:fake-1.pid"
+  board open home
+  [ "$status" -eq 0 ]
+  [ "$(wc -l <"$FAKE_DIR/spawn.log")" -eq 1 ]
+  # Two watchers would send each notice twice: the old one is stopped.
+  sleep 0.2
+  ! kill -0 "$pid" 2>/dev/null
 }

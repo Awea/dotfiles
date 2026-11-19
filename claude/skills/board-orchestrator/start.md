@@ -63,6 +63,7 @@ line. A card with no `project` has no repo.
         on the card, and never run `start` for it.
       - Each worker that the user does not pick: put "session `<id>`" on its card.
       - Then run `dispatch.sh resume-clear BOARD`, also when the user picks no worker.
+        Tell the user each stderr line `dispatch: kept the worktree ...` as it is.
       Done: `resumable` printed nothing, or `resume-clear` ran and each card of a closed
       worker has its address, a resume or "session `<id>`".
    Dispatch no card whose worker you adopted or resumed: that worker still runs. Until the
