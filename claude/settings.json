@@ -122,6 +122,7 @@
     "padding": 0
   },
   "tui": "fullscreen",
+  "viewMode": "focus",
   "enableArtifact": false,
   "preferredNotifChannel": "notifications_disabled",
   "remoteControlAtStartup": false,

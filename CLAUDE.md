@@ -8,10 +8,11 @@
 - In a squash, the commit that removes herdr-app stays its own commit, so that it can be
   reverted alone.
 - A worker does not push master. It gives the unpushed commits of master in its report.
-  The user tells when to squash and push.
+  The user tells when to squash and push. Squash when the user asks, then stop. Never ask
+  when to push master and never offer to push it.
 
 # UI
 
 - A key or an action shows a visible result at once, in less than 1 second. Open the
   popup, the tab, the workspace or the view first, and write what happens in it. Run the
-  slow steps (a Herdr server start, a Claude start) after that. Test the order.
+  slow steps (a Rex server start, a Claude start) after that. Test the order.

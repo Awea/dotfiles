@@ -76,3 +76,7 @@ rules="$BATS_TEST_DIRNAME/../CLAUDE.md"
 @test "the Rex block has the branches-open line" {
   grep -qF '~/.config/rex/bin/branches-open <repo>' "$rules"
 }
+
+@test "the Replies block writes a block ID as a renux block link" {
+  grep -qF '[e0760707](renux://block/e0760707)' "$rules"
+}
