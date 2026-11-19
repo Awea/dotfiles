@@ -30,6 +30,16 @@ links: $(symlink_paths) $(sublime_links) antibody/zsh_plugins.sh $(HOME)/.config
 $(HOME)/.%: %.symlink
 	ln -s $(abspath $<) $@
 
+# A plain ~/.zshenv or ~/.profile (from /etc/skel or an installer) moves to
+# <file>.before-dotfiles, then the link takes its place. FORCE runs the rule also when the
+# plain file is newer than the .symlink file.
+$(HOME)/.zshenv $(HOME)/.profile: $(HOME)/.%: %.symlink FORCE
+	@if [ -e $@ ] && [ ! -L $@ ]; then mv $@ $@.before-dotfiles; echo "$@ moved to $@.before-dotfiles"; fi
+	ln -sfn $(abspath $<) $@
+
+.PHONY: FORCE
+FORCE:
+
 $(HOME)/.config/sublime-merge/Packages/User:
 	ln -s $(PWD)/sublime-merge $@
 

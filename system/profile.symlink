@@ -1,0 +1,29 @@
+# ~/.profile: login shells read it. On Linux the desktop session (gdm Xsession)
+# reads it too, and the hc core and the Rex server take the PATH of that session.
+# So a `bash -c` job in hc or Rex gets the PATH set here. macOS GUI apps and launchd
+# do not read this file.
+
+# bash: read ~/.bashrc
+if [ -n "$BASH_VERSION" ] && [ -f "$HOME/.bashrc" ]; then
+  # shellcheck source=/dev/null
+  . "$HOME/.bashrc"
+fi
+
+if [ -d "$HOME/bin" ]; then
+  PATH="$HOME/bin:$PATH"
+fi
+
+if [ -d "$HOME/.local/bin" ]; then
+  PATH="$HOME/.local/bin:$PATH"
+fi
+
+# asdf: a job finds mix, bats and the other asdf tools. The shims go at the end: the
+# whole desktop session reads this file, and ~/.tool-versions sets no global ruby, so the
+# system ruby must stay first. An interactive zsh puts the shims first (system/path.zsh).
+ASDF_DATA_DIR="${ASDF_DATA_DIR:-$HOME/.asdf}"
+export ASDF_DATA_DIR
+case ":$PATH:" in
+  *":$ASDF_DATA_DIR/shims:"*) ;;
+  *) PATH="$PATH:$ASDF_DATA_DIR/shims" ;;
+esac
+export PATH
