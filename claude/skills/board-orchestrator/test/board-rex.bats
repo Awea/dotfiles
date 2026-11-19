@@ -70,37 +70,9 @@ rex_orch() {
   [[ "$(jq -r .typed "$STATE/rex/$O.json")" =~ ^[0-9]+\ [0-9]+$ ]]
 }
 
-@test "open on Rex refuses a board that runs in herdr-app" {
-  record_orchestrator home t5
-  fake_terminal t5 home orchestrator claude
-  board open home
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"board.sh: home runs in herdr-app. Stop it there first."* ]]
-  [ -z "$(calls '^rex new ')" ]
-}
-
-@test "open in herdr-app refuses a board that runs in Renux" {
-  rex_orch home claude
-  unset REX_BLOCK REX_SESSION REX_CLIENT
-  export HC_TERMINAL_ID=t1
-  board open home
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"board.sh: home runs in Renux. Stop it there first."* ]]
-  [ -z "$(calls 'space.new')" ]
-}
-
 @test "open on Rex starts again when the old session is gone" {
   record_orchestrator home "$O"
   rex_record_file "$O" '{"board":"home","role":"orchestrator","rex_session":"session:fake-1","window":"window:fake-1"}'
-  board open home
-  [ "$status" -eq 0 ]
-  [ -n "$(calls '^rex new home orchestrator')" ]
-}
-
-@test "open on Rex ignores an hc record when hc does not answer" {
-  export FAKE_HC_FAIL=1
-  record_orchestrator home t5
-  fake_terminal t5 home orchestrator claude
   board open home
   [ "$status" -eq 0 ]
   [ -n "$(calls '^rex new home orchestrator')" ]
@@ -140,26 +112,6 @@ rex_orch() {
   [ -z "$(calls '^rex send ')" ]
 }
 
-@test "running in Renux lists only the boards of Renux, running all lists both backends" {
-  rex_orch home claude
-  record_orchestrator "my board" t5
-  fake_terminal t5 "my board" orchestrator claude
-  board running
-  [ "$status" -eq 0 ]
-  [ "$(jq -c . <<<"$output")" = '["home"]' ]
-  board running all
-  [ "$status" -eq 0 ]
-  [ "$(jq -c 'sort' <<<"$output")" = '["home","my board"]' ]
-}
-
-@test "running in Renux does not list a board that runs in herdr-app" {
-  record_orchestrator "my board" t5
-  fake_terminal t5 "my board" orchestrator claude
-  board running
-  [ "$status" -eq 0 ]
-  [ "$(jq -c . <<<"$output")" = '[]' ]
-}
-
 @test "stop on Rex removes the records before the kill ends the popup" {
   rex_orch home claude
   # ctrl+b X in the board session: the kill closes the popup, and board.sh gets SIGHUP.
@@ -196,21 +148,6 @@ rex_orch() {
   kill "$pid"
   [ "$status" -eq 0 ]
   [ ! -s "$FAKE_DIR/spawn.log" ]
-}
-
-@test "open on Rex names Renux, not herdr-app or hc, when the session does not open" {
-  cat >"$BATS_TEST_TMPDIR/rex-no-new" <<EOS
-#!/usr/bin/env bash
-a=("\$@"); [ "\${a[0]:-}" != --autostart=false ] || a=("\${a[@]:1}")
-[ "\${a[0]:-}" != new ] || exit 1
-exec "$SKILL_DIR/test/fake-rex" "\$@"
-EOS
-  chmod +x "$BATS_TEST_TMPDIR/rex-no-new"
-  export REX_BIN="$BATS_TEST_TMPDIR/rex-no-new"
-  board open home
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"Renux did not open the session"* ]]
-  [[ "$output" != *herdr-app* && "$output" != *"hc "* ]]
 }
 
 @test "open on Rex names rex when typing claude fails" {
@@ -288,4 +225,18 @@ fake_spawners() {
   board restart home "$O"
   [ "$status" -eq 0 ]
   [ "$(wc -l <"$FAKE_DIR/spawn.log")" -eq 1 ]
+}
+
+@test "open on Rex names Renux when the session does not open" {
+  cat >"$BATS_TEST_TMPDIR/rex-no-new" <<EOS
+#!/usr/bin/env bash
+a=("\$@"); [ "\${a[0]:-}" != --autostart=false ] || a=("\${a[@]:1}")
+[ "\${a[0]:-}" != new ] || exit 1
+exec "$SKILL_DIR/test/fake-rex" "\$@"
+EOS
+  chmod +x "$BATS_TEST_TMPDIR/rex-no-new"
+  export REX_BIN="$BATS_TEST_TMPDIR/rex-no-new"
+  board open home
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Renux did not open the session"* ]]
 }

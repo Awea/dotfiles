@@ -1,9 +1,8 @@
 # shellcheck shell=bash
 # Shared helpers for the board-orchestrator scripts. Source this file, do not run it.
 
-# herdr-app mods run commands with a small PATH. Add the system paths for jq and hc. On
-# macOS, Homebrew puts jq and bash 5 in /opt/homebrew/bin (Apple silicon) or
-# /usr/local/bin. The hc installer puts hc in ~/.local/bin.
+# A hook or a script can run with a small PATH. Add the system paths for jq. On macOS,
+# Homebrew puts jq and bash 5 in /opt/homebrew/bin (Apple silicon) or /usr/local/bin.
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}"
 
 # /bin/bash on macOS is bash 3.2. When a script that sources this file runs under bash
@@ -16,23 +15,21 @@ if [ "${BASH_VERSINFO[0]}" -lt 4 ] && [ "${BASH_SOURCE[1]:-}" = "$0" ] &&
 fi
 
 # The tests point these at fakes.
-HC=("${HC_BIN:-hc}")
-# --autostart=false: a call from herdr-app must not start a Rex server.
+# --autostart=false: a call from a script must not start a Rex server.
 # shellcheck disable=SC2034 # Used by term.sh.
 REX=("${REX_BIN:-rex}" --autostart=false)
-# shellcheck disable=SC2034 # Used by the scripts that source this file.
-HAPP=("${HERDR_APP_BIN:-herdr-app}")
 
 # The state folder: the worker and orchestrator records, and the report files.
 state_dir() {
+  # The folder name board-orchestrator-hc is old: it holds live state, so it stays.
   local dir="${XDG_STATE_HOME:-$HOME/.local/state}/board-orchestrator-hc"
   mkdir -p "$dir"
   printf '%s\n' "$dir"
 }
 
-# hc_labels ADDR: the labels (a JSON object) of a live hc terminal. Exit 1 when the
+# term_labels ADDR: the labels (a JSON object) of a live terminal. Exit 1 when the
 # terminal is gone or finished.
-hc_labels() {
+term_labels() {
   local json
   json=$(term_get "$1") || return 1
   jq -e '.state == "live"' <<<"$json" >/dev/null 2>&1 || return 1
@@ -43,7 +40,7 @@ hc_labels() {
 # that role. A recorded address can be gone, or can belong to another terminal now.
 has_labels() {
   local labels
-  labels=$(hc_labels "$1") || return 1
+  labels=$(term_labels "$1") || return 1
   jq -e --arg b "$2" --arg r "$3" '.board == $b and .["board.role"] == $r' \
     <<<"$labels" >/dev/null 2>&1
 }
@@ -171,6 +168,6 @@ push_policy() {
   printf 'missing\n'
 }
 
-# The terminal layer: it needs HC and HAPP.
+# The terminal layer: it needs REX.
 # shellcheck source=term.sh
 source "$(dirname "${BASH_SOURCE[0]}")/term.sh"

@@ -17,7 +17,7 @@ root() {
 
 if [ -f "$record" ]; then
   dir=$(jq -r '.dir // empty' "$record" 2>/dev/null) || dir=
-  # The base stays even when dir is the pane folder (herdr-app drops it there).
+  # The base stays even when dir is the pane folder.
   if [ -n "$dir" ] && [ -d "$dir" ]; then
     printf '%s\n%s\n' "$(root "$dir")" "$(jq -r '.base // empty' "$record")"
     exit 0

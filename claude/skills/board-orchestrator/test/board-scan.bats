@@ -116,14 +116,6 @@ line() { printf '%s\n' "${lines[$1]}"; }
   [ "$(line 2 | jq -c .)" = '{"column":"📥 Backlog","line":11,"title":"No date and no link","due":true}' ]
 }
 
-@test "a card that waits for a PR deploy gives its PR and file links, not its task links or view link" {
-  printf -- '---\nkanban-plugin: board\n---\n\n## ⏳ Waiting On\n\n- [ ] 🟡 **[alpha] Check the logs after the deploy** · waits for the [PR #796](https://forge.example/o/r/pull/796) deploy\n\tCount the errors. [plan](file:///home/u/plan.md) [view](https://herdr.invalid/pane/wQ:p2) [[Tasks/Daily check]] [[Projects/alpha]]\n- [ ] 🟢 **[alpha] No link**\n\tShort. [[Projects/alpha]]\n' >"$V/Boards/links.md"
-  run --separate-stderr bash "$PLUGIN_DIR/board-scan.sh" cards links
-  [ "$status" -eq 0 ]
-  [ "$(line 0 | jq -c .links)" = '["[PR #796](https://forge.example/o/r/pull/796)","[plan](file:///home/u/plan.md)"]' ]
-  [ "$(line 1 | jq -c 'has("links")')" = false ]
-}
-
 # A real card line of the full scan has about 180 characters. These have about 275.
 @test "a board of 100 cards with a task note, a waits text and long text fits in the 30000 characters of the Bash tool" {
   make_board
@@ -481,4 +473,12 @@ BOARD
   [ "$status" -eq 0 ]
   [ "${#lines[@]}" -eq 1 ]
   [ "$(line 0 | jq .inbox)" -eq 0 ]
+}
+
+@test "a card that waits for a PR deploy gives its PR and file links, not its task links or view link" {
+  printf -- '---\nkanban-plugin: board\n---\n\n## ⏳ Waiting On\n\n- [ ] 🟡 **[alpha] Check the logs after the deploy** · waits for the [PR #796](https://forge.example/o/r/pull/796) deploy\n\tCount the errors. [plan](file:///home/u/plan.md) [view](https://herdr.invalid/pane/wQ:p2) [[Tasks/Daily check]] [[Projects/alpha]]\n- [ ] 🟢 **[alpha] No link**\n\tShort. [[Projects/alpha]]\n' >"$V/Boards/links.md"
+  run --separate-stderr bash "$PLUGIN_DIR/board-scan.sh" cards links
+  [ "$status" -eq 0 ]
+  [ "$(line 0 | jq -c .links)" = '["[PR #796](https://forge.example/o/r/pull/796)","[plan](file:///home/u/plan.md)"]' ]
+  [ "$(line 1 | jq -c 'has("links")')" = false ]
 }

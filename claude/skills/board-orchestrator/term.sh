@@ -1,133 +1,36 @@
 # shellcheck shell=bash
-# The terminal layer of the board-orchestrator scripts. lib.sh sources this file after it
-# sets HC and HAPP. Each term_X function calls the backend version: hc_X for a herdr-app
-# terminal. An address picks the backend (term_of). A call with no address uses the
-# backend of the caller (term_here).
-
-# term_of ADDR: the backend of the terminal ADDR. A Rex block ID is "block:..." or 8 hex digits.
-term_of() {
-  case "$1" in
-    block:*) printf 'rex\n' ;;
-    *)
-      if [[ "$1" =~ ^[0-9a-f]{8}$ ]]; then printf 'rex\n'; else printf 'hc\n'; fi
-      ;;
-  esac
-}
-
-# term_here: the backend of the caller. BOARD_TERM wins, then the env of the terminal.
-term_here() {
-  if [ -n "${BOARD_TERM:-}" ]; then
-    printf '%s\n' "$BOARD_TERM"
-  elif [ -n "${HC_TERMINAL_ID:-}" ]; then
-    printf 'hc\n'
-  elif [ -n "${REX_BLOCK:-}" ]; then
-    printf 'rex\n'
-  else
-    printf 'hc\n'
-  fi
-}
+# The terminal layer of the board-orchestrator scripts: Rex only. lib.sh sources this file
+# after it sets REX. Each term_X function calls rex_X. A terminal address is a Rex block ID
+# ("block:..." or its last 8 hex digits).
 
 # term_self: the address of the terminal of the caller.
-term_self() { printf '%s\n' "${HC_TERMINAL_ID:-${REX_BLOCK:-}}"; }
+term_self() { printf '%s\n' "${REX_BLOCK:-}"; }
 
 # Calls with an address.
-term_get() { "$(term_of "$1")_get" "$@"; }
-term_label() { "$(term_of "$1")_label" "$@"; }
-term_send() { "$(term_of "$1")_send" "$@"; }
-term_message() { "$(term_of "$1")_message" "$@"; }
-term_read() { "$(term_of "$1")_read" "$@"; }
-term_wait() { "$(term_of "$1")_wait" "$@"; }
-term_park() { "$(term_of "$1")_park" "$@"; }
-term_kill() { "$(term_of "$1")_kill" "$@"; }
-term_rm() { "$(term_of "$1")_rm" "$@"; }
-term_focus_agent() { "$(term_of "$1")_focus_agent" "$@"; }
-term_focus_pane() { "$(term_of "$1")_focus_pane" "$@"; }
-term_space_close() { "$(term_of "$1")_space_close" "$@"; }
+term_get() { rex_get "$@"; }
+term_label() { rex_label "$@"; }
+term_send() { rex_send "$@"; }
+term_message() { rex_message "$@"; }
+term_read() { rex_read "$@"; }
+term_wait() { rex_wait "$@"; }
+term_park() { rex_park "$@"; }
+term_kill() { rex_kill "$@"; }
+term_rm() { rex_rm "$@"; }
+term_focus_agent() { rex_focus_agent "$@"; }
+term_focus_pane() { rex_focus_pane "$@"; }
+term_space_close() { rex_space_close "$@"; }
 
 # Calls with no address.
-term_names() { "$(term_here)_names"; }
-term_ping() { "$(term_here)_ping"; }
-# term_ping_of ADDR: ping the backend of the terminal ADDR.
-term_ping_of() { "$(term_of "$1")_ping"; }
-term_run_worker() { "$(term_here)_run_worker" "$@"; }
-term_space_new() { "$(term_here)_space_new" "$@"; }
-term_tell_cmd() { "$(term_here)_tell_cmd" "$@"; }
-term_tell_rule() { "$(term_here)_tell_rule"; }
-
-# The hc versions.
-
-# hc_get ADDR: the hc get JSON. Exit 1 when the terminal is gone.
-hc_get() { "${HC[@]}" get "$1" --json 2>/dev/null; }
-
-# hc_names: the names of the live terminals, one for each line.
-hc_names() { "${HC[@]}" ls --json 2>/dev/null | jq -r '.terminals[]?.name // empty' 2>/dev/null; }
-
-# hc_label ADDR KEY=VALUE...
-hc_label() { "${HC[@]}" label "$@" >/dev/null; }
-
-# hc_send ADDR TEXT: type TEXT and Enter.
-hc_send() { "${HC[@]}" send "$1" "$2" >/dev/null; }
-
-# hc_message ADDR TEXT: a message to an agent. For hc this is hc_send.
-hc_message() { hc_send "$@"; }
-
-hc_read() { "${HC[@]}" read "$1" 2>/dev/null; }
-
-# hc_wait ADDR SECONDS: print the reason that the wait ended.
-hc_wait() { "${HC[@]}" wait "$1" --timeout "$2" 2>/dev/null | jq -r '.reason // empty' 2>/dev/null; }
-
-hc_park() { "${HAPP[@]}" "do" terminal.park --terminal "$1" >/dev/null 2>&1; }
-hc_kill() { "${HC[@]}" kill "$1" >/dev/null 2>&1; }
-hc_rm() { "${HC[@]}" rm "$1" >/dev/null 2>&1; }
-
-# hc_ping: exit 1 and a message on stderr when hc does not answer.
-hc_ping() {
-  local err
-  err=$("${HC[@]}" ls --json 2>&1 >/dev/null) || {
-    printf 'hc does not answer: %s\n' "${err%%$'\n'*}" >&2
-    return 1
-  }
-}
-
-# hc_run_worker CWD NAME BOARD SESSION -- CMD...: start a worker. Print its address.
-hc_run_worker() {
-  local cwd=$1 name=$2 board=$3 session=$4 out
-  shift 5
-  out=$("${HC[@]}" run --json --bg --name "$name" --cwd "$cwd" \
-    --label "board=$board" --label board.role=worker --label "board.session=$session" \
-    -- "$@") || return 1
-  jq -r '.address // empty' <<<"$out"
-}
-
-hc_focus_agent() { "${HAPP[@]}" "do" agent.focus --terminal "$1" >/dev/null; }
-hc_focus_pane() { "${HAPP[@]}" "do" pane.focus --terminal "$1" >/dev/null; }
-
-# hc_space_new BOARD VAULT: open the space of the orchestrator. Print its first terminal.
-hc_space_new() {
-  local out
-  out=$("${HAPP[@]}" "do" space.new --name "$1 orchestrator" --folder "$2" --tab orchestrator) || return 1
-  jq -r '.terminal // empty' <<<"$out"
-}
-
-# hc_space_close ADDR: close the herdr-app space of ADDR. Exit 2 when ADDR has no space,
-# exit 1 when the close fails.
-hc_space_close() {
-  local space
-  space=$(hc_labels "$1" | jq -r '.["herdr.space"] // empty')
-  [ -n "$space" ] || return 2
-  "${HAPP[@]}" "do" space.close --id "$space" --confirmed true >/dev/null || return 1
-}
-
-# hc_tell_cmd TEXT: the command that a worker runs to send TEXT to its orchestrator.
-hc_tell_cmd() { printf 'hc send %s "%s"\n' "${HC_TERMINAL_ID:-}" "$1"; }
-
-# hc_tell_rule: the allow rule for that command.
-hc_tell_rule() { printf 'Bash(hc send %s *)\n' "${HC_TERMINAL_ID:-}"; }
+term_names() { rex_names; }
+term_ping() { rex_ping; }
+term_run_worker() { rex_run_worker "$@"; }
+term_space_new() { rex_space_new "$@"; }
+term_tell_cmd() { rex_tell_cmd "$@"; }
+term_tell_rule() { rex_tell_rule; }
 
 # The Rex versions. A Rex block ID is "block:<uuid>". The short form is its last 8
-# characters. A record in $(state_dir)/rex/<block ID>.json keeps what hc keeps in labels:
+# characters. A record in $(state_dir)/rex/<block ID>.json keeps the labels of the block:
 # {board, role, session, typed, rex_session, window, name}.
-
 # _rex_api METHOD JSON: call a method of the Rex control API.
 _rex_api() { "${REX[@]}" api call "$1" "$2" 2>/dev/null; }
 
@@ -229,7 +132,7 @@ _rex_method() {
     '{session_id: $s, block_id: $b, method: $m}')"
 }
 
-# rex_get ADDR: the answers of Rex in the shape of hc_get. Exit 1 when the block is gone.
+# rex_get ADDR: the answers of Rex in the shape of the old get JSON. Exit 1 when the block is gone.
 rex_get() {
   local full session proc st rec
   full=$(rex_full "$1") || return 1
@@ -296,13 +199,8 @@ rex_send() {
 rex_message() {
   local self short name board
   self=$(term_self)
-  if [ "$(term_of "$self")" = rex ]; then
-    short=$(rex_short "$self")
-    board=${BOARD:-$(rex_record "$self" | jq -r '.board // empty')}
-  else
-    short=$self
-    board=${BOARD:-$( [ -z "$self" ] || hc_labels "$self" | jq -r '.board // empty')}
-  fi
+  short=$(rex_short "$self")
+  board=${BOARD:-$(rex_record "$self" | jq -r '.board // empty')}
   name=${BOARD_NAME:-$(board_slug "$board")-orchestrator}
   rex_send "$1" "<rex from=\"$short $name\">$2</rex>"
 }

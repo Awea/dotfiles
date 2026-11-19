@@ -3,47 +3,10 @@ load helper
 
 source_lib() { source "$SKILL_DIR/lib.sh"; }
 
-@test "has_labels is true for a live terminal of that board and role" {
-  source_lib
-  fake_terminal t5 garden worker
-  run has_labels t5 garden worker
-  [ "$status" -eq 0 ]
-}
-
-@test "has_labels is false for another board" {
-  source_lib
-  fake_terminal t5 lab worker
-  run has_labels t5 garden worker
-  [ "$status" -ne 0 ]
-}
-
-@test "has_labels is false for another role" {
-  source_lib
-  fake_terminal t5 garden orchestrator
-  run has_labels t5 garden worker
-  [ "$status" -ne 0 ]
-}
-
-@test "has_labels is false when hc get fails" {
+@test "has_labels is false when the terminal is unknown" {
   source_lib
   run has_labels t7 garden worker
   [ "$status" -ne 0 ]
-}
-
-@test "has_labels is false for a finished terminal" {
-  source_lib
-  fake_terminal t5 garden worker
-  jq '.state="finished"' "$FAKE_DIR/hc-get-t5.json" >"$FAKE_DIR/x" && mv "$FAKE_DIR/x" "$FAKE_DIR/hc-get-t5.json"
-  run has_labels t5 garden worker
-  [ "$status" -ne 0 ]
-}
-
-@test "hc_labels prints the labels of a live terminal" {
-  source_lib
-  fake_terminal t5 garden worker
-  run hc_labels t5
-  [ "$status" -eq 0 ]
-  [ "$(jq -r '.board' <<<"$output")" = garden ]
 }
 
 @test "board_slug makes a short lowercase slug" {
@@ -124,10 +87,10 @@ rex_lib_block() {
   [ "$status" -ne 0 ]
 }
 
-@test "hc_labels prints the labels of a live block (Rex)" {
+@test "term_labels prints the labels of a live block (Rex)" {
   source_lib
   rex_lib_block garden worker
-  run hc_labels "$RB"
+  run term_labels "$RB"
   [ "$status" -eq 0 ]
   [ "$(jq -r '.board' <<<"$output")" = garden ]
 }

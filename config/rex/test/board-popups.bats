@@ -5,7 +5,7 @@
 load helper
 
 setup() {
-  hc_setup
+  base_setup
   export BOARD_SH="$BATS_TEST_TMPDIR/board.sh"
   cat >"$BOARD_SH" <<'SH'
 #!/usr/bin/env bash

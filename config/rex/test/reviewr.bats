@@ -5,7 +5,7 @@
 load helper
 
 setup() {
-  hc_setup
+  base_setup
   REC="$XDG_STATE_HOME/rex/reviewr"
   REPO="$BATS_TEST_TMPDIR/repo"
   git init -q "$REPO"

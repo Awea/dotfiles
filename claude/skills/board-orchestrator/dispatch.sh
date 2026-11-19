@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Tool of the board orchestrator: run a worker claude as a terminal of the orchestrator (an
-# hc child in herdr-app, a window in Renux), talk to the workers (remind, answer, tell),
+# Tool of the board orchestrator: run a worker claude as a terminal of the orchestrator (a
+# window in Renux), talk to the workers (remind, answer, tell),
 # and the board commands that need no terminal (report, run-add, note-add, log,
 # inbox-clear, send, queue, queue-clear, policy, policy-set).
 set -euo pipefail
@@ -44,8 +44,7 @@ set_claude_args() {
   local settings board="" f
   local -a mcp=()
   claude_args=()
-  # The worker reports to the orchestrator that runs this script: hc send in herdr-app,
-  # dispatch.sh tell in Renux.
+  # The worker reports to the orchestrator that runs this script: dispatch.sh tell.
   local send; send=$(term_tell_rule)
   board=$(board_of "$cwd") || board=""
   if [ "$mode" = auto ]; then
@@ -133,7 +132,7 @@ main_dir() {
 
 # card_worktree DIR SLUG: the folder of the work of the card SLUG, the same folder as DIR
 # in a git worktree on the branch SLUG, beside the main checkout: REPO-SLUG (else
-# REPO-SLUG-2, ...). The worker claude starts there, so herdr-app and herdr-reviewr see
+# REPO-SLUG-2, ...). The worker claude starts there, so Renux and herdr-reviewr see
 # where it works. It uses the worktree again when it is there. A new branch starts at
 # origin/HEAD (else HEAD), with no upstream: a push never goes to the default branch. DIR
 # when DIR is not in a main git checkout. A second line "new" when it made the worktree.
@@ -273,14 +272,10 @@ caller_board() {
   local labels self
   self=$(term_self)
   if [ -z "$self" ]; then
-    if [ "$(term_here)" = rex ]; then
-      printf 'dispatch: REX_BLOCK is empty. Run this in the board orchestrator.\n' >&2
-    else
-      printf 'dispatch: HC_TERMINAL_ID is empty. Run this in the board orchestrator, in herdr-app.\n' >&2
-    fi
+    printf 'dispatch: REX_BLOCK is empty. Run this in the board orchestrator.\n' >&2
     return 2
   fi
-  if ! labels=$(hc_labels "$self") ||
+  if ! labels=$(term_labels "$self") ||
     [ "$(jq -r '.["board.role"] // empty' <<<"$labels")" != orchestrator ]; then
     printf 'dispatch: %s is not a board orchestrator.\n' "$self" >&2
     return 2
@@ -320,23 +315,17 @@ other_repos() {
 footer() {
   local mode=$1 cwd=$2 report=$3 slug=$4 vault text others=""
   shift 4
-  local win="herdr-app"
-  [ "$(term_here)" != rex ] || win="Renux"
+  local win="Renux"
   text="When you finish, write your report to $report. Do not merge, deploy or change production. Write the report in one Write call, as your last step. Do not edit the vault. When the user asks for a change to the board or to a task note, write it in the report under a heading ## Vault changes, one change for each item. For a new task, write only its title, its project, its priority and one context line: the orchestrator writes the card in the board format, so do not read the vault for it. For a change to existing text, give the note path and the exact old and new text only in the report. Do not show them in the conversation: write there only that the report has vault changes. When the user answers you or asks for more work after your report, write the full report again when you finish. The new report replaces the old one. After the first line, write a section ## Result of at most 10 lines: the result, and the PR, commit or issue links. Do not change the $win window."
   text="$text After you write the report, run: $(term_tell_cmd "report $slug $report")"
   # An auto check can use only its listed tools, so only a task worker gets this.
   [ "$mode" != task ] ||
     text="$text You can start subagents and other claude terminals, for example for an independent review of your work before you push."
-  # Workers of one board can need the same long job (a wait for a deploy). A name from the
-  # job lets them find it, and hc refuses a second live terminal with that name. An hc child
-  # ends with its parent: --outlive-parent keeps the job when the orchestrator closes the
-  # worker that started it.
-  # In Renux, rex-job does the same in the Rex session "jobs": the name finds the job, and
+  # Workers of one board can need the same long job (a wait for a deploy). rex-job does it
+  # in the Rex session "jobs": the name finds the job, and
   # an ended job stays, so a second worker reads its result.
-  if [ "$mode" = task ] && [ "$(term_here)" = rex ]; then
+  if [ "$mode" = task ]; then
     text="$text Run a long job (a wait for a deploy, a build) as a shared job, so that other workers can use the same job. Name the job after what it does, not after your card, for example deploy-web-4fb7f80. Run ~/.bin/rex-job <job> <dir> -- <command>. It starts the job, or gives the job that another worker started: its JSON tells the block, the session, started, ended and exit_code. To use a job, run rex wait <block> --for 3600s --json as a background Bash call, end your turn with \"I wait for <job>.\", then read the end of the job with rex capture -s <session> -b <block> --trim | tail -40. A time-out gives the error \"wait timed out\": wait again. An ended job stays: run rex-job --again <job> <dir> -- <command> only to start it again. Do not close a shared job: another worker can still use it."
-  elif [ "$mode" = task ]; then
-    text="$text Run a long job (a wait for a deploy, a build) in a named hc terminal, so that other workers can use the same job. Name the job after what it does, not after your card, for example deploy-web-4fb7f80. First run: hc get <job>. When it shows the job, use it and do not start it again. Else start it: hc run --bg --no-notify --outlive-parent --name <job> --cwd <dir> -- <command>. On name_taken, another worker started it first: use that job. To use a job, run hc wait <job> --timeout 3600 as a background Bash call, end your turn with \"I wait for <job>.\", then read exit_code in its JSON and the end of the job with hc read <job> | tail -40. On reason timeout or message, wait again. Do not hc rm or hc kill a shared job: another worker can still use it."
   fi
   # A worker has no obsidian plugin (set_claude_args), so it gets the way to read the vault.
   if vault=$(vault_path); then
@@ -375,7 +364,7 @@ footer() {
 }
 
 # run_worker MODE BOARD CWD NAME SESSION REPORT PROMPT [CLAUDE_FLAGS...]: start the worker
-# claude as a terminal of the caller (an hc child, a window in Renux). Prints the address.
+# claude as a terminal of the caller (a window in Renux). Prints the address.
 # The command in the array setup_cmd (set by start) runs before claude, in its env.
 setup_cmd=()
 run_worker() {
@@ -415,8 +404,7 @@ setup_runs() {
 # worker_terminal LINE CHECK: exit 0 when the address of the record LINE is a live worker
 # terminal of its board with the same session, and the jq CHECK is true for that terminal.
 # The jq function lost gives a terminal of a worker that claude no longer runs in. A worker
-# terminal that the user opened in a tab is a kept terminal: after a restart or a reboot,
-# hc puts a shell in the place of claude, with the same labels. Its argv is then that
+# terminal can be a shell after a restart or a reboot, with the same labels. Its argv is then that
 # shell, not the env, direnv or claude command of run_worker. The worker runs again when
 # claude runs in front of that shell. While worktree-setup.sh runs, Rex gives bash as the
 # argv: that worker is not lost.
@@ -439,16 +427,12 @@ live_session() { worker_terminal "$1" 'lost | not'; }
 
 # drop_lost LINE: close the terminal of the record LINE when a restart put a shell in the
 # place of its claude, and that shell is idle: a program that the user runs in it stays.
-# Park it first, as close does: no pane, no keep, no empty tab.
 drop_lost() {
   local addr
   worker_terminal "$1" 'lost and .foreground.pid != null and .foreground.pid == .pid' || return 0
   addr=$(cut -f1 <<<"$1")
-  term_park "$addr" || true
-  # In Renux the watcher hears this exit: mark the record, as close does.
-  if [ "$(term_of "$addr")" = rex ]; then
-    rex_record_set "$addr" '{"notice":"exited"}' || true
-  fi
+  # The watcher hears this exit: mark the record, as close does.
+  rex_record_set "$addr" '{"notice":"exited"}' || true
   term_kill "$addr" || true
   term_rm "$addr" || true
 }
@@ -476,7 +460,7 @@ file_mtime() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1"; }
 # give the short ID: that is the full block ID.
 worker_addr() {
   local full
-  if [ "$(term_of "$1")" = rex ] && full=$(rex_full "$1"); then
+  if full=$(rex_full "$1"); then
     printf '%s\n' "$full"
   else
     printf '%s\n' "$1"
@@ -486,7 +470,7 @@ worker_addr() {
 # need_worker ADDR: exit 1 with "no agent" when ADDR is not a live worker.
 need_worker() {
   local labels
-  if ! labels=$(hc_labels "$1") || [ "$(jq -r '.["board.role"] // empty' <<<"$labels")" != worker ]; then
+  if ! labels=$(term_labels "$1") || [ "$(jq -r '.["board.role"] // empty' <<<"$labels")" != worker ]; then
     printf 'dispatch: no agent in %s.\n' "$1" >&2
     exit 1
   fi
@@ -916,7 +900,7 @@ NOTE
     elif term_message "$addr" "card $id"; then
       printf 'send: %s sent to %s\n' "$id" "$addr"
     else
-      printf 'send: %s queued, %s send to %s failed\n' "$id" "$(term_of "$addr")" "$addr"
+      printf 'send: %s queued, %s send to %s failed\n' "$id" "rex" "$addr"
     fi
     ;;
   queue|queue-clear)
@@ -1024,7 +1008,7 @@ NOTE
       prompt="$prompt Your terminal ran make worktree-setup in $setup before claude started. Its output is in $setup_log. Its last line gives the exit status: when it is not 0, read the log and fix the setup first."
     fi
     if ! addr=$(run_worker "$mode" "$board" "$work" "$slug" "$session" "$report" "$prompt" --session-id "$session") || [ -z "$addr" ]; then
-      printf 'dispatch: %s did not start the worker.\n' "$(term_here)" >&2
+      printf 'dispatch: %s did not start the worker.\n' rex >&2
       exit 1
     fi
     printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$addr" "$mode" "$board" "$report" "$session" "$work" "$slug" >>"$(workers_file)"
@@ -1107,7 +1091,7 @@ NOTE
     # The orchestrator that started the worker is gone: give the address of this one.
     prompt="The stop of the board orchestrator cut your turn. Continue the task. If you waited for an answer from the user, ask again."$'\n\n'"The orchestrator has a new address. After you write the report, run: $(term_tell_cmd "report $name $report")"
     if ! addr=$(run_worker "$mode" "$board" "$cwd" "$name" "$session" "$report" "$prompt" --resume "$session") || [ -z "$addr" ]; then
-      printf 'dispatch: %s did not start the worker.\n' "$(term_here)" >&2
+      printf 'dispatch: %s did not start the worker.\n' rex >&2
       exit 1
     fi
     # shellcheck disable=SC2016 # An awk program.
@@ -1135,7 +1119,7 @@ NOTE
       # A Renux worker window closes when its command ends: nothing to wait for. The
       # workers line has the session.
       line=$(worker_line "$addr")
-      if [ "$(term_of "$addr")" != rex ] || [ -z "$line" ]; then
+      if [ -z "$line" ]; then
         printf 'dispatch: no agent in %s.\n' "$addr" >&2
         exit 1
       fi
@@ -1159,8 +1143,7 @@ NOTE
     session=$(jq -r '.labels["board.session"] // empty' <<<"$json")
     # A worker that exited is finished: remove its terminal and its record only.
     if [ "$(jq -r '.state' <<<"$json")" = live ]; then
-      # hc wait also ends on a message to the caller (another worker reports): wait again
-      # then. Without "wait", give up after the 90 s check-in or 20 messages.
+      # Without "wait", give up after the 90 s check-in or 20 messages.
       tries=20
       while :; do
         reason=$(term_wait "$addr" "${BOARD_CLOSE_WAIT:-90}") || reason=""
@@ -1174,14 +1157,9 @@ NOTE
         printf 'dispatch: the worker in %s is still working. Close nothing.\n' "$addr" >&2
         exit 1
       fi
-      # The user gave the worker a pane: herdr-app keeps that terminal and puts a shell
-      # in its place when claude ends. Park it first: no pane, no keep, no shell tab.
-      if [ -n "$(jq -r '.labels["herdr.tab"] // empty' <<<"$json")" ]; then
-        term_park "$addr" || true
-      fi
-      # In Renux the watcher hears the exit of the claude that we kill. Mark the record, so
+      # The watcher hears the exit of the claude that we kill. Mark the record, so
       # that the notice does not tell the orchestrator about its own close.
-      if [ "$(term_of "$addr")" = rex ] && [ -f "$(_rex_rec_file "$(rex_full "$addr")")" ]; then
+      if [ -f "$(_rex_rec_file "$(rex_full "$addr")")" ]; then
         rex_record_set "$addr" '{"notice":"exited"}' || true
       fi
       term_kill "$addr" || true
@@ -1196,7 +1174,7 @@ NOTE
     addr=$(worker_addr "${2:?usage: dispatch.sh last ADDRESS}")
     # A worker that exited has no terminal: its workers line keeps the session.
     gone=false
-    if labels=$(hc_labels "$addr") && [ "$(jq -r '.["board.role"] // empty' <<<"$labels")" = worker ]; then
+    if labels=$(term_labels "$addr") && [ "$(jq -r '.["board.role"] // empty' <<<"$labels")" = worker ]; then
       session=$(jq -r '.["board.session"] // empty' <<<"$labels")
     elif line=$(worker_line "$addr") && [ -n "$line" ]; then
       gone=true

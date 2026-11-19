@@ -4,8 +4,9 @@
 
 rules="$BATS_TEST_DIRNAME/../CLAUDE.md"
 
-@test "the Rex block starts with its Renux condition" {
-  grep -qF 'In Renux (`REX_BLOCK` set and `HC_TERMINAL_ID` not set), use these rules in place of the `hc` rules above.' "$rules"
+@test "the Rex block starts with its Renux condition, and says what to do outside Renux" {
+  grep -qF 'In Renux (`REX_BLOCK` set), use these rules.' "$rules"
+  grep -qF 'Outside Renux, run a slow command as a background Bash call' "$rules"
 }
 
 @test "the Rex block has the rex run line" {
@@ -39,11 +40,9 @@ rules="$BATS_TEST_DIRNAME/../CLAUDE.md"
   grep -qF 'tab name' "$rules"
 }
 
-@test "the hc rules are unchanged" {
-  grep -qF 'hc run --bg --no-notify --name <n> --cwd <dir> -- <cmd>' "$rules"
-  grep -qF 'hc wait <n> --timeout 110' "$rules"
-  grep -qF 'hc run --bg --no-parent --no-notify --name <n> --cwd <dir> -- <cmd>' "$rules"
-  grep -qF 'hc label "$HC_TERMINAL_ID" reviewr.dir=<worktree root> reviewr.base=<short base SHA>' "$rules"
+@test "no hc or herdr-app rule is left" {
+  run grep -nE '`hc |hc (run|wait|read|label|get)|HC_TERMINAL_ID|herdr-app' "$rules"
+  [ "$status" -eq 1 ]
 }
 
 @test "no rex rule uses --focus without =false" {
@@ -58,10 +57,10 @@ rules="$BATS_TEST_DIRNAME/../CLAUDE.md"
   grep -qF '`rex capture -s <session> -b <block> --trim | tail -40`. Do not close a shared resource.' "$rules"
 }
 
-@test "the reviewr and address bullets use the Renux condition of the Rex block" {
-  grep -qF -- '- In Renux (`REX_BLOCK` set and `HC_TERMINAL_ID` not set), in place of the `hc label` step' "$rules"
-  grep -qF '  and of the `b`/`B` steps, run' "$rules"
-  grep -qF -- '- In Renux (`REX_BLOCK` set and `HC_TERMINAL_ID` not set), write the tab name of a job' "$rules"
+@test "the reviewr and job name bullets use the Renux condition" {
+  grep -qF 'In Renux (`REX_BLOCK` set), first run' "$rules"
+  grep -qF 'Outside Renux, give the short SHA of the base' "$rules"
+  grep -qF -- '- In Renux, write the tab name of a job, not its block ID.' "$rules"
 }
 
 @test "the Rex block has the rex-tab-name line" {

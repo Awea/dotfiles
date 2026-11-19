@@ -16,18 +16,18 @@ human. The agent reads `SKILL.md`, and `start.md`, `shorten.md` and `boards.md` 
 | `board-scan.sh` | Reads the board, the task notes, the project notes and the inbox. |
 | `dispatch.sh` | Starts, lists and closes the workers, and writes reports, runs and logs. |
 | `lib.sh` | Shared shell functions. |
-| `term.sh` | The terminal functions for both backends. `lib.sh` sources it. |
+| `term.sh` | The terminal functions for Renux. `lib.sh` sources it. |
 | `board-watch.lua` | The board watcher of a Renux session. |
-| `board.sh` | Lists the boards and the running orchestrators for the herdr-app mods board-open and board-stop. `claude-resume.sh` runs `board.sh restart` to start an orchestrator again in its shell after a reboot. |
+| `board.sh` | Lists the boards and the running orchestrators, and opens and stops them for the Renux popups. `claude-resume.sh` runs `board.sh restart` to start an orchestrator again in its shell after a reboot. |
 | `hooks/compact.sh` | After a compact, tells the orchestrator to read `SKILL.md` again. |
-| `hooks/guard.sh` | Blocks a `herdr-app do` call of a board worker, and a `rex` call that changes the window. A worker leaves the tabs as they are. Asks for a worker push with no review. |
+| `hooks/guard.sh` | Blocks a `rex` call that changes the window. A worker leaves the tabs as they are. Asks for a worker push with no review. |
 | `test/*.bats` | The bats tests. `test/skill.bats` checks the skill text. |
 
 ## Workers
 
-- In herdr-app, a worker is an `hc` terminal, a child of the orchestrator terminal. In Renux, see "Backends". It shows
-  under the orchestrator in the agents list, and it ends when the orchestrator ends.
-- A worker has an address such as `t7`. A Ctrl-click on the address peeks at the worker.
+- A worker is a tab of the board session (see "Renux"). It ends when the orchestrator
+  session ends.
+- A worker has an address: its Rex block ID.
 - A task worker gets the slug of its card: its branch, worktree and agent name. When 2
   card titles give the same slug, the second card gets the slug with `-2`.
 - When `start` makes a new worktree and the repo has a make target `worktree-setup`, the
@@ -35,37 +35,34 @@ human. The agent reads `SKILL.md`, and `start.md`, `shorten.md` and `boards.md` 
   in the start folder (else the worktree root) and keeps the output in a log beside the
   report. The prompt gives the worker that log. A worktree used again gets no setup.
 - An automatic worker gets the allow rules of `<repo>/.claude/settings.readonly.json`,
-  the allow rules and MCP servers of its board, the `hc send` rule and an edit rule for
+  the allow rules and MCP servers of its board, the `dispatch.sh tell` rule and an edit rule for
   its report.
 - Only one orchestrator of a board runs at a time. To restart, close the old orchestrator
   first (alt-shift-x). Each start is a new session that starts at rule 1.
 - `SKILL.md` keeps `disable-model-invocation: true`. It stops worker claudes from loading
   the skill and its `Bash(dispatch.sh *)` permission. `test/skill.bats` checks it.
 
-## Backends
+## Renux
 
-The skill runs in herdr-app (`hc`) and in Renux (Rex). The backend of a terminal comes
-from its address: `t7` is `hc`, and `block:…` or 8 hex digits is Rex. `BOARD_TERM` (`hc`
-or `rex`) forces the backend of the caller. When it is not set, `HC_TERMINAL_ID` gives
-`hc`, `REX_BLOCK` gives `rex`, and the default is `hc`. `term.sh` holds one `hc_` and one
-`rex_` version of each terminal function.
+The skill runs in Renux (Rex). A terminal address is a Rex block ID `block:…` (8 hex digits
+also work). `term.sh` holds the `rex_` version of each terminal function.
 
-| herdr-app (`hc`) | Renux (Rex) |
+| Item | In Renux |
 |---|---|
-| Space "BOARD orchestrator" | Session "BOARD orchestrator" |
-| Tab "orchestrator" | First tab of the session, label "orchestrator" |
-| Worker: an `hc` child terminal | Worker: a tab of the board session, labeled with the worker name |
-| Address `t7` | Block ID `block:…` (8 hex digits also work) |
-| `HC_TERMINAL_ID` | `REX_BLOCK` and `REX_SESSION` |
-| Labels on the terminal | A state file for each block |
-| A child ends with its parent | `board.sh stop` closes the session, so its tabs close |
-| Message `<hc from="t7 NAME">…</hc>` | Message `<rex from="SHORT NAME">…</rex>` |
-| `hc read` | `rex capture`, or `dispatch.sh last` |
-| `hc` tells blocked and exit | The board watcher |
+| Orchestrator | Session "BOARD orchestrator", first tab labeled "orchestrator" |
+| Worker | A tab of the board session, labeled with the worker name |
+| Env of the caller | `REX_BLOCK` and `REX_SESSION` |
+| Labels | A state file for each block |
+| End of a worker | `board.sh stop` closes the session, so its tabs close |
+| Message | `<rex from="SHORT NAME">…</rex>` |
+| Read a worker | `rex capture`, or `dispatch.sh last` |
+| Blocked and exit | The board watcher |
 
-- The orchestrator record keeps two columns, so the same file works for both backends.
+The state folder keeps the old name `board-orchestrator-hc`: it holds live state.
+
+- The orchestrator record keeps two columns: the address and the board.
 - A worker reports with `dispatch.sh tell "report SLUG PATH"`. `tell` sends the text to the
-  orchestrator in the right form for its backend.
+  orchestrator in the right form.
 - The watcher `board-watch.lua` starts with `board.sh open` and `board.sh restart`, with
   `rex do -s SESSION`. Rex does not tell the orchestrator that a worker is blocked or has
   exited, so the watcher does. It calls `dispatch.sh notice`, which sends
@@ -73,9 +70,7 @@ or `rex`) forces the backend of the caller. When it is not set, `HC_TERMINAL_ID`
   `<rex>SHORT NAME exited (exit CODE). See: dispatch.sh last SHORT</rex>`. These notices
   have no `from` attribute.
 - In Renux, ctrl+b B opens a board, with one key for each board. ctrl+b X stops a board.
-  When only one board runs, it stops at once. `board.sh running` lists only the boards of
-  the backend of the caller, so a stop key never stops a board of the other app.
-  `board.sh running all` lists the boards of both backends.
+  When only one board runs, it stops at once. `board.sh running` lists the boards that run.
 - `rex send` types raw text, and a newline submits the line. So a message with a newline
   goes to Rex as one bracketed paste, then Enter.
 - The scripts call `rex` with `--autostart=false`: they never start a Rex server.
@@ -119,7 +114,7 @@ or `rex`) forces the backend of the caller. When it is not set, `HC_TERMINAL_ID`
 ### dispatch.sh
 
 - `start task|auto CWD NAME PROMPT_FILE`: prints the worker address, then the report path.
-  Exit 2: no worker. Exit 1: the git worktree or `hc` failed.
+  Exit 2: no worker. Exit 1: the git worktree or `rex` failed.
 - `workers BOARD`: one JSON line for each running worker: `address`, `name`, `status`
   (working, blocked, idle or done), `mode`, `cwd`, `session`, `report`, `report_exists`,
   `first_line`, `report_mtime` and `waits`. `waits` is true for a blocked worker, and for
@@ -128,10 +123,9 @@ or `rex`) forces the backend of the caller. When it is not set, `HC_TERMINAL_ID`
 - `resumable BOARD`: one JSON line for each worker that started and no longer runs (a
   stop, a closed space, a reboot): `session`, `mode`, `cwd`, `name`, `report`,
   `report_exists`, `first_line` and `done`. `resume` prints the address and the report
-  path, and the old report path stays. `resume-clear` empties the list. A worker that
-  the user opened in a tab is a kept terminal: after a reboot, hc puts a shell in the
-  place of its claude, with the same labels. `workers` skips that shell, and
-  `resumable` and `resume` close it (park, kill, rm), so no empty tab stays.
+  path, and the old report path stays. `resume-clear` empties the list. After a
+  reboot, a worker terminal can hold a shell in the place of its claude. `workers` skips that
+  shell, and `resumable` and `resume` close it (kill, rm), so no empty tab stays.
 - `report REPORT`: the first line, the `## Result` section, the `## Vault changes`
   section, the `REFUSED:` lines, then `full report: REPORT (N lines)`. A report with no
   `## Result` gives its first 40 lines. A section over 60 lines is cut, with a

@@ -1,12 +1,14 @@
 #!/usr/bin/env bats
-# dispatch.sh start task: the worker claude starts in its own git worktree, so herdr-app
+# dispatch.sh start task: the worker claude starts in its own git worktree, so Renux
 # and herdr-reviewr see the folder of its work.
 
 bats_require_minimum_version 1.5.0
 load helper
 
+O=block:01a1ef15-4833-735e-9530-226d79648a16
+
 setup() {
-  hc_setup
+  rex_setup
   export GIT_CONFIG_GLOBAL="$BATS_TEST_TMPDIR/gitconfig" GIT_CONFIG_NOSYSTEM=1
   git config --global user.name test
   git config --global user.email test@example.com
@@ -25,15 +27,18 @@ setup() {
   repo_with_push_policy "$REPO"
   printf 'Fix the login bug.\n' >"$BATS_TEST_TMPDIR/p.md"
   WT="$BATS_TEST_TMPDIR/repo-fix-login"
-  orchestrator t5 garden
+  rex_orchestrator "$O" garden
 }
+
+# rex_args N: the arguments of the Nth worker window call, in RUN_ARGS.
+rex_args() { mapfile -d '' RUN_ARGS <"$FAKE_DIR/rex/rex-$1-${2:-1}.args"; }
 
 start() { run bash "$SKILL_DIR/dispatch.sh" start "${1:-task}" "${2:-$REPO}" "${3:-Fix login}" "$BATS_TEST_TMPDIR/p.md"; }
 
 @test "start task runs the worker in a new worktree beside the repo" {
   start
   [ "$status" -eq 0 ]
-  run_args
+  rex_args window-new
   [ "$(arg_after --cwd)" = "$WT" ]
   [ "$(git -C "$WT" rev-parse --abbrev-ref HEAD)" = fix-login ]
   [ "$(git -C "$WT" rev-parse HEAD)" = "$(git -C "$REPO" rev-parse origin/main)" ]
@@ -55,7 +60,7 @@ start() { run bash "$SKILL_DIR/dispatch.sh" start "${1:-task}" "${2:-$REPO}" "${
 
 @test "start task tells the worker its worktree, branch and repo" {
   start
-  run_args
+  rex_args window-new
   prompt=${RUN_ARGS[-1]}
   [[ "$prompt" == *"Your git worktree is $WT, on the branch fix-login."* ]]
   [[ "$prompt" == *"Change only the repo of your card: $REPO and its git worktrees."* ]]
@@ -67,7 +72,7 @@ start() { run bash "$SKILL_DIR/dispatch.sh" start "${1:-task}" "${2:-$REPO}" "${
   touch "$WT/work"
   start
   [ "$status" -eq 0 ]
-  run_args 2
+  rex_args window-new 2
   [ "$(arg_after --cwd)" = "$WT" ]
   [ -f "$WT/work" ]
 }
@@ -82,7 +87,7 @@ PAGE="Fix login bug in the signup page"
   touch "$REPO-fix-login-bug-in-the-signup/form"
   start task "$REPO" "$PAGE"
   [ "$status" -eq 0 ]
-  run_args 2
+  rex_args window-new 2
   [ "$(arg_after --cwd)" = "$REPO-fix-login-bug-in-the-signup-2" ]
   [ "$(git -C "$REPO-fix-login-bug-in-the-signup-2" rev-parse --abbrev-ref HEAD)" = fix-login-bug-in-the-signup-2 ]
   [ ! -e "$REPO-fix-login-bug-in-the-signup-2/form" ]
@@ -96,11 +101,11 @@ PAGE="Fix login bug in the signup page"
   start task "$REPO" "$PAGE"
   start task "$REPO" "$FORM"
   [ "$status" -eq 0 ]
-  run_args 3
+  rex_args window-new 3
   [ "$(arg_after --cwd)" = "$REPO-fix-login-bug-in-the-signup" ]
   start task "$REPO" "$PAGE"
   [ "$status" -eq 0 ]
-  run_args 4
+  rex_args window-new 4
   [ "$(arg_after --cwd)" = "$REPO-fix-login-bug-in-the-signup-2" ]
 }
 
@@ -108,7 +113,7 @@ PAGE="Fix login bug in the signup page"
   start task "$REPO" "$FORM"
   start task "$REPO" "fix login bug in the signup form. "
   [ "$status" -eq 0 ]
-  run_args 2
+  rex_args window-new 2
   [ "$(arg_after --cwd)" = "$REPO-fix-login-bug-in-the-signup" ]
 }
 
@@ -120,7 +125,7 @@ PAGE="Fix login bug in the signup page"
   } >"$XDG_STATE_HOME/board-orchestrator-hc/cards"
   start
   [ "$status" -eq 0 ]
-  run_args
+  rex_args window-new
   [ "$(arg_after --cwd)" = "$WT-2" ]
 }
 
@@ -129,7 +134,7 @@ PAGE="Fix login bug in the signup page"
   start task "$REPO" "$FORM"
   start task "$REPO" "$PAGE"
   [ "$status" -eq 0 ]
-  run_args 2
+  rex_args window-new 2
   [[ "${RUN_ARGS[-1]}" == *"worktree add -b fix-login-bug-in-the-signup-2 $OTHER-fix-login-bug-in-the-signup-2 origin/HEAD,"* ]]
 }
 
@@ -137,7 +142,7 @@ PAGE="Fix login bug in the signup page"
   mkdir -p "$WT"
   start
   [ "$status" -eq 0 ]
-  run_args
+  rex_args window-new
   [ "$(arg_after --cwd)" = "$WT-2" ]
   [ "$(git -C "$WT-2" rev-parse --abbrev-ref HEAD)" = fix-login ]
 }
@@ -157,7 +162,7 @@ PAGE="Fix login bug in the signup page"
   repo_with_push_policy "$BATS_TEST_TMPDIR/mine"
   start task "$BATS_TEST_TMPDIR/mine"
   [ "$status" -eq 0 ]
-  run_args
+  rex_args window-new
   [ "$(arg_after --cwd)" = "$BATS_TEST_TMPDIR/mine" ]
   [ ! -e "$WT" ]
 }
@@ -166,7 +171,7 @@ PAGE="Fix login bug in the signup page"
   printf '{"permissions":{"allow":["Bash(make test)"]}}\n' >"$REPO/.claude/settings.readonly.json"
   start auto
   [ "$status" -eq 0 ]
-  run_args
+  rex_args window-new
   [ "$(arg_after --cwd)" = "$REPO" ]
   [ ! -e "$WT" ]
 }
@@ -178,7 +183,7 @@ PAGE="Fix login bug in the signup page"
   chmod +x "$BATS_TEST_TMPDIR/bin/direnv"
   PATH="$BATS_TEST_TMPDIR/bin:$PATH" start
   [ "$status" -eq 0 ]
-  run_args
+  rex_args window-new
   [ "$(arg_after direnv)" = exec ]
   [ "$(arg_after exec)" = "$REPO" ]
 }
@@ -189,7 +194,7 @@ PAGE="Fix login bug in the signup page"
   start
   [ "$status" -eq 1 ]
   [[ "$output" == *"could not make a worktree"* ]]
-  [ -z "$(calls '^hc run')" ]
+  [ -z "$(calls '^rex window new')" ]
 }
 
 # board_vault: a vault whose board garden links the card repo, another git repo of the
@@ -216,7 +221,7 @@ board_vault() {
   board_vault
   start
   [ "$status" -eq 0 ]
-  run_args
+  rex_args window-new
   prompt=${RUN_ARGS[-1]}
   [[ "$prompt" == *"Change only the repo of your card: $REPO and its git worktrees, and the other repos of your board below. When the work needs a repo that is not in that list, do not change that repo: stop that work."* ]]
   [[ "$prompt" == *"The other repos of your board: $OTHER (push policy ask, worktree $OTHER-fix-login)."* ]]
@@ -236,7 +241,7 @@ board_vault() {
   git -C "$OTHER" remote set-head origin -d
   start
   [ "$status" -eq 0 ]
-  run_args
+  rex_args window-new
   [[ "${RUN_ARGS[-1]}" == *"worktree add -b fix-login $OTHER-fix-login HEAD,"* ]]
 }
 
@@ -246,7 +251,7 @@ board_vault() {
   repo_with_push_policy "$BATS_TEST_TMPDIR/mine"
   start task "$BATS_TEST_TMPDIR/mine"
   [ "$status" -eq 0 ]
-  run_args
+  rex_args window-new
   [[ "${RUN_ARGS[-1]}" != *"$REPO (push policy"* ]]
   [[ "${RUN_ARGS[-1]}" == *"$OTHER (push policy ask"* ]]
 }
@@ -256,7 +261,7 @@ board_vault() {
   printf -- '---\nkanban-plugin: board\n---\n\n## 📥 Backlog\n\n- [ ] 🟢 **[card] Fix login**\n\tA. [[Projects/card]]\n' >"$OBSIDIAN_VAULT_PATH/Boards/garden.md"
   start
   [ "$status" -eq 0 ]
-  run_args
+  rex_args window-new
   [[ "${RUN_ARGS[-1]}" == *"Change only the repo of your card: $REPO and its git worktrees. When the work needs another repo"* ]]
   [[ "${RUN_ARGS[-1]}" != *"other repos of your board"* ]]
 }
@@ -266,7 +271,7 @@ board_vault() {
   printf '{"permissions":{"allow":["Bash(make test)"]}}\n' >"$REPO/.claude/settings.readonly.json"
   start auto
   [ "$status" -eq 0 ]
-  run_args
+  rex_args window-new
   [[ "${RUN_ARGS[-1]}" != *"other repos of your board"* ]]
 }
 
@@ -296,7 +301,7 @@ setup_index() {
   [ "$status" -eq 0 ]
   # dispatch opens the terminal at once: make runs there, not in dispatch.
   [ ! -e "$WT/setup-ran" ]
-  run_args
+  rex_args window-new
   i=$(setup_index)
   [ "$i" -ge 0 ]
   [ "${RUN_ARGS[$((i + 1))]}" = "$WT" ]
@@ -308,7 +313,7 @@ setup_index() {
 @test "start task tells the worker about the worktree-setup log" {
   with_setup_target
   start
-  run_args
+  rex_args window-new
   i=$(setup_index)
   log=${RUN_ARGS[$((i + 2))]}
   [[ "${RUN_ARGS[-1]}" == *"Your terminal ran make worktree-setup in $WT before claude started. Its output is in $log."* ]]
@@ -317,7 +322,7 @@ setup_index() {
 @test "start task runs no worktree-setup when the repo has no such target" {
   start
   [ "$status" -eq 0 ]
-  run_args
+  rex_args window-new
   [ "$(setup_index)" = -1 ]
   [[ "${RUN_ARGS[-1]}" != *"worktree-setup"* ]]
 }
@@ -328,7 +333,7 @@ setup_index() {
   [ "$status" -eq 0 ]
   start
   [ "$status" -eq 0 ]
-  run_args 2
+  rex_args window-new 2
   [ "$(setup_index)" = -1 ]
 }
 
@@ -338,7 +343,7 @@ setup_index() {
   repo_with_push_policy "$REPO/sub"
   start task "$REPO/sub"
   [ "$status" -eq 0 ]
-  run_args
+  rex_args window-new
   i=$(setup_index)
   [ "$i" -ge 0 ]
   [ "${RUN_ARGS[$((i + 1))]}" = "$WT" ]
@@ -354,7 +359,7 @@ setup_index() {
   start
   [ "$status" -eq 0 ]
   [ ! -e "$WT/gen-ran" ]
-  run_args
+  rex_args window-new
   [ "$(setup_index)" -ge 0 ]
 }
 
@@ -367,7 +372,7 @@ setup_index() {
   git -C "$REPO" checkout -q other
   start
   [ "$status" -eq 0 ]
-  run_args
+  rex_args window-new
   [ "$(setup_index)" = -1 ]
 }
 
@@ -383,7 +388,7 @@ setup_index() {
   repo_with_push_policy "$REPO/sub"
   start task "$REPO/sub"
   [ "$status" -eq 0 ]
-  run_args
+  rex_args window-new
   i=$(setup_index)
   [ "${RUN_ARGS[$((i + 1))]}" = "$WT/sub" ]
 }

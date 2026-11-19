@@ -8,7 +8,6 @@ setup() {
   RS="$BATS_TEST_DIRNAME/../rex-summary"
   OUT="$BATS_TEST_TMPDIR/tty"
   : >"$OUT"
-  unset HC_TERMINAL_ID
   export REX_BLOCK=block:fake REX_SUMMARY_TTY="$OUT"
 }
 
@@ -45,12 +44,6 @@ msg_of() {
   [ ! -s "$OUT" ]
 }
 
-@test "does nothing in herdr-app" {
-  export HC_TERMINAL_ID=t7
-  run "$RS" "Patches the Renux sidebar"
-  [ "$status" -eq 0 ]
-  [ ! -s "$OUT" ]
-}
 
 @test "an empty sentence is a usage error" {
   run "$RS" ""

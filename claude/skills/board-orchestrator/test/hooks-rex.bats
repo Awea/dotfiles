@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# hooks/guard.sh and hooks/compact.sh in a Renux pane (REX_BLOCK set, no HC_TERMINAL_ID).
+# hooks/guard.sh and hooks/compact.sh in a Renux pane (REX_BLOCK set).
 
 bats_require_minimum_version 1.5.0
 load helper
@@ -80,13 +80,6 @@ blocked() {
   [ -z "$output" ]
 }
 
-@test "guard keeps blocking herdr-app do for a Rex worker" {
-  rex_worker
-  guard 'herdr-app do x'
-  [ "$status" -eq 2 ]
-  [[ "$output" == *"change the herdr-app window (herdr-app do)"* ]]
-}
-
 @test "guard does nothing for a Rex orchestrator" {
   export REX_BLOCK=b1 BOARD=garden BOARD_ROLE=orchestrator
   guard 'rex window new'
@@ -101,7 +94,7 @@ blocked() {
   [ -z "$output" ]
 }
 
-@test "the push rules apply to a Rex worker as to an hc worker" {
+@test "the push rules apply to a Rex worker" {
   rex_worker
   export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
   ORIGIN="$BATS_TEST_TMPDIR/origin.git" REPO="$BATS_TEST_TMPDIR/repo"

@@ -4,8 +4,7 @@
 #
 #   reviewr.sh DIR [BASE]
 #
-# With BASE: the branch scope on BASE (config/rex/reviewr-branch, --base), as
-# herdr-app/bin/agent-tabs.sh reviewr does.
+# With BASE: the branch scope on BASE (config/rex/reviewr-branch, --base).
 set -euo pipefail
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}"
 here=$(dirname "$(readlink -f "$0")")
