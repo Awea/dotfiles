@@ -4,7 +4,7 @@
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { exec, focused, home, openOverlay, closeOverlay, panes, props, run, terminals, theme } from "herdr";
-import { newPane, openReviewr, zoomSteps } from "./reviewr.js";
+import { newPane, openReviewr, pickRoot, reviewTarget, zoomSteps } from "./reviewr.js";
 
 const SCRIPT = () => `${home()}/.config/herdr-app/bin/agent-tabs.sh`;
 const close = () => { const id = props()?.overlay; if (id) closeOverlay(id); };
@@ -51,22 +51,31 @@ for (let i = 1; i <= 9; i++) KEYS[String(i)] = [`tab ${i}`, () => run("tab.selec
 // The help line: one entry for each action.
 const HELP = "a claude · A handoff · c shell · % \" split · B board · X stop · N space · d reviewr · x close · z zoom · hjkl panes · n p 1-9 tabs · b sidebar · g go to · ? help";
 
-// reviewr(cx): herdr-reviewr on the git root of the focused folder, zoomed. It shows the
-// reviewr of that root in the tab, else opens one in a split on the right. Its herdr
-// calls go to herdr-shim (agent-tabs.sh reviewr).
+// reviewr(cx): herdr-reviewr on the git root of the focused folder, zoomed. The labels
+// reviewr.dir and reviewr.base of the focused terminal replace that folder, and start the
+// branch scope on that base (reviewTarget). It shows the reviewr of that root and base in
+// the tab, else opens one in a split on the right. Its herdr calls go to herdr-shim
+// (agent-tabs.sh reviewr).
 async function reviewr(cx) {
   const f = focused();
   if (!f?.pane) return;
   const cwd = f.cwd ?? home();
-  let root = cwd;
-  try {
-    const r = await exec("git", ["-C", cwd, "rev-parse", "--show-toplevel"], { timeout: 2000 });
-    if (r.code === 0 && r.stdout.trim()) root = r.stdout.trim();
-  } catch {}
-  let pane = openReviewr({ focus: f, panes: panes(), terminals: terminals(), root });
+  const labels = terminals().find((t) => t.address === f.terminal)?.labels ?? null;
+  const target = reviewTarget(labels, cwd);
+  const { root, base } = await pickRoot(target, cwd, async (d) => {
+    try {
+      const r = await exec("git", ["-C", d, "rev-parse", "--show-toplevel"],
+        { timeout: d === cwd ? 2000 : 1000 });
+      return r.code === 0 && r.stdout.trim() ? r.stdout.trim() : null;
+    } catch {
+      return null;
+    }
+  });
+  let pane = openReviewr({ focus: f, panes: panes(), terminals: terminals(), root, base });
   if (!pane) {
     const before = new Set(panes().map((p) => p.pane));
-    run("pane.split", { direction: "right", pane: f.pane, argv: ["bash", SCRIPT(), "reviewr", root] });
+    const argv = ["bash", SCRIPT(), "reviewr", root, ...(base ? [base] : [])];
+    run("pane.split", { direction: "right", pane: f.pane, argv });
     // The new pane shows in panes() at once, or after a few frames: wait 1 s at most.
     for (let i = 0; !(pane = newPane(before, panes(), f.tab)) && i < 20; i++) {
       await new Promise((done) => cx.timer.after(50, done));

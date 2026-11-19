@@ -54,3 +54,30 @@ check() {
   check "assert.equal(m.newPane(new Set(['p1', 'p2', 'p3', 'p4']), [...panes, { pane: 'p5', tab: 'a' }], 'a'), 'p5');
     assert.equal(m.newPane(new Set(['p1', 'p2', 'p3', 'p4']), panes, 'a'), null);"
 }
+
+@test "the reviewr labels of the agent terminal give the folder and the base" {
+  check "assert.deepEqual(m.reviewTarget({ 'reviewr.dir': '/wt', 'reviewr.base': 'abc1234' }, '/r'), { dir: '/wt', base: 'abc1234' });
+    assert.deepEqual(m.reviewTarget({ 'reviewr.dir': '/wt' }, '/r'), { dir: '/wt', base: null });
+    assert.deepEqual(m.reviewTarget({ 'herdr.tab': 'a' }, '/r'), { dir: '/r', base: null });
+    assert.deepEqual(m.reviewTarget(null, '/r'), { dir: '/r', base: null });"
+}
+
+@test "a reviewr is reused only for the same base" {
+  check "const t = [...terminals, { address: 't5', argv: [...rv('/w'), 'abc1234'] }];
+    const p = [...panes, { pane: 'p5', tab: 'a', terminal: 't5', zoomed: false }];
+    assert.equal(m.openReviewr({ focus: { pane: 'p1', tab: 'a' }, panes: p, terminals: t, root: '/w', base: 'abc1234' }), 'p5');
+    assert.equal(m.openReviewr({ focus: { pane: 'p1', tab: 'a' }, panes: p, terminals: t, root: '/w', base: 'def5678' }), null);
+    assert.equal(m.openReviewr({ focus: { pane: 'p1', tab: 'a' }, panes: p, terminals: t, root: '/w' }), null);
+    assert.equal(m.openReviewr({ focus: { pane: 'p1', tab: 'a' }, panes, terminals, root: '/r', base: 'abc1234' }), null);"
+}
+
+@test "the labeled worktree is the root, and a gone one falls back to the pane folder" {
+  check "const rootOf = async (d) => ({ '/wt/sub': '/wt', '/r/sub': '/r' })[d] ?? null;
+    assert.deepEqual(await m.pickRoot({ dir: '/wt/sub', base: 'abc1234' }, '/r/sub', rootOf), { root: '/wt', base: 'abc1234' });
+    assert.deepEqual(await m.pickRoot({ dir: '/gone', base: 'abc1234' }, '/r/sub', rootOf), { root: '/r', base: null });
+    assert.deepEqual(await m.pickRoot({ dir: '/r/sub', base: null }, '/r/sub', rootOf), { root: '/r', base: null });
+    assert.deepEqual(await m.pickRoot({ dir: '/gone', base: 'abc1234' }, '/nogit', rootOf), { root: '/nogit', base: null });
+    const asked = [];
+    await m.pickRoot({ dir: '/r/sub', base: null }, '/r/sub', async (d) => { asked.push(d); return '/r'; });
+    assert.deepEqual(asked, ['/r/sub']);"
+}

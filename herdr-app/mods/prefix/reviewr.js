@@ -7,14 +7,35 @@ export function reviewrDir(t) {
   return /(^|\/)agent-tabs\.sh$/.test(a[1] ?? "") && a[2] === "reviewr" ? a[3] ?? null : null;
 }
 
-// openReviewr({focus, panes, terminals, root}): the pane to show for ctrl+b d, else null.
-// That is the focused pane when it is a reviewr, else a reviewr of root in the same tab.
-export function openReviewr({ focus, panes, terminals, root }) {
-  const dir = (p) => reviewrDir(terminals.find((t) => t.address === p.terminal));
+// reviewTarget(labels, cwd): the folder and the base to review. An agent sets the labels
+// reviewr.dir and reviewr.base on its hc terminal when its branch is in another worktree
+// (claude/CLAUDE.md). With no reviewr.dir: cwd and no base.
+export function reviewTarget(labels, cwd) {
+  const dir = labels?.["reviewr.dir"];
+  return dir ? { dir, base: labels["reviewr.base"] || null } : { dir: cwd, base: null };
+}
+
+// pickRoot({dir, base}, cwd, rootOf): the git root to review and its base. rootOf(d) gives
+// the git root of folder d, else null. A labeled worktree that is gone gives the root of
+// cwd with no base, and no root at all gives cwd.
+export async function pickRoot({ dir, base }, cwd, rootOf) {
+  if (dir !== cwd) {
+    const root = await rootOf(dir);
+    if (root) return { root, base };
+  }
+  return { root: (await rootOf(cwd)) ?? cwd, base: null };
+}
+
+// openReviewr({focus, panes, terminals, root, base}): the pane to show for ctrl+b d, else
+// null. That is the focused pane when it is a reviewr, else a reviewr of root in the same
+// tab with the same base (agent-tabs.sh reviewr DIR [BASE]).
+export function openReviewr({ focus, panes, terminals, root, base = null }) {
+  const term = (p) => terminals.find((t) => t.address === p.terminal);
+  const dir = (p) => reviewrDir(term(p));
   const me = panes.find((p) => p.pane === focus.pane);
   if (me && dir(me) !== null) return me.pane;
   return panes.find((p) => p.tab === focus.tab && p.pane !== focus.pane && p.terminal &&
-    dir(p) === root)?.pane ?? null;
+    dir(p) === root && (term(p).argv[4] ?? null) === base)?.pane ?? null;
 }
 
 // zoomSteps(panes, tab, pane): the panes to give pane.zoom, in order, so that tab shows

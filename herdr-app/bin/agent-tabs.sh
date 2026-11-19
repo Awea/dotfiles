@@ -6,7 +6,9 @@
 #   agent-tabs.sh folders           JSON list of the folders for a new space
 #   agent-tabs.sh handoff TERMINAL SPACE TAB FOCUS EFFORT focus|background
 #                                   run /handoff in TERMINAL, then continue in a new tab
-#   agent-tabs.sh reviewr DIR       run herdr-reviewr on DIR, with herdr-shim as its herdr
+#   agent-tabs.sh reviewr DIR [BASE]
+#                                   run herdr-reviewr on DIR, with herdr-shim as its herdr,
+#                                   in the branch scope on BASE when BASE is given
 #   agent-tabs.sh handoff-start ARGS...
 #                                   run handoff ARGS detached, with a log file
 set -euo pipefail
@@ -135,11 +137,17 @@ reviewr_bin() {
   return 1
 }
 
-# reviewr DIR: run herdr-reviewr in this hc terminal. Its herdr calls go to herdr-shim,
-# with the herdr-app space, tab and terminal of this terminal as the Herdr ids.
+# reviewr DIR [BASE]: run herdr-reviewr in this hc terminal. Its herdr calls go to
+# herdr-shim, with the herdr-app space, tab and terminal of this terminal as the Herdr ids.
+# With BASE: the branch scope on BASE (herdr-app/reviewr-branch/config.toml, --base).
 reviewr() {
-  local bin labels here
+  local bin labels here config=reviewr
+  local -a flags=()
   here="$(cd "$(dirname "$0")" && pwd)"
+  if [ -n "${2:-}" ]; then
+    config=reviewr-branch
+    flags=(--base "$2")
+  fi
   if ! bin=$(reviewr_bin); then
     printf 'agent-tabs: herdr-reviewr is not installed.\n' >&2
     exec "${SHELL:-sh}"
@@ -149,14 +157,14 @@ reviewr() {
     HERDR_WORKSPACE_ID=$(jq -r '.["herdr.space"] // empty' <<<"$labels") \
     HERDR_TAB_ID=$(jq -r '.["herdr.tab"] // empty' <<<"$labels") \
     HERDR_PANE_ID=${HC_TERMINAL_ID:-} \
-    HERDR_PLUGIN_CONFIG_DIR="$(cd "$here/../reviewr" && pwd)" \
-    exec "$bin" "$1"
+    HERDR_PLUGIN_CONFIG_DIR="$(cd "$here/../$config" && pwd)" \
+    exec "$bin" ${flags[@]+"${flags[@]}"} "$1"
 }
 
 case "${1:-}" in
   main-folder) main_folder "${2:?usage: agent-tabs.sh main-folder DIR}" ;;
   folders) folders ;;
-  reviewr) reviewr "${2:?usage: agent-tabs.sh reviewr DIR}" ;;
+  reviewr) reviewr "${2:?usage: agent-tabs.sh reviewr DIR [BASE]}" "${3:-}" ;;
   handoff)
     [ "$#" -eq 7 ] || { printf 'usage: agent-tabs.sh handoff TERMINAL SPACE TAB FOCUS EFFORT focus|background\n' >&2; exit 2; }
     handoff "$2" "$3" "$4" "$5" "$6" "$7"

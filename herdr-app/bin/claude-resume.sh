@@ -27,7 +27,10 @@
 #
 #   cd '<claude.cwd>' && claude --resume <claude.session>
 #
-# Both skip board terminals: the board orchestrator starts and resumes them.
+# A board orchestrator gets its labels too. In its new shell, resume runs board.sh restart:
+# a new orchestrator session, that starts at rule 1 and offers to resume the workers of
+# the board. board.sh holds the lock of the board, so alt-shift-b types no second start. resume and record skip the other board terminals (the
+# workers): the orchestrator resumes them.
 # Both exit 1 when hc ls, a label or a send fails.
 set -uo pipefail
 HC=("${HC_BIN:-hc}")
@@ -36,6 +39,7 @@ export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${P
 UUID='^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
 SEP=$'\x1f'
 SESSIONS="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/sessions"
+BOARD_SH="$HOME/.claude/skills/board-orchestrator/board.sh"
 
 usage() {
   printf 'usage: claude-resume.sh record|resume|tick\n' >&2
@@ -84,9 +88,10 @@ record() {
   fi
 }
 
-# resume ADDR: claude --resume in ADDR when a new shell, idle, replaced Claude.
+# resume ADDR: claude --resume in ADDR when a new shell, idle, replaced Claude. In a board
+# orchestrator: board.sh restart.
 resume() {
-  local addr=$1 start
+  local addr=$1 start err rc
   [ -n "$l_pid" ] && [ "$fg_pid" = "$pid" ] || return 0
   [[ "$l_session" =~ $UUID ]] || return 0
   start=$(started "$pid")
@@ -94,6 +99,14 @@ resume() {
   if [ "$pid" = "$l_pid" ] && same_start "$start" "$l_start"; then return 0; fi
   # The new shell first: a second run before Claude starts finds nothing to do.
   label "$addr" "claude.pid=$pid" "claude.start=$start" || return 1
+  if [ -n "$board" ]; then
+    err=$(bash "$BOARD_SH" restart "$board" "$addr" 2>&1 >/dev/null) && rc=0 || rc=$?
+    [ "$rc" -ne 0 ] || { printf 'claude-resume: %s: orchestrator of %s\n' "$addr" "$board"; return 0; }
+    printf 'claude-resume: %s: %s\n' "$addr" "${err:-board.sh restart failed}" >&2
+    # Exit 3: not the orchestrator of its board. The new labels stay: no try at each tick.
+    [ "$rc" -eq 3 ] || label "$addr" "claude.pid=$l_pid" "claude.start=$l_start" || true
+    return 1
+  fi
   if ! "${HC[@]}" send "$addr" "cd $(quote "${l_cwd:-.}") && claude --resume $l_session" >/dev/null; then
     printf 'claude-resume: %s: hc send failed\n' "$addr" >&2
     label "$addr" "claude.pid=$l_pid" "claude.start=$l_start" || true
@@ -116,12 +129,12 @@ for addr in $(jq -r '.terminals[] | select(.state == "live") | .address' <<<"$li
   # One field for each value, joined with the unit separator: read merges empty fields
   # between tabs.
   fields=$(jq -r --arg sep "$SEP" '
-    select(.state == "live" and (.labels.board // "") == "")
+    select(.state == "live" and ((.labels.board // "") == "" or .labels["board.role"] == "orchestrator"))
     | [(.pid // "" | tostring), (.foreground.pid // "" | tostring), .foreground.name // "",
-       (.labels | .["claude.session"], .["claude.cwd"], .["claude.pid"], .["claude.start"]
-         | . // "")] | join($sep)' <<<"$term")
+       (.labels | .["claude.session"], .["claude.cwd"], .["claude.pid"], .["claude.start"],
+         (if .["board.role"] == "orchestrator" then .board else "" end) | . // "")] | join($sep)' <<<"$term")
   [ -n "$fields" ] || continue
-  IFS=$SEP read -r pid fg_pid fg_name l_session l_cwd l_pid l_start <<<"$fields"
+  IFS=$SEP read -r pid fg_pid fg_name l_session l_cwd l_pid l_start board <<<"$fields"
   [ -n "$pid" ] || continue
   case "$cmd" in
     record) record "$addr" || failed=1 ;;

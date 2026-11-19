@@ -54,6 +54,21 @@ session_file() {
     >"$CLAUDE_CONFIG_DIR/sessions/$1.json"
 }
 
+# fake_board_sh: a board.sh that logs its calls. restart exits 0 for the board "my board"
+# in t85, 1 for the board "down" (hc fails), and 3 for any other board.
+fake_board_sh() {
+  local dir="$HOME/.claude/skills/board-orchestrator"
+  mkdir -p "$dir"
+  cat >"$dir/board.sh" <<'EOF2'
+#!/usr/bin/env bash
+printf 'board.sh %s\n' "$*" >>"$FAKE_LOG"
+[ "$1|$2|$3" != "restart|my board|t85" ] || exit 0
+[ "$2" != down ] || { printf 'board.sh: hc did not start claude in %s\n' "$3" >&2; exit 1; }
+printf 'board.sh: %s is not the orchestrator of the board %s\n' "$3" "$2" >&2
+exit 3
+EOF2
+}
+
 setup() {
   hc_setup
   export CLAUDE_CONFIG_DIR="$HOME/.claude"
@@ -143,11 +158,18 @@ setup() {
   [ -z "$(calls '^hc label')" ]
 }
 
-@test "record: a board terminal gets nothing, the board orchestrator resumes it" {
-  terminal t85 300 500 claude '{"board":"shop","board.role":"orchestrator"}'
+@test "record: a board worker gets nothing, the board orchestrator resumes it" {
+  terminal t85 300 500 claude '{"board":"shop","board.role":"worker"}'
   session_file 500 "$ID" /repo
   run bash "$RESUME" record
   [ -z "$(calls '^hc label')" ]
+}
+
+@test "record: a board orchestrator gets the labels of its session" {
+  terminal t85 300 500 claude '{"board":"shop","board.role":"orchestrator"}'
+  session_file 500 "$ID" /vault
+  run bash "$RESUME" record
+  [ -n "$(calls "^hc label t85 claude.session=$ID claude.cwd=/vault claude.pid=300 ")" ]
 }
 
 @test "record: a failed hc ls exits 1 with the reason" {
@@ -251,10 +273,40 @@ setup() {
   [ -z "$(calls '^hc (send|label)')" ]
 }
 
-@test "resume: a board terminal gets nothing, the board orchestrator resumes it" {
-  terminal t85 400 400 zsh "$(labels "$ID" /repo 300 '{"board":"shop","board.role":"orchestrator"}')"
+@test "resume: a board worker gets nothing, the board orchestrator resumes it" {
+  terminal t85 400 400 zsh "$(labels "$ID" /repo 300 '{"board":"shop","board.role":"worker"}')"
   run bash "$RESUME" resume
   [ -z "$(calls '^hc (send|label)')" ]
+}
+
+@test "resume: a board orchestrator shell after a restart starts the orchestrator again" {
+  fake_board_sh
+  terminal t85 400 400 zsh "$(labels "$ID" /vault 300 '{"board":"my board","board.role":"orchestrator"}')"
+  run bash "$RESUME" resume
+  [ "$status" -eq 0 ]
+  label=$(grep -n -m 1 "^hc label t85 claude.pid=400 claude.start=$" "$FAKE_LOG" | cut -d: -f1)
+  restart=$(grep -n -m 1 "^board.sh restart my board t85$" "$FAKE_LOG" | cut -d: -f1)
+  [ -n "$label" ] && [ -n "$restart" ]
+  [ "$label" -lt "$restart" ]
+  [ -z "$(calls '^hc send')" ]
+}
+
+@test "resume: an orchestrator that board.sh refuses gets nothing, and no new try" {
+  fake_board_sh
+  terminal t85 400 400 zsh "$(labels "$ID" /vault 300 '{"board":"lab","board.role":"orchestrator"}')"
+  run bash "$RESUME" resume
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"t85 is not the orchestrator of the board lab"* ]]
+  [ -z "$(calls '^hc send')" ]
+  [ -z "$(calls "^hc label t85 claude.pid=300 ")" ]
+}
+
+@test "resume: an orchestrator that board.sh could not start gets its old labels back" {
+  fake_board_sh
+  terminal t85 400 400 zsh "$(labels "$ID" /vault 300 '{"board":"down","board.role":"orchestrator"}')"
+  run bash "$RESUME" resume
+  [ "$status" -eq 1 ]
+  [ -n "$(calls "^hc label t85 claude.pid=300 claude.start=$")" ]
 }
 
 @test "resume: a finished terminal gets nothing" {
