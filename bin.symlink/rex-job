@@ -4,15 +4,21 @@
 #
 #   Usage: rex-job [--again] NAME DIR -- CMD [ARGS...]
 #          rex-job --sweep
+#          rex-job --done NAME
 #
 # The job runs in a block labeled NAME in the Rex session "jobs", with rex-resource. Name
 # a job after what it does, for example deploy-web-4fb7f80. A second call gets the same
 # block, also after the job ended: the worker then reads its result. With --again, a call
 # closes an ended job and starts it again. A live job never starts again.
 # Prints the JSON line of rex-resource: {"block", "session", "started", "ended",
-# "exit_code", "cwd", "argv"}. Exit codes: those of rex-resource.
+# "exit_code", "cwd", "argv", "port"}. Exit codes: those of rex-resource.
 # An ended job closes when no live Renux block uses it: rex-resource does it at each call.
-# --sweep only closes those jobs, and prints the name of each closed job.
+# A job whose command runs never stops (rex-resource --keep-running).
+# --sweep only closes those jobs, and prints the name of each closed job. The board
+# watcher runs it every 10 minutes.
+# --done NAME: run it after you read the end of the job. It closes the job at once when it
+# ended and no other live block uses it, and prints NAME. A job that runs stays, and the
+# first sweep after its end closes it.
 
 set -euo pipefail
 
@@ -22,7 +28,7 @@ case "${1:-}" in
     keep=()
     shift
     ;;
-  --sweep) keep=() ;;
+  --sweep | --done) keep=() ;;
 esac
 exec "$(dirname "$(readlink -f "$0" 2>/dev/null || printf '%s' "$0")")/rex-resource" \
-  --session jobs ${keep[@]+"${keep[@]}"} "$@"
+  --session jobs --keep-running ${keep[@]+"${keep[@]}"} "$@"

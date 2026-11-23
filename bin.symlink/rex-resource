@@ -2,27 +2,52 @@
 
 # Find or start a shared resource (a database, a docs server) in Renux, once for all agents.
 #
-#   Usage: rex-resource [--session NAME] [--keep-ended] NAME DIR -- CMD [ARGS...]
-#          rex-resource [--session NAME] --sweep
+#   Usage: rex-resource [--session NAME] [--keep-ended] [--keep-running] [--port PORT] NAME DIR -- CMD [ARGS...]
+#          rex-resource [--session NAME] [--keep-running] --sweep
+#          rex-resource [--session NAME] --keep-running --done NAME
 #
 # The resource runs in a block labeled NAME, in the Rex session labeled "resources" (or
 # the --session one). A lock makes the look-up and the start one step, so two agents
 # cannot start it twice. The block stays open when its command ends. The next call closes
 # such a block and starts the command again. With --keep-ended, the next call gives the
 # ended block (rex-job: a second worker reads the result of a job). CMD runs with the
-# PATH of ~/.zshrc (rex run --interactive).
-# Each call keeps the Renux block of the caller (REX_BLOCK) as a user of NAME. Each call,
-# and --sweep, closes the other blocks of the session that this script started, whose
-# command ended and that no live block uses: the tabs of finished jobs do not stay. A
-# block with no user (a caller outside Renux) stays until its start is 1 hour old. A
-# caller outside Renux is not a user: a block that it shares with Renux callers closes
-# when those are gone. A block whose command runs always stays. A failed or wrong answer
-# of Rex closes nothing. The sweep also removes the saved start of a block that is gone.
-# --sweep prints the label of each closed block.
+# PATH of ~/.zshrc (rex run --interactive). CMD runs through rex-starter, which tells Renux
+# the block of the caller (REX_BLOCK): the Renux sidebar shows the tab under the tab of
+# that caller. A later caller does not change it.
+# Each call keeps the Renux block of the caller (REX_BLOCK) as a user of NAME, or
+# "outside" for a caller outside Renux. Each call, and --sweep, closes the other blocks of
+# the session that this script started, whose command ended and that no live Renux user
+# uses: the tabs of finished jobs do not stay. For an ended block, "outside" is not a
+# user: a block with no Renux user stays until its start is 1 hour old, and a block that
+# it shares with Renux users closes when those are gone.
+# --done NAME: the caller read the end of NAME and no longer uses it. It removes the caller
+# (REX_BLOCK, or "outside") from the users of NAME. When NAME ended and no live Renux user
+# remains, it closes NAME at once and prints NAME. A block whose users all said done (an
+# empty users file) closes at the first sweep after its end, not after 1 hour. A block
+# that still runs stays. No block NAME: exit 1. --done needs --keep-running (rex-job): a
+# shared resource keeps its stop rule. A block with no saved start never closes.
+# A block whose command runs stops when it had Renux users, all of them are gone, and it
+# has no "outside" user: the sweep sends it one ctrl+c, as a user in its tab does.
+# "docker compose up" then stops its containers and keeps their volumes. The block ends,
+# and the next sweep closes it. With --keep-running (rex-job), a block whose command runs
+# always stays. A call for a stopping block waits at most 20 seconds for its end, then
+# starts it again. For a docker compose resource, give DIR of the main checkout or pass -p
+# PROJECT: the project, and so its volume, does not change with the caller. --sweep also waits for the end of the blocks that it stops, then
+# closes them. A failed or wrong answer of Rex closes and stops nothing. The sweep also
+# removes the saved start of a block that is gone. --sweep prints the label of each
+# closed block.
+# --port PORT: the resource listens on PORT. The start keeps PORT next to cwd and argv. A
+# start refuses PORT when another NAME of the session holds it: exit 3, nothing starts. A
+# NAME holds its port while its block is open. So each worker can start its own copy, with
+# its own NAME and PORT, for example shop-postgres-24931. Put PORT in CMD too: the script
+# does not give it to CMD. For docker compose, put PORT in -p PROJECT too, so each copy has
+# its own volume. A found block keeps the port of its start.
 # Prints one JSON line: {"block", "session", "started", "ended", "exit_code", "cwd",
-# "argv"}. exit_code is null while the command runs. cwd and argv are those of the start,
-# kept in the state folder next to the lock.
-# Exit 1: Rex fails, or the lock stays taken. Exit 2: a usage error.
+# "argv", "port"}. exit_code is null while the command runs. cwd, argv and port are those
+# of the start, kept in the state folder next to the lock. port is null for a start
+# without --port.
+# Exit 1: Rex fails, or the lock stays taken. Exit 2: a usage error. Exit 3: another NAME
+# holds PORT.
 #
 # REX_BIN is the rex command (default rex). REX_RESOURCE_STALE is the age in seconds after
 # which a lock is stale (default 60). REX_RESOURCE_POLL is the seconds between two lock
@@ -31,8 +56,10 @@
 set -euo pipefail
 
 say() { printf 'rex-resource: %s\n' "$*" >&2; }
+# The folder of this script, where rex-starter is.
+here=$(dirname "$(readlink -f "$0" 2>/dev/null || printf '%s' "$0")")
 
-session_label=resources keep_ended="" sweep_only=""
+session_label=resources keep_ended="" keep_running="" sweep_only="" done_only="" port=""
 while :; do
   case "${1:-}" in
     --session)
@@ -40,19 +67,37 @@ while :; do
       session_label=$2
       shift 2
       ;;
+    --port)
+      # A number from 1 to 65535, with no leading 0.
+      if [ $# -lt 2 ] || ! [[ "$2" =~ ^[1-9][0-9]{0,4}$ ]] || [ "$2" -gt 65535 ]; then
+        say "usage: --port PORT, a number from 1 to 65535"
+        exit 2
+      fi
+      port=$2
+      shift 2
+      ;;
     --keep-ended) keep_ended=1; shift ;;
+    --keep-running) keep_running=1; shift ;;
     --sweep) sweep_only=1; shift ;;
+    --done) done_only=1; shift ;;
     *) break ;;
   esac
 done
-if [ -n "$sweep_only" ]; then
-  if [ $# -gt 0 ] || [ -n "$keep_ended" ] || [ -z "$session_label" ]; then
-    say "usage: rex-resource [--session NAME] --sweep"
+if [ -n "$done_only" ]; then
+  if [ $# -ne 1 ] || [ -z "$1" ] || [ -z "$keep_running" ] || [ -n "$keep_ended" ] || [ -n "$sweep_only" ] ||
+    [ -n "$port" ] || [ -z "$session_label" ]; then
+    say "usage: rex-resource [--session NAME] --keep-running --done NAME"
+    exit 2
+  fi
+  set -- "$1" . -- true
+elif [ -n "$sweep_only" ]; then
+  if [ $# -gt 0 ] || [ -n "$keep_ended" ] || [ -n "$port" ] || [ -z "$session_label" ]; then
+    say "usage: rex-resource [--session NAME] [--keep-running] --sweep"
     exit 2
   fi
   set -- "" . -- true
 elif [ $# -lt 4 ] || [ -z "${1:-}" ] || [ "${3:-}" != -- ] || [ -z "$session_label" ]; then
-  say "usage: rex-resource [--session NAME] [--keep-ended] NAME DIR -- CMD [ARGS...]"
+  say "usage: rex-resource [--session NAME] [--keep-ended] [--keep-running] [--port PORT] NAME DIR -- CMD [ARGS...]"
   exit 2
 fi
 name=$1 cwd=$2 dir_arg=$2
@@ -69,11 +114,16 @@ lock="$dir/lock"
 start_dir=$dir
 [ "$session_label" = resources ] || start_dir="$dir/$(printf '%s' "$session_label" | tr '/' '_')"
 # file_of NAME: the state files of NAME without the extension: .json for the start,
-# .users for the blocks that called for NAME.
+# .users for the blocks that called for NAME, .stop for the ctrl+c of the sweep.
 file_of() { printf '%s/%s' "$start_dir" "$(printf '%s' "$1" | tr '/' '_')"; }
 start_file="$(file_of "$name").json"
 users_file="$(file_of "$name").users"
+stop_file="$(file_of "$name").stop"
 mkdir -p "$start_dir"
+# The user line of a caller outside Renux.
+outside=outside
+# The seconds that a call waits for the end of a stopping block.
+stop_wait=20
 
 # This function is named rex: "command rex" skips it, or it would call itself.
 rex() {
@@ -93,7 +143,10 @@ age() {
 }
 
 owner=""
-release() { [ -z "$owner" ] || rmdir "$lock" 2>/dev/null || true; }
+release() {
+  [ -z "$owner" ] || rmdir "$lock" 2>/dev/null || true
+  owner=""
+}
 trap release EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
@@ -135,11 +188,27 @@ live_blocks() {
   printf '%s' "$all"
 }
 
-# sweep SKIP: close each block of the session with a saved start (this script started
-# it) whose command ended, when no live block uses it. Skip the blocks labeled SKIP.
-# Print the label of each closed block.
+# process BLOCK: print the process answer of Rex for BLOCK of the session. Exit 1 when
+# Rex fails.
+process() {
+  rex api call block.method \
+    "$(jq -cn --arg s "$session" --arg b "$1" '{session_id: $s, block_id: $b, method: "process"}')" 2>/dev/null
+}
+
+# renux_users FILE: print the Renux users of a users file, with no "outside" line.
+renux_users() { grep -vxF "$outside" "$1" 2>/dev/null || true; }
+
+# The blocks that the last sweep stopped.
+stopped=()
+
+# sweep SKIP: in the session, look at each block with a saved start (this script started
+# it), but not the blocks labeled SKIP. Close a block whose command ended, when no live
+# Renux user uses it. Send ctrl+c to a block whose command runs, when it had Renux users,
+# all of them are gone, and it has no "outside" user (not with --keep-running). Keep the
+# blocks that got a ctrl+c in the array stopped. Print the label of each closed block.
 sweep() {
-  local blocks b label file info live="" listed="" present f
+  local blocks b label file info users live="" listed="" present f
+  stopped=()
   blocks=$(rex api call session.list_blocks "$(jq -cn --arg s "$session" '{session_id: $s}')" 2>/dev/null) || return 0
   jq -e '.blocks | type == "array"' <<<"$blocks" >/dev/null 2>&1 || return 0
   # The saved start of a block that is gone: remove it, or a new block with the same label
@@ -147,27 +216,41 @@ sweep() {
   present=$(jq -r '.blocks[].label' <<<"$blocks" | while IFS= read -r label; do file_of "$label"; echo; done)
   for f in "$start_dir"/*.json; do
     [ -f "$f" ] && [ "${f%.json}" != "$(file_of "$1")" ] || continue
-    grep -qxF "${f%.json}" <<<"$present" || rm -f "$f" "${f%.json}.users"
+    grep -qxF "${f%.json}" <<<"$present" || rm -f "$f" "${f%.json}.users" "${f%.json}.stop"
   done
   while IFS=$'\t' read -r b label; do
     [ -n "$b" ] && [ "$label" != "$1" ] || continue
     file=$(file_of "$label")
     [ -f "$file.json" ] || continue
-    info=$(rex api call block.method \
-      "$(jq -cn --arg s "$session" --arg b "$b" '{session_id: $s, block_id: $b, method: "process"}')" 2>/dev/null) || continue
+    info=$(process "$b") || continue
     # A process answer always has last_exit: an answer without it is wrong.
-    jq -e 'has("last_exit") and (.last_exit != null or .child == null)' <<<"$info" >/dev/null 2>&1 || continue
-    if [ -s "$file.users" ]; then
+    jq -e 'has("last_exit")' <<<"$info" >/dev/null 2>&1 || continue
+    users=$(renux_users "$file.users")
+    if jq -e '.last_exit != null or .child == null' <<<"$info" >/dev/null 2>&1; then
+      # No Renux user: all users said done (an empty users file), or the 1 hour rule.
+      if [ -z "$users" ] && { [ ! -e "$file.users" ] || [ -s "$file.users" ]; }; then
+        [ "$(age "$file.json")" -gt 3600 ] || continue
+      fi
+    else
+      # The command runs.
+      [ -z "$keep_running" ] && [ -n "$users" ] && [ ! -e "$file.stop" ] || continue
+      ! grep -qxF "$outside" "$file.users" || continue
+    fi
+    if [ -n "$users" ]; then
       if [ -z "$listed" ]; then
         live=$(live_blocks) || return 0
         listed=1
       fi
-      ! grep -qxFf "$file.users" <<<"$live" || continue
-    else
-      [ "$(age "$file.json")" -gt 3600 ] || continue
+      ! grep -qxFf <(printf '%s\n' "$users") <<<"$live" || continue
+    fi
+    if jq -e '.last_exit == null and .child != null' <<<"$info" >/dev/null 2>&1; then
+      rex send-key -s "$session" -b "$b" ctrl+c >/dev/null 2>&1 || continue
+      : >"$file.stop"
+      stopped+=("$b")
+      continue
     fi
     rex block close -s "$session" "$b" >/dev/null 2>&1 || continue
-    rm -f "$file.json" "$file.users"
+    rm -f "$file.json" "$file.users" "$file.stop"
     printf '%s\n' "$label"
   done < <(jq -r '.blocks[] | [.block_id, .label] | @tsv' <<<"$blocks")
 }
@@ -180,25 +263,87 @@ session=$(rex_out api call session.list '{}' |
   jq -r --arg l "$session_label" '[.sessions[] | select(.label == $l)][0].session_id // empty')
 if [ -z "$session" ]; then
   [ -z "$sweep_only" ] || exit 0
+  [ -z "$done_only" ] || { say "no block $name"; exit 1; }
   session=$(rex_out new "$session_label" --json | jq -r '.session_id')
 fi
 
 if [ -n "$sweep_only" ]; then
+  sweep ""
+  [ ${#stopped[@]} -gt 0 ] || exit 0
+  # Wait for the end of the stopped blocks without the lock, then close them.
+  release
+  for b in "${stopped[@]}"; do
+    rex wait -s "$session" "$b" --for "${stop_wait}s" --json >/dev/null 2>&1 || true
+  done
+  take_lock
   sweep ""
   exit 0
 fi
 sweep "$name" >/dev/null
 
 args=$(jq -cn --arg s "$session" '{session_id: $s}')
-block=$(rex_out api call session.list_blocks "$args" |
-  jq -r --arg n "$name" '[.blocks[] | select(.label == $n)][0].block_id // empty')
+# find: set block to the block labeled NAME (empty when there is none), and info to the
+# process answer of that block.
+find() {
+  block=$(rex_out api call session.list_blocks "$args" |
+    jq -r --arg n "$name" '[.blocks[] | select(.label == $n)][0].block_id // empty')
+  [ -z "$block" ] || info=$(process "$block") || { say "rex does not answer"; exit 1; }
+}
+find
+
+# --done: remove the caller from the users, then close the block when it ended and no live
+# Renux user remains. A wrong answer of Rex closes nothing.
+if [ -n "$done_only" ]; then
+  [ -n "$block" ] || { say "no block $name"; exit 1; }
+  user=${REX_BLOCK:-$outside}
+  if [ -f "$users_file" ]; then
+    grep -vxF "$user" "$users_file" >"$users_file.tmp" || true
+    mv "$users_file.tmp" "$users_file"
+  fi
+  # This script did not start a block with no saved start: it never closes it.
+  [ -f "$start_file" ] || exit 0
+  jq -e 'has("last_exit") and (.last_exit != null or .child == null)' <<<"$info" >/dev/null 2>&1 || exit 0
+  users=$(renux_users "$users_file")
+  if [ -n "$users" ]; then
+    live=$(live_blocks) || exit 0
+    ! grep -qxFf <(printf '%s\n' "$users") <<<"$live" || exit 0
+  elif [ ! -e "$users_file" ] || [ -s "$users_file" ]; then
+    # Only a caller outside Renux remains, or no users file: the 1 hour rule of the sweep.
+    exit 0
+  fi
+  rex_out block close -s "$session" "$block" >/dev/null
+  rm -f "$start_file" "$users_file" "$stop_file"
+  printf '%s\n' "$name"
+  exit 0
+fi
+
+# A block that got the ctrl+c of the sweep: wait for its end without the lock, then look
+# again. A block that still runs after the wait stays in use.
+if [ -n "$block" ] && [ -f "$stop_file" ] && jq -e '.last_exit == null and .child != null' <<<"$info" >/dev/null; then
+  release
+  rex wait -s "$session" "$block" --for "${stop_wait}s" --json >/dev/null 2>&1 || true
+  take_lock
+  find
+fi
+[ -z "$block" ] || rm -f "$stop_file"
+
+# --port: before a start, refuse PORT when the saved start of another NAME has it. The sweep
+# above removed the saved start of each block that is gone.
+if [ -n "$port" ] && { [ -z "$block" ] ||
+  { [ -z "$keep_ended" ] && jq -e '.last_exit != null or .child == null' <<<"$info" >/dev/null; }; }; then
+  for f in "$start_dir"/*.json; do
+    [ -f "$f" ] && [ "$f" != "$start_file" ] || continue
+    if jq -e --argjson p "$port" '.port == $p' "$f" >/dev/null 2>&1; then
+      say "port $port is held by $(basename "${f%.json}")"
+      exit 3
+    fi
+  done
+fi
 
 # A found block whose command ended: keep it with --keep-ended, else close it and start
 # the command again.
 ended=false exit_code=null
 if [ -n "$block" ]; then
-  info=$(rex_out api call block.method \
-    "$(jq -cn --arg s "$session" --arg b "$block" '{session_id: $s, block_id: $b, method: "process"}')")
   if jq -e '.last_exit != null or .child == null' <<<"$info" >/dev/null; then
     if [ -n "$keep_ended" ]; then
       ended=true
@@ -220,18 +365,21 @@ if [ -n "$block" ]; then
   fi
 else
   started=true
-  block=$(rex_out run -s "$session" --focus=false --keep-open --interactive --label "$name" --cwd "$cwd" --json -- "$@" |
+  # rex-starter writes the block of the caller to the new tab: Renux shows the tab under it.
+  block=$(rex_out run -s "$session" --focus=false --keep-open --interactive --label "$name" --cwd "$cwd" --json -- \
+    "$here/rex-starter" "${REX_BLOCK:-}" "$@" |
     jq -r '.block_ids[0]')
   # After --args --, jq 1.6 and 1.7 keep each word of CMD as it is, also a word such as -D.
-  start=$(jq -cn --arg cwd "$cwd" '{cwd: $cwd, argv: $ARGS.positional}' --args -- "$@")
+  start=$(jq -cn --arg cwd "$cwd" --argjson port "${port:-null}" '{cwd: $cwd, argv: $ARGS.positional, port: $port}' --args -- "$@")
   printf '%s\n' "$start" >"$start_file"
-  rm -f "$users_file"
+  rm -f "$users_file" "$stop_file"
 fi
-# The caller uses the block: a sweep keeps the block while the caller lives.
-if [ -n "${REX_BLOCK:-}" ] && ! grep -qxF "$REX_BLOCK" "$users_file" 2>/dev/null; then
-  printf '%s\n' "$REX_BLOCK" >>"$users_file"
-fi
+# The caller uses the block: a sweep keeps the block while the caller lives. A caller
+# outside Renux keeps a running block always.
+user=${REX_BLOCK:-$outside}
+grep -qxF "$user" "$users_file" 2>/dev/null || printf '%s\n' "$user" >>"$users_file"
 
 jq -cn --arg block "$block" --arg session "$session" --argjson started "$started" --argjson start "$start" \
   --argjson ended "$ended" --argjson code "$exit_code" \
-  '{block: $block, session: $session, started: $started, ended: $ended, exit_code: $code, cwd: $start.cwd, argv: $start.argv}'
+  '{block: $block, session: $session, started: $started, ended: $ended, exit_code: $code, cwd: $start.cwd, argv: $start.argv,
+    port: ($start.port // null)}'

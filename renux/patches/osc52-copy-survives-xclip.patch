@@ -1,0 +1,57 @@
+diff --git a/src/app/app.zig b/src/app/app.zig
+--- a/src/app/app.zig
++++ b/src/app/app.zig
+@@ -1565,7 +1565,7 @@ pub const App = struct {
+             .clipboard => {
+                 const z = gpa.dupeSentinel(u8, h.server.clipboard_text.items, 0) catch return;
+                 defer gpa.free(z);
+-                a.window.as(gtk.Widget).getClipboard().setText(z.ptr);
++                termview.putCopy(a.window.as(gtk.Widget).getClipboard(), z);
+             },
+             .message => {
+                 const s = h.server;
+diff --git a/src/terminal/termview.zig b/src/terminal/termview.zig
+--- a/src/terminal/termview.zig
++++ b/src/terminal/termview.zig
+@@ -46,6 +46,41 @@ fn clipboardKind(formats: *const gdk.ContentFormats) ClipboardKind {
+     return .text;
+ }
+ 
++/// A copy that a program sends with OSC 52 goes on the clipboard here. Claude Code also runs
++/// xclip for the same copy. When xclip and Renux take the clipboard in the same millisecond
++/// of the X server, GTK 4.22 takes the xclip change with the same time as the newer one. GTK
++/// then thinks that xclip owns the clipboard, but the X server keeps Renux as the owner. GTK
++/// answers no request, and each paste hangs until the next copy. An owner gives its formats
++/// within milliseconds, so on X11 a clipboard that is not Renux's and has no formats 300 ms
++/// later is in that state, and the copy goes on the clipboard again. An owner that is slower
++/// than 300 ms, or that gives no formats, loses its copy to this one: that risk is accepted.
++var held_copy: ?[:0]u8 = null;
++var copy_check: c_uint = 0;
++const copy_check_ms = 300;
++
++pub fn putCopy(clipboard: *gdk.Clipboard, text: [:0]const u8) void {
++    clipboard.setText(text.ptr);
++    if (copy_check != 0) _ = glib.Source.remove(copy_check);
++    copy_check = 0;
++    if (held_copy) |t| gpa.free(t);
++    held_copy = null;
++    // Only the X11 backend of GTK has this fault.
++    const display: *gobject.TypeInstance = @ptrCast(@alignCast(clipboard.getDisplay()));
++    if (!std.mem.eql(u8, std.mem.span(gobject.typeNameFromInstance(display)), "GdkX11Display")) return;
++    held_copy = gpa.dupeSentinel(u8, text, 0) catch null;
++    if (held_copy != null) copy_check = glib.timeoutAdd(copy_check_ms, &checkCopy, clipboard);
++}
++
++fn checkCopy(data: ?*anyopaque) callconv(.c) c_int {
++    copy_check = 0;
++    const clipboard: *gdk.Clipboard = @ptrCast(@alignCast(data.?));
++    const text = held_copy orelse return 0;
++    held_copy = null;
++    defer gpa.free(text);
++    if (clipboard.isLocal() == 0 and clipboard.getFormats().isEmpty() != 0) clipboard.setText(text.ptr);
++    return 0;
++}
++
+ fn saveClipboardImage(texture: *gdk.Texture) !*gio.File {
+     var io: *gio.FileIOStream = undefined;
+     const file = gio.File.newTmp("renux-clipboard-XXXXXX.png", &io, null) orelse return error.TempFileFailed;

@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+
+# Tell Renux which agent started this tab, then run the command of the tab. The Renux
+# sidebar shows the tab under the tab of that agent (tab-under-starter patch of
+# renux/patches).
+#
+#   Usage: rex-starter BLOCK CMD [ARGS...]
+#
+# BLOCK is the Renux block of the agent (its REX_BLOCK). The script writes it to the
+# terminal of the tab as an OSC 7501 report on the record with the id "starter"
+# (https://www.superlogical.com/rex/docs/build/program-status). The idle state of the
+# record stays when the command ends, so an ended job stays under its agent. Then the
+# script runs CMD in its place (exec). An empty BLOCK, or a stdout that is not a terminal,
+# writes no record.
+# Exit 2: a usage error. Else the exit code of CMD.
+# REX_STARTER_TTY is the file to write the record to, in place of stdout (for the tests).
+
+set -euo pipefail
+
+if [ $# -lt 2 ]; then
+  printf 'rex-starter: usage: rex-starter BLOCK CMD [ARGS...]\n' >&2
+  exit 2
+fi
+block=$(printf %s "$1" | tr -d '\000-\037\177')
+shift
+
+if [ -n "$block" ]; then
+  msg=$(printf %s "$block" | base64 | tr -d '\n')
+  # shellcheck disable=SC1003 # the \\ ends the string terminator ESC \, it escapes no quote
+  record=$(printf '\033]7501;id=starter:state=idle:msg=%s\033\\' "$msg")
+  if [ -n "${REX_STARTER_TTY:-}" ]; then
+    printf %s "$record" >>"$REX_STARTER_TTY"
+  elif [ -t 1 ]; then
+    printf %s "$record"
+  fi
+fi
+
+exec "$@"

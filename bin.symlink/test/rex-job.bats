@@ -40,7 +40,7 @@ old() {
   [ "$(jq -r .ended <<<"$output")" = false ]
   grep -qF 'rex new jobs' "$FAKE_LOG"
   session=$(jq -r .session <<<"$output")
-  grep -qF "rex run -s $session --focus=false --keep-open --interactive --label deploy-web-4fb7f80 --cwd /tmp/x --json -- make deploy" "$FAKE_LOG"
+  grep -qF "rex run -s $session --focus=false --keep-open --interactive --label deploy-web-4fb7f80 --cwd /tmp/x --json -- $(cd "$BATS_TEST_DIRNAME/.." && pwd -P)/rex-starter  make deploy" "$FAKE_LOG"
 }
 
 @test "a second call on a live job gives the same block and starts nothing" {
@@ -136,6 +136,16 @@ old() {
   REX_BLOCK=block:gone run "$RJ" deploy-web-4fb7f80 /tmp/x -- make deploy
   run "$RJ" build-api-1234567 /tmp/x -- make build
   [ "$status" -eq 0 ]
+  ! grep -q '^rex send-key' "$FAKE_LOG"
+  ! grep -q '^rex block close' "$FAKE_LOG"
+}
+
+@test "--sweep keeps a job whose command runs, also with no live caller" {
+  REX_BLOCK=block:gone run "$RJ" deploy-web-4fb7f80 /tmp/x -- make deploy
+  run "$RJ" --sweep
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  ! grep -q '^rex send-key' "$FAKE_LOG"
   ! grep -q '^rex block close' "$FAKE_LOG"
 }
 
@@ -143,7 +153,7 @@ old() {
   run "$RJ" deploy-web-4fb7f80 /tmp/x -- make deploy
   session=$(jq -r .session <<<"$output")
   first=$(jq -r .block <<<"$output")
-  [ ! -e "$JOBS/deploy-web-4fb7f80.users" ]
+  [ "$(cat "$JOBS/deploy-web-4fb7f80.users")" = outside ]
   ended "$first" 0
   run "$RJ" build-api-1234567 /tmp/x -- make build
   ! grep -q '^rex block close' "$FAKE_LOG"
@@ -262,4 +272,101 @@ bad_list() {
   run "$RJ" --sweep deploy-web-4fb7f80 /tmp/x -- make deploy
   [ "$status" -eq 2 ]
   [ ! -s "$FAKE_LOG" ]
+}
+
+@test "--done closes an ended job that no other caller uses" {
+  user=$(live_block)
+  REX_BLOCK=$user run "$RJ" deploy-web-4fb7f80 /tmp/x -- make deploy
+  session=$(jq -r .session <<<"$output")
+  first=$(jq -r .block <<<"$output")
+  ended "$first" 0
+  REX_BLOCK=$user run "$RJ" --done deploy-web-4fb7f80
+  [ "$status" -eq 0 ]
+  [ "$output" = deploy-web-4fb7f80 ]
+  [ "$(grep -c '^rex block close' "$FAKE_LOG")" -eq 1 ]
+  grep -qF "rex block close -s $session $first" "$FAKE_LOG"
+  [ ! -e "$JOBS/deploy-web-4fb7f80.json" ]
+  [ ! -e "$JOBS/deploy-web-4fb7f80.users" ]
+}
+
+@test "--done keeps an ended job that another live caller uses" {
+  user=$(live_block)
+  other=$(live_block)
+  REX_BLOCK=$user run "$RJ" deploy-web-4fb7f80 /tmp/x -- make deploy
+  first=$(jq -r .block <<<"$output")
+  REX_BLOCK=$other run "$RJ" deploy-web-4fb7f80 /tmp/x -- make deploy
+  ended "$first" 0
+  REX_BLOCK=$user run "$RJ" --done deploy-web-4fb7f80
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  ! grep -q '^rex block close' "$FAKE_LOG"
+  [ "$(cat "$JOBS/deploy-web-4fb7f80.users")" = "$other" ]
+}
+
+@test "--done on a running job keeps it, and a sweep closes it at once after its end" {
+  user=$(live_block)
+  REX_BLOCK=$user run "$RJ" deploy-web-4fb7f80 /tmp/x -- make deploy
+  first=$(jq -r .block <<<"$output")
+  REX_BLOCK=$user run "$RJ" --done deploy-web-4fb7f80
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  ! grep -q '^rex block close' "$FAKE_LOG"
+  [ -e "$JOBS/deploy-web-4fb7f80.users" ]
+  [ ! -s "$JOBS/deploy-web-4fb7f80.users" ]
+  ended "$first" 0
+  run "$RJ" --sweep
+  [ "$status" -eq 0 ]
+  [ "$output" = deploy-web-4fb7f80 ]
+}
+
+@test "--done outside Renux removes only the outside line" {
+  user=$(live_block)
+  run "$RJ" deploy-web-4fb7f80 /tmp/x -- make deploy
+  first=$(jq -r .block <<<"$output")
+  REX_BLOCK=$user run "$RJ" deploy-web-4fb7f80 /tmp/x -- make deploy
+  ended "$first" 0
+  run "$RJ" --done deploy-web-4fb7f80
+  [ "$status" -eq 0 ]
+  ! grep -q '^rex block close' "$FAKE_LOG"
+  [ "$(cat "$JOBS/deploy-web-4fb7f80.users")" = "$user" ]
+}
+
+@test "--done on an unknown job exits 1 and closes nothing" {
+  user=$(live_block)
+  REX_BLOCK=$user run "$RJ" deploy-web-4fb7f80 /tmp/x -- make deploy
+  ended "$(jq -r .block <<<"$output")" 0
+  REX_BLOCK=$user run "$RJ" --done build-api-1234567
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"no block build-api-1234567"* ]]
+  ! grep -q '^rex block close' "$FAKE_LOG"
+}
+
+@test "--done with a wrong process answer closes nothing" {
+  user=$(live_block)
+  REX_BLOCK=$user run "$RJ" deploy-web-4fb7f80 /tmp/x -- make deploy
+  printf '{"error":"x"}\n' >"$FAKE_DIR/rex/process-$(jq -r .block <<<"$output").json"
+  REX_BLOCK=$user run "$RJ" --done deploy-web-4fb7f80
+  ! grep -q '^rex block close' "$FAKE_LOG"
+}
+
+@test "--done with no name or with more words is a usage error" {
+  run "$RJ" --done
+  [ "$status" -eq 2 ]
+  run "$RJ" --done deploy-web-4fb7f80 /tmp/x
+  [ "$status" -eq 2 ]
+  [ ! -s "$FAKE_LOG" ]
+}
+
+@test "--done never closes a block with no saved start" {
+  user=$(live_block)
+  REX_BLOCK=$user run "$RJ" deploy-web-4fb7f80 /tmp/x -- make deploy
+  first=$(jq -r .block <<<"$output")
+  rm "$JOBS/deploy-web-4fb7f80.json"
+  ended "$first" 0
+  REX_BLOCK=$user run "$RJ" deploy-web-4fb7f80 /tmp/x -- make deploy
+  [ "$(jq -r .block <<<"$output")" = "$first" ]
+  REX_BLOCK=$user run "$RJ" --done deploy-web-4fb7f80
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  ! grep -q '^rex block close' "$FAKE_LOG"
 }

@@ -1,0 +1,167 @@
+#!/usr/bin/env bash
+
+# Use the panes near the agent that runs this script: the other panes of its Renux tab
+# (the Rex window of REX_BLOCK). An agent runs it only when the user tells it to.
+#
+#   Usage: rex-pane ls
+#          rex-pane read PANE [LINES]
+#          rex-pane type PANE TEXT
+#
+# ls: one line for each other pane of the tab, in layout order, tab-separated: the short
+# block ID (its last 8 chars), the position from the agent pane, the program and the
+# title. The position is above, below, left or right; a pane on a diagonal has two words,
+# the vertical word first, for example "below right". A pane with no clear side has "-".
+#
+# read: the last LINES lines of the screen of the pane (default 40).
+# type: type TEXT in the pane, with no Enter: the user reads it and presses Enter. So that
+# the agent never runs a command in the pane, type refuses a TEXT that is not UTF-8 or has
+# a control char (a newline, a tab, an escape, DEL, a C1 char), and a pane that does not
+# wait at a shell prompt: in a program that reads single keys (vim, lazygit, a y/N
+# prompt), each typed char is an action.
+#
+# PANE is a short block ID from ls, a full block ID, or a position word (above, below,
+# left, right) when only one pane of the tab has it.
+#
+# Exit 1: not in Renux, or Rex fails. Exit 2: a usage error, or a refused TEXT.
+# Exit 3: a refused PANE: not a pane of the tab, the pane of the agent, or two matches.
+# REX_BIN is the rex command (default rex).
+
+set -euo pipefail
+
+say() { printf 'rex-pane: %s\n' "$*" >&2; }
+usage() {
+  say "usage: rex-pane ls | read PANE [LINES] | type PANE TEXT"
+  exit 2
+}
+
+# has_control TEXT: exit 0 when TEXT is not UTF-8 or has a control char: C0 (a newline, a
+# tab, an escape), DEL or C1. A [[:cntrl:]] of bash misses C1 in the C locale.
+has_control() {
+  perl -MEncode -e 'my $t = eval { Encode::decode("UTF-8", $ARGV[0], Encode::FB_CROAK) };
+    exit((defined $t && $t !~ /\p{Cc}/) ? 1 : 0)' -- "$1"
+}
+
+[ $# -ge 1 ] || usage
+cmd=$1
+shift
+case "$cmd" in
+  ls) [ $# -eq 0 ] || usage ;;
+  read)
+    if [ $# -lt 1 ] || [ $# -gt 2 ] || [ -z "$1" ]; then usage; fi
+    pane=$1 lines=${2:-40}
+    [[ $lines =~ ^[1-9][0-9]*$ ]] || usage
+    ;;
+  type)
+    if [ $# -ne 2 ] || [ -z "$1" ] || [ -z "$2" ]; then usage; fi
+    pane=$1 text=$2
+    if has_control "$text"; then
+      say "the text has a newline, a tab or another control char: type one line, with no Enter"
+      exit 2
+    fi
+    ;;
+  *) usage ;;
+esac
+
+if [ -z "${REX_BLOCK:-}" ] || [ -z "${REX_SESSION:-}" ]; then
+  say "not in Renux"
+  exit 1
+fi
+rex=("${REX_BIN:-rex}")
+
+# method BLOCK METHOD: the JSON of a terminal method of the block, or {} when it fails.
+method() {
+  "${rex[@]}" api call block.method "$(jq -cn --arg s "$REX_SESSION" --arg b "$1" --arg m "$2" \
+    '{session_id: $s, block_id: $b, method: $m}')" 2>/dev/null || printf '{}\n'
+}
+
+view=$("${rex[@]}" api call session.view "$(jq -cn --arg s "$REX_SESSION" '{session_id: $s}')") || {
+  say "Rex does not answer"
+  exit 1
+}
+
+# The other panes of the tab, one line each: the block ID, a tab, the position. NOTAB when
+# no tab holds REX_BLOCK. The rects are [x, y, width, height], from 0 to 1.
+panes=$(jq -r --arg me "$REX_BLOCK" '
+  def leaves: [.layers[]?.layout | .. | objects | select(has("block_id") and has("rect"))];
+  ([.windows[]? | leaves | select(any(.[]; .block_id == $me))] | first) as $l
+  | if $l == null then "NOTAB" else
+      ([$l[] | select(.block_id == $me)][0].rect) as $w
+      | $l[] | select(.block_id != $me) | .rect as $p
+      | ([(if $p[1] + $p[3] <= $w[1] + 1e-6 then "above"
+           elif $p[1] >= $w[1] + $w[3] - 1e-6 then "below" else empty end),
+          (if $p[0] + $p[2] <= $w[0] + 1e-6 then "left"
+           elif $p[0] >= $w[0] + $w[2] - 1e-6 then "right" else empty end)]
+         | join(" ")) as $pos
+      | "\(.block_id)\t\(if $pos == "" then "-" else $pos end)"
+    end' <<<"$view") || {
+  say "Rex gives a view that jq cannot read"
+  exit 1
+}
+if [ "$panes" = NOTAB ]; then
+  say "no tab for $REX_BLOCK"
+  exit 1
+fi
+
+if [ "$cmd" != ls ]; then
+  # Find the pane: one line of panes whose ID, short ID or position word is PANE.
+  full="" n=0
+  while IFS=$'\t' read -r id pos; do
+    [ -n "$id" ] || continue
+    case "$pane" in
+      above | below | left | right)
+        case " $pos " in *" $pane "*) ;; *) continue ;; esac
+        ;;
+      *) [ "$id" = "$pane" ] || [ "${id: -8}" = "$pane" ] || continue ;;
+    esac
+    full=$id n=$((n + 1))
+  done <<<"$panes"
+  if [ "$n" -ne 1 ]; then
+    if [ "$REX_BLOCK" = "$pane" ] || [ "${REX_BLOCK: -8}" = "$pane" ]; then
+      say "$pane is the pane of this agent: see rex-pane ls"
+    elif [ "$n" -eq 0 ]; then
+      say "no pane $pane in this tab: see rex-pane ls"
+    else
+      case "$pane" in
+        above | below | left | right) say "$pane matches $n panes: give a short ID from rex-pane ls" ;;
+        *) say "$pane matches $n panes: give the full block ID" ;;
+      esac
+    fi
+    exit 3
+  fi
+  if [ "$cmd" = read ]; then
+    screen=$("${rex[@]}" capture -s "$REX_SESSION" -b "$full" --trim) || {
+      say "Rex does not answer"
+      exit 1
+    }
+    tail -n "$lines" <<<"$screen"
+  else
+    # The shell of the pane runs no program: its foreground process is the shell itself.
+    shell=$(method "$full" process | jq -r 'if .foreground.pid != null and .foreground.pid == .child.pid
+      then .foreground.name // "" else "" end' 2>/dev/null) || shell=""
+    case "${shell#-}" in
+      bash | zsh | sh | dash | ksh | fish) ;;
+      *)
+        say "${full: -8} is not at a shell prompt: type only in a pane that waits at a shell prompt"
+        exit 3
+        ;;
+    esac
+    "${rex[@]}" send -s "$REX_SESSION" -b "$full" -- "$text" </dev/null >/dev/null || {
+      say "Rex fails: nothing went in"
+      exit 1
+    }
+    say "typed in ${full: -8}, press Enter there"
+  fi
+  exit 0
+fi
+
+if [ -z "$panes" ]; then
+  say "no other pane in this tab"
+  exit 0
+fi
+
+while IFS=$'\t' read -r id pos; do
+  program=$(method "$id" process | jq -r '(.foreground.invoked_path // .foreground.name // "")
+    | split("/") | last // ""' 2>/dev/null) || program=""
+  title=$(method "$id" title | jq -r '.title // "" | gsub("[\t\n\r]"; " ")' 2>/dev/null) || title=""
+  printf '%s\t%s\t%s\t%s\n' "${id: -8}" "$pos" "$program" "$title"
+done <<<"$panes"

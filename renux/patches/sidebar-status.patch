@@ -1,5 +1,5 @@
 diff --git a/src/app/app.zig b/src/app/app.zig
-index 917dfee..626ab48 100644
+index 917dfee..9d372e8 100644
 --- a/src/app/app.zig
 +++ b/src/app/app.zig
 @@ -117,6 +117,7 @@ const css =
@@ -63,6 +63,16 @@ index 917dfee..626ab48 100644
              tile.setValign(.center);
              line.prepend(tile);
              mark.tile = tile;
+@@ -2154,6 +2177,9 @@ pub const App = struct {
+                 title.as(gtk.Widget).addCssClass("row-title");
+                 const sub = gtk.Label.new("");
+                 sub.setXalign(0);
++                // The summary sentence can be long. Without the ellipsis, its full width is the
++                // minimum width of the sidebar, and the panes change size with each new sentence.
++                sub.setEllipsize(.end);
+                 sub.as(gtk.Widget).setHexpand(1);
+                 sub.as(gtk.Widget).addCssClass("agent-status");
+                 const when = gtk.Label.new("");
 diff --git a/src/rex/server.zig b/src/rex/server.zig
 index 38a7fc7..6e47d91 100644
 --- a/src/rex/server.zig

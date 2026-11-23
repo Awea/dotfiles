@@ -1,0 +1,231 @@
+diff --git a/src/app/app.zig b/src/app/app.zig
+index 3055f42..9afbc4e 100644
+--- a/src/app/app.zig
++++ b/src/app/app.zig
+@@ -251,7 +251,7 @@ const css =
+     \\window.renux.bare .content .workspace, window.renux.bare .content.alone .workspace { margin: 0; }
+ ;
+ 
+-const Row = struct { host: *Host, session_id: []u8, window_id: []u8, block_id: []u8 = &.{}, label: ?*gtk.Label = null, line: ?*gtk.Box = null, tile: ?*gtk.Widget = null };
++const Row = struct { host: *Host, session_id: []u8, window_id: []u8, block_id: []u8 = &.{}, label: ?*gtk.Label = null, line: ?*gtk.Box = null };
+ 
+ /// One row the sidebar should have, worked out from the servers before any widget is touched.
+ const RowPlan = struct {
+@@ -280,6 +280,8 @@ const RowMark = struct {
+     /// For an agent's row: its status in a word, and how long it has been so.
+     sub: ?*gtk.Label = null,
+     when: ?*gtk.Label = null,
++    /// For a tab's row: the line that holds `sub` and `when`, shown only when the tab has an agent.
++    foot: ?*gtk.Widget = null,
+ };
+ 
+ fn hashParts(parts: []const []const u8) u64 {
+@@ -404,6 +406,8 @@ pub const App = struct {
+     config_timer: c_uint = 0,
+     filter_label: *gtk.Label = undefined,
+     filter_menu: *gio.Menu = undefined,
++    /// The hosts and the filter that the filter menu shows now, as a hash.
++    filter_menu_for: u64 = 0,
+     mode_chip: *gtk.Label = undefined,
+     /// The keys that can follow a prefix or work in a key mode, while one is waiting.
+     hints: *gtk.Box = undefined,
+@@ -732,6 +736,8 @@ pub const App = struct {
+         a.hints.as(gtk.Widget).setMarginBottom(62);
+         a.hints.as(gtk.Widget).setCanTarget(0);
+         layered.addOverlay(a.hints.as(gtk.Widget));
++        // This clock keeps "4 min" up to date beside each agent, on an agent row or a tab row.
++        a.agents_clock = glib.timeoutAddSeconds(30, &agentsTick, a);
+         a.activity = @import("../ui/activity.zig").Activity.create(a);
+         a.activity.widget().setMarginTop(6);
+         a.activity.widget().setMarginBottom(8);
+@@ -977,9 +983,6 @@ pub const App = struct {
+         const a: *App = @ptrCast(@alignCast(data.?));
+         a.eye_swap = 0;
+         a.agents_only = a.eye_button.getActive() != 0;
+-        // "4 min" beside each agent is kept up to date while they are listed.
+-        if (a.agents_clock != 0) _ = glib.Source.remove(a.agents_clock);
+-        a.agents_clock = if (a.agents_only) glib.timeoutAddSeconds(30, &agentsTick, a) else 0;
+         a.rebuildSidebar();
+         a.refreshNow();
+         a.sidebar.as(gtk.Widget).removeCssClass("swapping");
+@@ -1976,6 +1979,14 @@ pub const App = struct {
+         @memcpy(zbuf[0..n], name[0..n]);
+         zbuf[n] = 0;
+         setLabel(mark.label, zbuf[0..n :0]);
++        fillState(mark, h, block_id);
++    }
++
++    /// Writes the state of an agent on a row: the emoji, the sentence or the word under the
++    /// title, and the time. An agent row and the row of a tab with an agent use it.
++    fn fillState(mark: *RowMark, h: *Host, block_id: []const u8) void {
++        const info = h.server.blockInfo(block_id);
++        const prog: ?[]const u8 = if (info) |i| ((if (i.has_status) i.status_app else null) orelse i.program) else null;
+         const status = if (info) |i| (if (i.has_status) i.status else .other) else .other;
+         // The agent's own sentence, in place of Working, Done and Idle. Needs you and Failed
+         // stay: the person has to act on them.
+@@ -2029,6 +2040,51 @@ pub const App = struct {
+         };
+     }
+ 
++    /// The pane whose agent state the sidebar row of a tab shows. Null when no pane of the tab
++    /// runs an agent with a state or a sentence. When the tab has more than one agent, the
++    /// most urgent state wins, so the row does not hide an agent that needs you. A finished
++    /// agent that you did not see yet is more urgent than a working agent, as for the eye
++    /// dot. On a tie, the focused pane wins, then the first pane.
++    fn windowAgent(s: *Server, w: *const view.Window) ?[]const u8 {
++        var best: ?[]const u8 = null;
++        var best_rank: u8 = 0;
++        const focused = w.focused_block_id orelse "";
++        for (0..2) |pass| for (w.layers) |l| for (l.blocks) |blk| {
++            // The first pass looks only at the focused pane, the second at the others.
++            if ((pass == 0) != std.mem.eql(u8, blk.id, focused)) continue;
++            if (!blk.isTerminal()) continue;
++            const info = s.blockInfo(blk.id) orelse continue;
++            if (!programs.listsAsAgent(info.program, if (info.has_status) info.status_app else null)) continue;
++            const summary = if (info.summary) |t| t.len > 0 else false;
++            if (!info.has_status and !summary) continue;
++            const status = if (info.has_status) info.status else .other;
++            const rank: u8 = switch (status) {
++                .blocked => 6,
++                .failed => 5,
++                .done => if (info.attention) 4 else 2,
++                .working => 3,
++                .other => 1,
++            };
++            if (rank > best_rank) {
++                best = blk.id;
++                best_rank = rank;
++            }
++        };
++        return best;
++    }
++
++    /// Shows the state of the agent of a tab on its sidebar row, as the eye shows it. When no
++    /// pane of the tab runs an agent, the row shows the tile of its panes.
++    fn fillWindowState(a: *App, mark: *RowMark, h: *Host, w: *const view.Window) void {
++        if (windowAgent(h.server, w)) |block_id| {
++            if (mark.foot) |f| f.setVisible(1);
++            fillState(mark, h, block_id);
++        } else {
++            if (mark.foot) |f| f.setVisible(0);
++            a.updateTile(mark, h.server, w);
++        }
++    }
++
+     /// Makes the sidebar show what the servers have now. While the same rows are wanted in the
+     /// same order, which is nearly always, each is updated where it is; only when rows come, go
+     /// or move is the list built again.
+@@ -2081,20 +2137,17 @@ pub const App = struct {
+     }
+ 
+     /// Shows what changed in a row that stays: its name, and its tile when its panes changed.
+-    fn updateRow(a: *App, want: RowPlan, mark: *RowMark, row: *?Row) void {
++    fn updateRow(a: *App, want: RowPlan, mark: *RowMark, _: *?Row) void {
+         var buf: [256]u8 = undefined;
+         switch (want.kind) {
+             .host => setLabel(mark.label, hostHeading(&buf, want.host)),
+             .session => setLabel(mark.label, sessionHeading(&buf, want.session.?)),
+             .agent => {
+                 fillAgent(mark, want.host, want.block_id);
+-                if (row.*) |*r| r.tile = mark.tile;
+             },
+             .window => {
+                 setLabel(mark.label, rowTitle(want.host, &buf, want.window.?, want.view.?));
+-                a.updateTile(mark, want.host.server, want.window.?);
+-                // `rows` holds the tile too, for `refreshRows`.
+-                if (row.*) |*r| r.tile = mark.tile;
++                a.fillWindowState(mark, want.host, want.window.?);
+             },
+         }
+     }
+@@ -2206,7 +2259,7 @@ pub const App = struct {
+                 a.sidebar.append(row.as(gtk.Widget));
+                 var mark: RowMark = .{ .key = want.key, .label = title, .line = line, .sub = sub, .when = when };
+                 fillAgent(&mark, h, want.block_id);
+-                a.rows.appendAssumeCapacity(.{ .host = h, .session_id = session_id, .window_id = window_id, .block_id = block_id, .label = title, .line = line, .tile = mark.tile });
++                a.rows.appendAssumeCapacity(.{ .host = h, .session_id = session_id, .window_id = window_id, .block_id = block_id, .label = title, .line = line });
+                 a.row_marks.appendAssumeCapacity(mark);
+             },
+             .window => {
+@@ -2219,10 +2272,26 @@ pub const App = struct {
+                 item.setEllipsize(.end);
+                 item.as(gtk.Widget).addCssClass("row-title");
+                 item.as(gtk.Widget).setHexpand(1);
++                // Under the title, the state of the agent of the tab, as the eye shows it.
++                const sub = gtk.Label.new("");
++                sub.setXalign(0);
++                sub.setEllipsize(.end);
++                sub.as(gtk.Widget).setHexpand(1);
++                sub.as(gtk.Widget).addCssClass("agent-status");
++                const when = gtk.Label.new("");
++                when.as(gtk.Widget).addCssClass("agent-status");
++                const foot = gtk.Box.new(.horizontal, 6);
++                foot.append(sub.as(gtk.Widget));
++                foot.append(when.as(gtk.Widget));
++                const text = gtk.Box.new(.vertical, 0);
++                text.as(gtk.Widget).setHexpand(1);
++                text.as(gtk.Widget).setValign(.center);
++                text.append(item.as(gtk.Widget));
++                text.append(foot.as(gtk.Widget));
+                 const line = gtk.Box.new(.horizontal, 8);
+-                const tile = rowTile(h.server, w);
+-                line.append(tile);
+-                line.append(item.as(gtk.Widget));
++                line.append(text.as(gtk.Widget));
++                var mark: RowMark = .{ .key = want.key, .label = item, .line = line, .sub = sub, .when = when, .foot = foot.as(gtk.Widget) };
++                a.fillWindowState(&mark, h, w);
+                 const more = menuButton(windowMenu(session.id, w.id), "Window");
+                 more.as(gtk.Widget).addCssClass("row-more");
+                 // Its hover highlight keeps clear of the row's own edge, above, below and beside.
+@@ -2232,13 +2301,26 @@ pub const App = struct {
+                 row.setChild(line.as(gtk.Widget));
+                 @import("../ui/hovercard.zig").attach(row.as(gtk.Widget), item, more, h.server, session.id, w.id);
+                 a.sidebar.append(row.as(gtk.Widget));
+-                a.rows.appendAssumeCapacity(.{ .host = h, .session_id = session_id, .window_id = window_id, .label = item, .line = line, .tile = tile });
+-                a.row_marks.appendAssumeCapacity(.{ .key = want.key, .label = item, .line = line, .tile = tile, .tile_for = tileFor(w) });
++                a.rows.appendAssumeCapacity(.{ .host = h, .session_id = session_id, .window_id = window_id, .label = item, .line = line });
++                a.row_marks.appendAssumeCapacity(mark);
+             },
+         }
+     }
+ 
+     fn rebuildFilterMenu(a: *App) void {
++        // Each block change syncs the sidebar. Do not make the menu again when its hosts and
++        // its filter stay the same: an open menu then keeps its hover and its keyboard row.
++        var hasher = std.hash.Wyhash.init(2);
++        hasher.update(if (a.filter) |f| f.page else "");
++        for (a.hosts.items) |h| {
++            hasher.update(std.mem.asBytes(&h.label.len));
++            hasher.update(h.label);
++            hasher.update(std.mem.asBytes(&h.page.len));
++            hasher.update(h.page);
++        }
++        const now = hasher.final() | 1;
++        if (now == a.filter_menu_for) return;
++        a.filter_menu_for = now;
+         a.filter_menu.removeAll();
+         const all = gio.MenuItem.new(if (a.filter == null) "All hosts  ✓" else "All hosts", null);
+         all.setActionAndTargetValue("app.filter", glib.Variant.newString(""));
+@@ -2436,18 +2518,11 @@ pub const App = struct {
+         return windowTitle(buf, w, v);
+     }
+ 
+-    /// Updates row titles and tiles in place, since block details change often.
++    /// Asks the sidebar to show the new block details before the next frame.
+     fn refreshRows(a: *App) void {
+-        // Agent rows are written from their panes, not their windows; the sidebar's own pass
+-        // updates them where they are.
+-        if (a.agents_only) return a.rebuildSidebar();
+-        for (a.rows.items) |r| if (r) |row| {
+-            const v = row.host.server.sessionView(row.session_id) orelse continue;
+-            const w = v.window(row.window_id) orelse continue;
+-            var buf: [256]u8 = undefined;
+-            if (row.label) |l| l.setText(rowTitle(row.host, &buf, w, v).ptr);
+-            if (row.tile) |t| t.queueDraw();
+-        };
++        // An agent row, and a tab row with the state of its agent, need more than the title:
++        // the sidebar's own pass updates each row where it is.
++        a.rebuildSidebar();
+     }
+ 
+     fn showAlert(a: *App, h: *Host) void {

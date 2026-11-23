@@ -1,0 +1,132 @@
+{
+  "session_id": "session:fake-1",
+  "label": "garden",
+  "revision": 3,
+  "active_window_id": "window:fake-1",
+  "windows": [
+    {
+      "window_id": "window:fake-1",
+      "label": "worker",
+      "focused_block_id": "block:00000000-0000-0000-0000-000000000001",
+      "layers": [
+        {
+          "layer_id": "layer:fake-1",
+          "kind": "tiled",
+          "bounds": [
+            0,
+            0,
+            1,
+            1
+          ],
+          "layout": {
+            "rect": [
+              0,
+              0,
+              1,
+              1
+            ],
+            "split": {
+              "split_id": "split:fake-1",
+              "direction": "horizontal",
+              "ratio": 0.5,
+              "before": {
+                "rect": [
+                  0,
+                  0,
+                  0.5,
+                  1
+                ],
+                "block_id": "block:00000000-0000-0000-0000-000000000001"
+              },
+              "after": {
+                "rect": [
+                  0.5,
+                  0,
+                  0.5,
+                  1
+                ],
+                "split": {
+                  "split_id": "split:fake-2",
+                  "direction": "vertical",
+                  "ratio": 0.5,
+                  "before": {
+                    "rect": [
+                      0.5,
+                      0,
+                      0.5,
+                      0.5
+                    ],
+                    "block_id": "block:00000000-0000-0000-0000-000000000002"
+                  },
+                  "after": {
+                    "rect": [
+                      0.5,
+                      0.5,
+                      0.5,
+                      0.5
+                    ],
+                    "block_id": "block:00000000-0000-0000-0000-000000000003"
+                  }
+                }
+              }
+            }
+          },
+          "blocks": [
+            {
+              "block_id": "block:00000000-0000-0000-0000-000000000001",
+              "label": "shell",
+              "creator_name": "com.superlogical.terminal",
+              "flavor": "com.superlogical.terminal.shell"
+            },
+            {
+              "block_id": "block:00000000-0000-0000-0000-000000000002",
+              "label": "shell",
+              "creator_name": "com.superlogical.terminal",
+              "flavor": "com.superlogical.terminal.shell"
+            },
+            {
+              "block_id": "block:00000000-0000-0000-0000-000000000003",
+              "label": "shell",
+              "creator_name": "com.superlogical.terminal",
+              "flavor": "com.superlogical.terminal.shell"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "window_id": "window:fake-2",
+      "label": "other",
+      "focused_block_id": "block:00000000-0000-0000-0000-000000000004",
+      "layers": [
+        {
+          "layer_id": "layer:fake-2",
+          "kind": "tiled",
+          "bounds": [
+            0,
+            0,
+            1,
+            1
+          ],
+          "layout": {
+            "rect": [
+              0,
+              0,
+              1,
+              1
+            ],
+            "block_id": "block:00000000-0000-0000-0000-000000000004"
+          },
+          "blocks": [
+            {
+              "block_id": "block:00000000-0000-0000-0000-000000000004",
+              "label": "shell",
+              "creator_name": "com.superlogical.terminal",
+              "flavor": "com.superlogical.terminal.shell"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -2,8 +2,9 @@
 # A fake rex for the bats tests. It logs each call to $FAKE_LOG and keeps its state in
 # $FAKE_DIR/rex/: blocks.jsonl (one JSON line for each block: session_id, window_id,
 # window_label, block_id), process-<block>.json and status-<block>.json (the defaults are
-# the real answers in test/fixtures/rex), capture.txt. The hook on-api runs at each
-# api call. FAKE_REX_FAIL=1 makes every call fail. FAKE_REX_SEND_FAIL=1 makes only send fail,
+# the real answers in test/fixtures/rex), title-<block>.json, capture.txt, and view.json
+# (when it exists, the answer of session.view). The hook on-api runs at each api call, the
+# hook on-wait at each wait. FAKE_REX_FAIL=1 makes every call fail. FAKE_REX_SEND_FAIL=1 makes only send fail,
 # FAKE_REX_KEY_FAIL=1 only send-key. FAKE_REX_WINDOW_FAIL=1 makes only window new fail.
 # FAKE_REX_KILL_FAIL=1 makes only kill fail. FAKE_REX_KILL_HUP=1 sends SIGHUP to the caller
 # of kill.
@@ -134,6 +135,7 @@ case "$cmd" in
              flavor: "terminal", placement: "placed", window_id}]}' "$d/blocks.jsonl"
         ;;
       session.view)
+        [ ! -f "$d/view.json" ] || { cat "$d/view.json"; exit 0; }
         jq -s --arg s "$s" '[.[] | select(.session_id == $s)] as $b
           | {session_id: $s, label: $s, active_window_id: ($b[0].window_id // null), revision: 1,
              windows: ($b | map({window_id, label: .window_label}) | unique_by(.window_id))}' "$d/blocks.jsonl"
@@ -148,6 +150,7 @@ case "$cmd" in
         case "$(jq -r .method <<<"$args")" in
           process) cat "$d/process-$b.json" 2>/dev/null || cat "$fixtures/process-claude.json" ;;
           program_status) cat "$d/status-$b.json" 2>/dev/null || cat "$fixtures/status-working.json" ;;
+          title) cat "$d/title-$b.json" 2>/dev/null || printf '{"title":""}\n' ;;
           *) printf '{}\n' ;;
         esac
         ;;
@@ -175,9 +178,12 @@ case "$cmd" in
     args=()
     for a in "$@"; do [ "$a" = -- ] || args+=("$a"); done
     save_args send "${args[@]}"
+    # FAKE_REX_SEND_STDIN=1 keeps the input of rex send in send-stdin.
+    [ -z "${FAKE_REX_SEND_STDIN:-}" ] || cat >"$d/send-stdin"
     ;;
   send-key) [ "${FAKE_REX_KEY_FAIL:-}" != 1 ] || { printf 'rex: send-key failed\n' >&2; exit 1; } ;;
   capture) cat "$d/capture.txt" 2>/dev/null || true ;;
+  wait) [ ! -x "$d/on-wait" ] || "$d/on-wait" "$@" ;;
   kill)
     [ "${FAKE_REX_KILL_FAIL:-}" != 1 ] || { printf 'rex: kill failed\n' >&2; exit 1; }
     touch "$d/blocks.jsonl"

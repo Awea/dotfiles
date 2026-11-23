@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Print the board of the orchestrator in BLOCK, for ctrl+b w (the board view pane). Exit 1
+# when BLOCK is not a board orchestrator: the key then does nothing.
+#
+#   board-view-open BLOCK
+set -euo pipefail
+export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}"
+block=${1:?usage: board-view-open BLOCK}
+record="${XDG_STATE_HOME:-$HOME/.local/state}/board-orchestrator-hc/rex/$block.json"
+[ -f "$record" ] || exit 1
+board=$(jq -r 'select(.role == "orchestrator") | .board // empty' "$record" 2>/dev/null) || exit 1
+# The board name goes into the command of the pane: only a plain name.
+[[ "$board" =~ ^[A-Za-z0-9_-]+$ ]] || exit 1
+printf '%s\n' "$board"

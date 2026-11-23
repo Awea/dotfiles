@@ -48,6 +48,12 @@ human. The agent reads `SKILL.md`, and `start.md`, `shorten.md` and `boards.md` 
      the branch of the main checkout) has all its commits. Else it stays: a close never
      deletes work. A squash-merged branch stays.
 
+  The make target stops the resources of the worktree. A shared resource of
+  `~/.bin/rex-resource` (a database in the Rex session `resources`) is not in the
+  worktree: after the close, `close` runs `rex-resource --sweep` and `rex-job --sweep` in
+  the background. The sweep stops and closes a shared resource that only closed blocks
+  used, and closes the ended jobs that no live block uses.
+
   `close` keeps all the worktrees of a worker with no report: it ended before the end of
   its work. It does not touch a linked worktree that it did not make (a `start` in a
   linked worktree), or a worktree that another worker of the card uses. It tells each

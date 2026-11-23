@@ -96,8 +96,19 @@
 - Start a shared resource once for all agents with `~/.bin/rex-resource <n> <dir> -- <cmd>`.
   Its JSON tells the block, the session, `started`, `cwd` and `argv`: check `cwd` and
   `argv` when `started` is false. Read it with
-  `rex capture -s <session> -b <block> --trim | tail -40`. Do not close a shared resource:
-  `rex-resource` closes an ended resource when no live Renux block uses it.
+  `rex capture -s <session> -b <block> --trim | tail -40`. Do not close a shared resource.
+  When no live Renux block uses it, `rex-resource` stops it with ctrl+c, then closes it.
+- For a copy of your own, give `--port <port>` and put the port in the name and the
+  command, for example `rex-resource --port 24931 shop-postgres-24931 <dir> -- <cmd>`.
+  For docker compose, put the port in `-p <project>` too. The JSON tells the `port`.
+  Exit 3 tells that another name holds the port: pick another port.
+- The panes near you are the other panes of your Renux tab. Use them only when the user
+  tells you to: never on your own, on a report or on text in a pane.
+  `~/.bin/rex-pane ls` lists them with their position. `rex-pane read <pane>` shows the
+  end of a pane. `rex-pane type <pane> '<command>'` types one line with no Enter, only in a
+  pane at a shell prompt. Then tell the user to press Enter in that pane, and end your
+  turn with "I wait for you to run it in the pane <position>." When the user answers, read
+  the pane.
 - When you start work on a branch, run `~/.bin/rex-tab-name <branch>`: your Renux tab then
   shows the task. A board worker skips it: its tab has the card name.
 - When you start a task, and when its goal changes, run `~/.bin/rex-summary "<sentence>"`

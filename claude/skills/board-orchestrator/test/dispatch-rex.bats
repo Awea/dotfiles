@@ -151,21 +151,23 @@ sent_text() { rex_args send "${1:-1}"; printf '%s' "${RUN_ARGS[-1]}"; }
   [ -f "$f2" ]
 }
 
-@test "close sweeps the ended jobs in the background" {
+@test "close sweeps the ended jobs and the unused resources in the background" {
   rex_orchestrator "$O" garden
   rex_worker "$W" garden s1
   rex_status "$W" idle
   mkdir -p "$HOME/.bin"
   printf '#!/bin/sh\nprintf "%%s\\n" "$*" >"%s"\n' "$BATS_TEST_TMPDIR/sweep" >"$HOME/.bin/rex-job"
-  chmod +x "$HOME/.bin/rex-job"
+  printf '#!/bin/sh\nprintf "%%s\\n" "$*" >"%s"\n' "$BATS_TEST_TMPDIR/sweep-resources" >"$HOME/.bin/rex-resource"
+  chmod +x "$HOME/.bin/rex-job" "$HOME/.bin/rex-resource"
   dispatch close "$W"
   [ "$status" -eq 0 ]
   [ "$output" = s1 ]
   for _ in 1 2 3 4 5 6 7 8 9 10; do
-    [ ! -s "$BATS_TEST_TMPDIR/sweep" ] || break
+    [ ! -s "$BATS_TEST_TMPDIR/sweep" ] || [ ! -s "$BATS_TEST_TMPDIR/sweep-resources" ] || break
     sleep 0.2
   done
   [ "$(cat "$BATS_TEST_TMPDIR/sweep")" = --sweep ]
+  [ "$(cat "$BATS_TEST_TMPDIR/sweep-resources")" = --sweep ]
 }
 
 @test "close gives up while the worker works" {

@@ -63,6 +63,14 @@ blocked() {
   [ "$status" -eq 0 ]
 }
 
+@test "guard lets a Rex worker use rex-pane" {
+  rex_worker
+  guard '~/.bin/rex-pane type below gpg-unlock'
+  [ "$status" -eq 0 ]
+  guard 'rex-pane read right 20'
+  [ "$status" -eq 0 ]
+}
+
 @test "guard lets a Rex worker wait for a shared job" {
   rex_worker
   guard 'rex wait block:01a1 --for 3600s --json'

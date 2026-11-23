@@ -80,6 +80,19 @@ setup() {
   grep -qF '+                l.as(gtk.Widget).addCssClass("status-emoji");' "$p"
 }
 
+@test "a sidebar tab row shows the state emoji and the sentence of its agent, as the eye" {
+  p="$repo/renux/patches/tab-row-agent-state.patch"
+  grep -qF '+    fn windowAgent(s: *Server, w: *const view.Window) ?[]const u8 {' "$p"
+  grep -qF '+                a.fillWindowState(mark, want.host, want.window.?);' "$p"
+  grep -qF '+                a.fillWindowState(&mark, h, w);' "$p"
+  grep -qF '+        a.agents_clock = glib.timeoutAddSeconds(30, &agentsTick, a);' "$p"
+}
+
+@test "a long summary sentence ends in an ellipsis and does not make the sidebar wider" {
+  p="$repo/renux/patches/sidebar-status.patch"
+  grep -qxF '+                sub.setEllipsize(.end);' "$p"
+}
+
 @test "a click on the pane title copies the pane ID" {
   p="$repo/renux/patches/title-click-copies-pane-id.patch"
   grep -qF '+            .{ "pane-copy-id", copyPaneId },' "$p"
@@ -135,9 +148,75 @@ setup() {
   grep -qF '+test "a drag motion tells Rex that its button is held" {' "$p"
 }
 
+@test "a click on an agent in a zoomed window goes to the zoomed pane" {
+  p="$repo/renux/patches/agent-click-keeps-zoom.patch"
+  grep -qxF '+    pub fn jumpToAgent(a: *App, h: *Host, session_id: []const u8, window_id: []const u8, block_id: []const u8) void {' "$p"
+  grep -qxF '+        const zoomed = gpa.dupe(u8, w.zoomed_block_id orelse return a.jumpTo(h, session_id, window_id, block_id)) catch return a.jumpTo(h, session_id, window_id, block_id);' "$p"
+  grep -qxF '+        if (r.block_id.len > 0) return a.jumpToAgent(r.host, r.session_id, r.window_id, r.block_id);' "$p"
+  grep -qxF '+        act.app.jumpToAgent(t.host, t.session_id, t.window_id, t.block_id);' "$p"
+  grep -qxF '+        b.app.jumpToAgent(c.host, c.session_id, c.window_id, c.block_id);' "$p"
+}
+
 @test "the eye lists agents, and not a program such as Leaf that reports a status" {
   p="$repo/renux/patches/eye-lists-only-agents.patch"
   grep -qF '+    return isAgent(process) or isAgent(status_app);' "$p"
   grep -qF '+                    if (!programs.listsAsAgent(info.program, if (info.has_status) info.status_app else null)) continue;' "$p"
   grep -qF '+test "the eye lists agents, and not a program that reports a status" {' "$p"
+}
+
+@test "a Ctrl-click on a folder link opens a shell in that folder, in a new pane below" {
+  p="$repo/renux/patches/peek-folder-opens-shell.patch"
+  grep -qF '+    pub fn newShellBelow(s: *Server, session_id: []const u8, anchor_id: []const u8, folder: []const u8) void {' "$p"
+  grep -qF '+            .direction = "vertical",' "$p"
+  grep -qF '+            .side = "after",' "$p"
+  grep -qF '+            .layout = ShellLayout{ .block = .{ .options = .{ .cwd = folder } } },' "$p"
+  grep -qF '+        if (p.kind == .folder) return p.openShell();' "$p"
+  grep -qF '+        if (p.auto and p.waiting == null) {' "$p"
+}
+
+@test "an OSC 52 copy goes on the clipboard again when GTK loses it" {
+  p="$repo/renux/patches/osc52-copy-survives-xclip.patch"
+  grep -qxF '+                termview.putCopy(a.window.as(gtk.Widget).getClipboard(), z);' "$p"
+  grep -qxF '+    if (clipboard.isLocal() == 0 and clipboard.getFormats().isEmpty() != 0) clipboard.setText(text.ptr);' "$p"
+  grep -qF '"GdkX11Display")) return;' "$p"
+}
+
+# Claude Code puts each copy on the clipboard twice: with xclip, and with OSC 52, which
+# Renux puts there. This test does the same 40 times in the Renux pane that runs it, and
+# reads the clipboard after each copy. It tests the running Renux, not the patch. It
+# overwrites the clipboard for about 40 s and then puts back only its text, so it runs
+# only with RENUX_LIVE_CLIPBOARD_TEST=1.
+@test "a copy made with xclip and OSC 52 at once can be pasted" {
+  [ -n "${RENUX_LIVE_CLIPBOARD_TEST:-}" ] || skip "set RENUX_LIVE_CLIPBOARD_TEST=1: overwrites the clipboard"
+  [ -n "${REX_BLOCK:-}" ] && [ -n "${DISPLAY:-}" ] || skip "needs a Renux pane on X11"
+  command -v xclip >/dev/null || skip "needs xclip"
+  # The terminal of the pane: the first parent process that has one, as an agent has no tty.
+  pid=$$ tty=""
+  while [ "${pid:-1}" -gt 1 ] && [ -z "$tty" ]; do
+    t=$(ps -o tty= -p "$pid" | tr -d ' ')
+    [ -n "$t" ] && [ "$t" != "?" ] && tty=/dev/$t
+    pid=$(ps -o ppid= -p "$pid" | tr -d ' ')
+  done
+  [ -n "$tty" ] || skip "needs the pane terminal"
+  saved=$(timeout 1 xclip -o -selection clipboard 2>/dev/null || true)
+  lost=0
+  for i in $(seq 1 40); do
+    text="renux-copy-test-$i-$RANDOM"
+    printf %s "$text" | xclip -selection clipboard &
+    printf '\033]52;c;%s\a' "$(printf %s "$text" | base64 -w0)" >"$tty"
+    wait
+    sleep 0.5
+    [ "$(timeout 1 xclip -o -selection clipboard 2>/dev/null)" = "$text" ] || lost=$((lost + 1))
+  done
+  printf %s "$saved" | xclip -selection clipboard
+  echo "lost $lost of 40 copies"
+  [ "$lost" -eq 0 ]
+}
+
+@test "a tab that an agent started shows under the tab of that agent" {
+  p="$repo/renux/patches/tab-under-starter.patch"
+  grep -qxF '+pub fn tabParent(tabs: []const TabRef, i: usize) ?usize {' "$p"
+  grep -qxF '+    pub fn starterOf(records: []const json.Value) ?[]const u8 {' "$p"
+  grep -qF 'row.child-row { margin-left: 18px; }' "$p"
+  grep -qxF '+                if (want.child) row.as(gtk.Widget).addCssClass("child-row");' "$p"
 }

@@ -1,0 +1,111 @@
+diff --git a/src/rex/server.zig b/src/rex/server.zig
+index 085c22f..7b6be0d 100644
+--- a/src/rex/server.zig
++++ b/src/rex/server.zig
+@@ -1488,6 +1488,18 @@ pub const Server = struct {
+         });
+     }
+ 
++    /// Splits the pane showing `anchor_id`, putting a new shell that starts in `folder` below it.
++    pub fn newShellBelow(s: *Server, session_id: []const u8, anchor_id: []const u8, folder: []const u8) void {
++        s.act(session_id, "session.new_split", .{
++            .session_id = session_id,
++            .anchor_id = anchor_id,
++            .direction = "vertical",
++            .side = "after",
++            .layout = ShellLayout{ .block = .{ .options = .{ .cwd = folder } } },
++            .focus = true,
++        });
++    }
++
+     pub fn resizePane(s: *Server, session_id: []const u8, horizontal: bool, before_id: []const u8, after_id: []const u8, ratio: f64) void {
+         s.act(session_id, "session.resize_pane", .{
+             .session_id = session_id,
+diff --git a/src/ui/peek.zig b/src/ui/peek.zig
+index 5479222..924953f 100644
+--- a/src/ui/peek.zig
++++ b/src/ui/peek.zig
+@@ -1,8 +1,8 @@
+ //! A small look at a file named in a pane, shown by its path: what the file is, the lines
+ //! around the one named, a picture, or a PDF's pages. Enter opens the file in an editor
+ //! in a new pane to the right, and Shift+Enter in a new window. A picture or a PDF goes to
+-//! the desktop's own viewer. A folder shows what is in it. Ctrl+D brings a file or a folder
+-//! on another machine to this computer's Downloads folder.
++//! the desktop's own viewer. A folder opens a shell in it, in a new pane below, with no
++//! peek. Ctrl+D brings a file on another machine to this computer's Downloads folder.
+ const std = @import("std");
+ const gtk = @import("gtk");
+ const adw = @import("adw");
+@@ -127,7 +127,8 @@ const Peek = struct {
+     kind: Kind = .loading,
+     /// A key pressed before Rex had said where the file is, kept until it has.
+     waiting: ?How = null,
+-    /// Whether a text file goes to the editor beside the pane at once, with no peek.
++    /// Whether a text file goes to the editor beside the pane at once, and a folder to a
++    /// shell below it, with no peek.
+     auto: bool = false,
+     /// Runs out when the file is slow to arrive, and the peek opens without it.
+     /// Then, once the peek is closing, runs out when it has faded.
+@@ -403,12 +404,11 @@ const Peek = struct {
+         const editing = p.edits();
+         const folder = p.kind == .folder;
+         var buf: [96]u8 = undefined;
+-        // A folder on another machine has one thing to be done with it, so Enter does it.
+-        const text: [:0]const u8 = if (folder) (if (p.onThisComputer()) "Open" else "Download") else if (editing) std.fmt.bufPrintSentinel(&buf, "Open in {s}", .{editorName()}, 0) catch "Open in Editor" else if (p.viewed()) "Open" else "Open With…";
++        const text: [:0]const u8 = if (folder) "Open Shell" else if (editing) std.fmt.bufPrintSentinel(&buf, "Open in {s}", .{editorName()}, 0) catch "Open in Editor" else if (p.viewed()) "Open" else "Open With…";
+         p.primary_label.setText(text.ptr);
+         p.primary.as(gtk.Widget).setSensitive(@intFromBool(!missing));
+         offer(p.second, editing);
+-        offer(p.bring, p.brings() and !folder);
++        offer(p.bring, p.brings());
+     }
+ 
+     fn located(ctx: *anyopaque, path: []const u8) void {
+@@ -578,6 +578,11 @@ const Peek = struct {
+         if (!readable) return p.fail(p.refused orelse "Can't read this file: check the path and permissions");
+         p.resolved = gpa.dupe(u8, path) catch null;
+         p.kind = .folder;
++        // A folder opens a shell below the pane at once, with no peek.
++        if (p.auto and p.waiting == null) {
++            p.waiting = .beside;
++            return;
++        }
+         p.icon.setDrawFunc(&drawFolder, null, null);
+         p.icon.as(gtk.Widget).queueDraw();
+         var buf: [32]u8 = undefined;
+@@ -768,7 +773,7 @@ const Peek = struct {
+     fn run(p: *Peek, how: How) void {
+         if (p.gone or !p.server.isLive()) return;
+         if (p.kind == .failed and p.resolved == null) return;
+-        if (p.kind == .folder and !p.onThisComputer()) return p.save();
++        if (p.kind == .folder) return p.openShell();
+         const editing = p.edits();
+         // A key pressed before what it needs has arrived is kept, and acted on when it has.
+         if (!p.ready(editing)) {
+@@ -786,6 +791,16 @@ const Peek = struct {
+         _ = parent.grabFocus();
+     }
+ 
++    /// Starts a shell in the folder, in a new pane below this one, on the host of the pane.
++    fn openShell(p: *Peek) void {
++        const folder = p.resolved orelse return;
++        const parent = p.parent;
++        p.server.newShellBelow(p.sid, p.bid, folder);
++        p.dismiss();
++        // The new pane takes the keyboard; until it is there the old one keeps it.
++        _ = parent.grabFocus();
++    }
++
+     /// Whether a key can be acted on yet. An editor in a new pane needs the file's whole
+     /// path, as its shell may start in another folder, where a path such as src/main.zig
+     /// names nothing; Rex says where the file is a moment after the download begins. An app
+@@ -817,8 +832,7 @@ const Peek = struct {
+         defer file.unref();
+         const launcher = gtk.FileLauncher.new(file);
+         defer launcher.unref();
+-        // A folder goes to the desktop's files app.
+-        launcher.setAlwaysAsk(@intFromBool(!p.viewed() and p.kind != .folder));
++        launcher.setAlwaysAsk(@intFromBool(!p.viewed()));
+         const window: ?*gtk.Window = if (p.parent.getRoot()) |root| @ptrCast(@alignCast(root)) else null;
+         launcher.launch(window, null, null, null);
+     }

@@ -1350,10 +1350,14 @@ NOTE
     if pfile=$(prompt_path "$session"); then rm -f "$pfile"; fi
     # After the kill: the tab closes at once, and the worker no longer runs in its folder.
     [ -z "$line" ] || drop_card_worktrees "$line" || true
-    # The worker is gone: close its ended jobs that no live block uses. In the background,
-    # so that the close does not wait for Rex.
+    # The worker is gone: close its ended jobs that no live block uses, and stop and close
+    # the shared resources (a database) that no live block uses. In the background, so
+    # that the close does not wait for Rex or for the stop of a resource.
     if [ -x "$HOME/.bin/rex-job" ]; then
       ("$HOME/.bin/rex-job" --sweep >/dev/null 2>&1 </dev/null &)
+    fi
+    if [ -x "$HOME/.bin/rex-resource" ]; then
+      ("$HOME/.bin/rex-resource" --sweep >/dev/null 2>&1 </dev/null &)
     fi
     # The card keeps the session ID: claude --resume <id> opens the worker again. For a
     # removed worktree, first run git worktree add with the same path and the kept branch.

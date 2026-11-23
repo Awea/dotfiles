@@ -1,0 +1,257 @@
+diff --git a/src/app/app.zig b/src/app/app.zig
+index 9afbc4e..df27c61 100644
+--- a/src/app/app.zig
++++ b/src/app/app.zig
+@@ -126,6 +126,7 @@ const css =
+     \\.row-more, .row-more > button { min-height: 20px; min-width: 24px; padding: 0; margin: 0; border-radius: 6px; }
+     \\row:hover .row-more, row:selected .row-more { opacity: 0.6; }
+     \\.session-heading { font-size: 0.82em; color: @renux_secondary; }
++    \\.renux-sidebar list > row.child-row { margin-left: 18px; }
+     \\.renux-sidebar list > row.session-row { min-height: 22px; margin-top: 8px; padding: 0 2px 0 8px; background: none; }
+     \\.renux-sidebar list > row.host-row { min-height: 22px; margin-top: 12px; padding: 0 8px; background: none; }
+     \\.renux-sidebar list > row.host-row:first-child { margin-top: 4px; }
+@@ -266,8 +267,13 @@ const RowPlan = struct {
+     collapsed: bool = false,
+     /// For an agent's row: the pane it runs in.
+     block_id: []const u8 = "",
++    /// For a tab's row: it shows under the tab of the agent that started it, indented.
++    child: bool = false,
+ };
+ 
++/// Where a tab is, for the plan of the sidebar.
++const TabPlace = struct { session: *const server_mod.Session, view: *const view.SessionView, window: *const view.Window };
++
+ /// What a sidebar row or a tab shows now, to update it in place.
+ const RowMark = struct {
+     key: u64,
+@@ -1917,6 +1923,38 @@ pub const App = struct {
+             if (a.filter) |f| if (f != h) continue;
+             if (several) plan.append(gpa, .{ .kind = .host, .host = h, .key = hashParts(&.{ "host", h.page }) }) catch return;
+             const s = h.server;
++            // Each tab of the host in the order of the sidebar, with the agent that started it.
++            var tabs: std.ArrayList(view.TabRef) = .empty;
++            var places: std.ArrayList(TabPlace) = .empty;
++            defer {
++                for (tabs.items) |t| gpa.free(t.blocks);
++                tabs.deinit(gpa);
++                places.deinit(gpa);
++            }
++            if (!above) for (s.sessions.items) |*session| {
++                const v = s.sessionView(session.id) orelse continue;
++                for (v.windows) |*w| {
++                    var blocks: std.ArrayList([]const u8) = .empty;
++                    var starter: ?[]const u8 = null;
++                    for (w.layers) |l| for (l.blocks) |blk| {
++                        blocks.append(gpa, blk.id) catch {};
++                        if (starter == null and blk.isTerminal()) if (s.blockInfo(blk.id)) |info| if (info.starter) |st| if (st.len > 0) {
++                            starter = st;
++                        };
++                    };
++                    const owned = blocks.toOwnedSlice(gpa) catch &.{};
++                    tabs.append(gpa, .{ .starter = starter, .blocks = owned, .shown = !a.collapsed.contains(session.id) }) catch {
++                        gpa.free(owned);
++                        return;
++                    };
++                    places.append(gpa, .{ .session = session, .view = v, .window = w }) catch return;
++                }
++            };
++            const parents = gpa.alloc(?usize, tabs.items.len) catch return;
++            defer gpa.free(parents);
++            for (parents, 0..) |*p, i| p.* = view.tabParent(tabs.items, i);
++            // The index of the next tab in `tabs`, as the loop below meets them.
++            var next: usize = 0;
+             for (s.sessions.items) |*session| {
+                 const collapsed = a.collapsed.contains(session.id);
+                 plan.append(gpa, .{
+@@ -1926,16 +1964,34 @@ pub const App = struct {
+                     .collapsed = collapsed,
+                     .key = hashParts(&.{ "session", h.page, session.id, if (collapsed) "folded" else "open", if (above) "above" else "beside" }),
+                 }) catch return;
+-                if (above or collapsed) continue;
+                 const v = s.sessionView(session.id) orelse continue;
+-                for (v.windows) |*w| plan.append(gpa, .{
+-                    .kind = .window,
+-                    .host = h,
+-                    .session = session,
+-                    .view = v,
+-                    .window = w,
+-                    .key = hashParts(&.{ "window", h.page, session.id, w.id }),
+-                }) catch return;
++                if (above) continue;
++                for (v.windows) |*w| {
++                    const i = next;
++                    next += 1;
++                    // A tab that an agent started shows under the tab of that agent.
++                    if (collapsed or parents[i] != null) continue;
++                    plan.append(gpa, .{
++                        .kind = .window,
++                        .host = h,
++                        .session = session,
++                        .view = v,
++                        .window = w,
++                        .key = hashParts(&.{ "window", h.page, session.id, w.id }),
++                    }) catch return;
++                    for (parents, 0..) |p, k| if (p == i) {
++                        const c = places.items[k];
++                        plan.append(gpa, .{
++                            .kind = .window,
++                            .host = h,
++                            .session = c.session,
++                            .view = c.view,
++                            .window = c.window,
++                            .child = true,
++                            .key = hashParts(&.{ "window", h.page, c.session.id, c.window.id, "under", w.id }),
++                        }) catch return;
++                    };
++                }
+             }
+         }
+     }
+@@ -2298,6 +2354,7 @@ pub const App = struct {
+                 more.as(gtk.Widget).setValign(.center);
+                 line.append(more.as(gtk.Widget));
+                 const row = gtk.ListBoxRow.new();
++                if (want.child) row.as(gtk.Widget).addCssClass("child-row");
+                 row.setChild(line.as(gtk.Widget));
+                 @import("../ui/hovercard.zig").attach(row.as(gtk.Widget), item, more, h.server, session.id, w.id);
+                 a.sidebar.append(row.as(gtk.Widget));
+diff --git a/src/rex/server.zig b/src/rex/server.zig
+index 7b6be0d..a306026 100644
+--- a/src/rex/server.zig
++++ b/src/rex/server.zig
+@@ -69,6 +69,9 @@ pub const BlockInfo = struct {
+     task: ?[]u8 = null,
+     /// One sentence on what the agent works on: the msg of its record with the id "summary".
+     summary: ?[]u8 = null,
++    /// The block of the agent that started this tab: the msg of its record with the id
++    /// "starter" (rex-starter of the dotfiles). The sidebar shows the tab under that agent.
++    starter: ?[]u8 = null,
+     program: ?[]u8 = null,
+     folder: ?[]u8 = null,
+     title: ?[]u8 = null,
+@@ -82,7 +85,7 @@ pub const BlockInfo = struct {
+     details: enum { unread, reading, read } = .unread,
+ 
+     fn deinit(b: *BlockInfo) void {
+-        inline for (.{ "status_app", "status_kind", "message", "task", "summary", "program", "folder", "title" }) |f| {
++        inline for (.{ "status_app", "status_kind", "message", "task", "summary", "starter", "program", "folder", "title" }) |f| {
+             if (@field(b, f)) |v| gpa.free(v);
+             @field(b, f) = null;
+         }
+@@ -782,6 +785,8 @@ pub const Server = struct {
+                         summary = json.str(rec, "msg");
+                         continue;
+                     };
++                    // The starter record names a block, not a status.
++                    if (json.str(rec, "id")) |id| if (eql(id, "starter")) continue;
+                     const st = json.str(rec, "state") orelse continue;
+                     const rank: u8 = if (eql(st, "blocked")) 4 else if (eql(st, "error")) 3 else if (eql(st, "working")) 2 else if (eql(st, "done")) 1 else 0;
+                     if (best == null or rank > best_rank) {
+@@ -790,6 +795,7 @@ pub const Server = struct {
+                     }
+                 }
+                 setStr(&b.summary, summary);
++                setStr(&b.starter, starterOf(json.array(payload, "records")));
+                 s.applyStatus(b, d.session_id, d.block_id, best, d.announce);
+             },
+             .title => setStr(&b.title, json.str(payload, "title")),
+@@ -1444,6 +1450,12 @@ pub const Server = struct {
+     /// The path in what a shell reports as its folder, which is a URL such as
+     /// `file://host/Users/me/my%20work`: without the host, and with `%20` and the like read
+     /// back into characters. Null when there is no usable path in it.
++    /// The msg of the record with the id "starter": the block of the agent that started the tab.
++    pub fn starterOf(records: []const json.Value) ?[]const u8 {
++        for (records) |rec| if (json.str(rec, "id")) |id| if (eql(id, "starter")) return json.str(rec, "msg");
++        return null;
++    }
++
+     pub fn folderPath(buf: []u8, pwd: []const u8) ?[]const u8 {
+         var path = pwd;
+         if (std.mem.startsWith(u8, path, "file://")) {
+@@ -2006,3 +2018,16 @@ test "a reported folder becomes a path" {
+     try std.testing.expect(Server.folderPath(&buf, "file://hostonly") == null);
+     try std.testing.expect(Server.folderPath(&buf, "") == null);
+ }
++
++test "the starter record gives the block of the agent" {
++    var parsed = try std.json.parseFromSlice(json.Value, gpa,
++        \\{"records":[{"id":"summary","state":"idle","msg":"x"},{"id":"starter","state":"idle","msg":"block:a1"},{"state":"working"}]}
++    , .{});
++    defer parsed.deinit();
++    try std.testing.expectEqualStrings("block:a1", Server.starterOf(json.array(parsed.value, "records")).?);
++    var none = try std.json.parseFromSlice(json.Value, gpa,
++        \\{"records":[{"id":"summary","state":"idle","msg":"x"},{"state":"working"}]}
++    , .{});
++    defer none.deinit();
++    try std.testing.expect(Server.starterOf(json.array(none.value, "records")) == null);
++}
+diff --git a/src/rex/view.zig b/src/rex/view.zig
+index 174a7fe..073632c 100644
+--- a/src/rex/view.zig
++++ b/src/rex/view.zig
+@@ -86,6 +86,35 @@ pub const Window = struct {
+     }
+ };
+ 
++/// A tab as the sidebar plans it: the block of the agent that started it (the msg of its
++/// "starter" record, see rex-starter of the dotfiles), the blocks it holds, and whether its
++/// row is on the sidebar (its session is not folded).
++pub const TabRef = struct {
++    starter: ?[]const u8,
++    blocks: []const []const u8,
++    shown: bool,
++};
++
++/// The tab that the tab `i` goes under in the sidebar: the shown tab that holds its starter
++/// block. Null when it has no starter, when no other tab holds that block, when that tab is
++/// not shown, or when that tab goes under a tab itself: one level only.
++pub fn tabParent(tabs: []const TabRef, i: usize) ?usize {
++    const j = holderOf(tabs, i) orelse return null;
++    if (!tabs[j].shown) return null;
++    if (holderOf(tabs, j)) |k| if (tabs[k].shown) return null;
++    return j;
++}
++
++/// The other tab that holds the starter block of the tab `i`.
++fn holderOf(tabs: []const TabRef, i: usize) ?usize {
++    const starter = tabs[i].starter orelse return null;
++    for (tabs, 0..) |t, j| {
++        if (j == i) continue;
++        for (t.blocks) |b| if (std.mem.eql(u8, b, starter)) return j;
++    }
++    return null;
++}
++
+ pub const SessionView = struct {
+     arena: std.heap.ArenaAllocator,
+     revision: i64,
+@@ -249,3 +278,29 @@ test "parses a split window" {
+     try std.testing.expectEqualStrings("b2", root.split.after.leaf.block_id);
+     try std.testing.expectApproxEqAbs(@as(f64, 0.25), root.split.after.rect().x, 1e-9);
+ }
++
++test "a tab goes under the tab of its starter" {
++    const a_blocks = [_][]const u8{"a1"};
++    const j_blocks = [_][]const u8{"j1"};
++    const k_blocks = [_][]const u8{"k1"};
++    // A runs the agent, J is its job, K was started from J, S names its own block.
++    const tabs = [_]TabRef{
++        .{ .starter = null, .blocks = &a_blocks, .shown = true },
++        .{ .starter = "a1", .blocks = &j_blocks, .shown = true },
++        .{ .starter = "j1", .blocks = &k_blocks, .shown = true },
++        .{ .starter = "s1", .blocks = &.{"s1"}, .shown = true },
++        .{ .starter = "zz", .blocks = &.{"z1"}, .shown = true },
++    };
++    try std.testing.expectEqual(@as(?usize, 0), tabParent(&tabs, 1));
++    try std.testing.expectEqual(@as(?usize, null), tabParent(&tabs, 0));
++    // One level only: the parent of K has a parent itself.
++    try std.testing.expectEqual(@as(?usize, null), tabParent(&tabs, 2));
++    try std.testing.expectEqual(@as(?usize, null), tabParent(&tabs, 3));
++    try std.testing.expectEqual(@as(?usize, null), tabParent(&tabs, 4));
++    // The tab of the starter is in a folded session: the job stays in its own session.
++    const folded = [_]TabRef{
++        .{ .starter = null, .blocks = &a_blocks, .shown = false },
++        .{ .starter = "a1", .blocks = &j_blocks, .shown = true },
++    };
++    try std.testing.expectEqual(@as(?usize, null), tabParent(&folded, 1));
++}

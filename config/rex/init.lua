@@ -182,6 +182,47 @@ rex.action{
 }
 rex.bind("ctrl+b>shift+l", "branches")
 
+-- ctrl+b w: the board view of the board app (~/.workspace/board) in a pane above the
+-- orchestrator: one column for each status of the workers of its board. The key works only
+-- in the orchestrator pane of a board (bin/board-view-open). When the tab already has a
+-- board view pane, the key focuses it. q in the board view closes the pane.
+rex.action{
+  name = "board_view",
+  title = "Board View",
+  run = function(ctx)
+    local session = ctx.session_id
+    local r = rex.exec({ bin .. "board-view-open", ctx.block_id }, { timeout = 2 })
+    if r == nil or not r.ok then return end
+    local board = r.stdout:gsub("%s+$", "")
+    local block = pane(ctx)
+    local label = "board view"
+    local list = rex.call("session.list_blocks", { session_id = session }) or { blocks = {} }
+    for _, b in ipairs(list.blocks) do
+      if b.window_id == block.window_id and b.label == label then
+        local _, ferr = rex.call("session.focus_block", { session_id = session, block_id = b.block_id })
+        if ferr ~= nil then error(ferr, 0) end
+        return
+      end
+    end
+    local home = os.getenv("HOME")
+    local split, err = rex.call("session.new_split", {
+      session_id = session,
+      anchor_id = ctx.block_id,
+      direction = "vertical",
+      side = "before",
+      ratio = 0.55,
+      focus = true,
+      layout = rex.layout.block{
+        flavor = "com.superlogical.terminal.shell",
+        options = { command = { home .. "/.local/bin/board", "view", board }, cwd = home },
+      },
+    })
+    if err ~= nil then error(err, 0) end
+    rex.call("session.set_block_label", { session_id = session, block_id = split.block_ids[1], label = label })
+  end,
+}
+rex.bind("ctrl+b>w", "board_view")
+
 -- ctrl+b d: herdr-reviewr in the branch scope on the git root to review (bin/reviewr-pick),
 -- zoomed. That is the worktree and base that an agent set with bin/reviewr-target, else the
 -- git root of the focused folder and the commit where its branch left the default branch

@@ -1,0 +1,57 @@
+diff --git a/src/app/app.zig b/src/app/app.zig
+index 917dfee..b3b1438 100644
+--- a/src/app/app.zig
++++ b/src/app/app.zig
+@@ -2810,6 +2810,17 @@ pub const App = struct {
+         }
+     }
+ 
++    /// Shows an agent picked in a list. In a zoomed window it shows the zoomed pane and
++    /// keeps the zoom: Rex ends the zoom of a window when focus goes to another pane.
++    pub fn jumpToAgent(a: *App, h: *Host, session_id: []const u8, window_id: []const u8, block_id: []const u8) void {
++        const v = h.server.sessionView(session_id) orelse return a.jumpTo(h, session_id, window_id, block_id);
++        const w = v.windowOf(block_id) orelse return a.jumpTo(h, session_id, window_id, block_id);
++        // jumpTo can refresh the view that owns this ID, so keep a copy.
++        const zoomed = gpa.dupe(u8, w.zoomed_block_id orelse return a.jumpTo(h, session_id, window_id, block_id)) catch return a.jumpTo(h, session_id, window_id, block_id);
++        defer gpa.free(zoomed);
++        a.jumpTo(h, session_id, window_id, zoomed);
++    }
++
+     fn rowActivated(_: *gtk.ListBox, row: *gtk.ListBoxRow, a: *App) callconv(.c) void {
+         if (a.rebuilding) return;
+         // Picking a pane in the sidebar leaves the board for it.
+@@ -2820,7 +2831,7 @@ pub const App = struct {
+         a.selectHost(r.host);
+         a.auto_picked = false;
+         // An agent's row goes to its very pane.
+-        if (r.block_id.len > 0) return a.jumpTo(r.host, r.session_id, r.window_id, r.block_id);
++        if (r.block_id.len > 0) return a.jumpToAgent(r.host, r.session_id, r.window_id, r.block_id);
+         if (r.window_id.len == 0) return a.showSession(r.session_id);
+         a.openTab(r.host, r.session_id, r.window_id);
+         if (a.workspace) |w| w.grabFocus();
+diff --git a/src/ui/activity.zig b/src/ui/activity.zig
+index 23c4f01..6d19693 100644
+--- a/src/ui/activity.zig
++++ b/src/ui/activity.zig
+@@ -282,7 +282,7 @@ pub const Activity = struct {
+         const t: *Target = @ptrCast(@alignCast(data));
+         // Only a host that is still here; a row can outlive its host by a moment.
+         if (std.mem.indexOfScalar(*app_mod.Host, act.app.hosts.items, t.host) == null) return;
+-        act.app.jumpTo(t.host, t.session_id, t.window_id, t.block_id);
++        act.app.jumpToAgent(t.host, t.session_id, t.window_id, t.block_id);
+     }
+ 
+     fn freeTarget(t: *Target) void {
+diff --git a/src/ui/board.zig b/src/ui/board.zig
+index 0a65b7d..2eaaf8f 100644
+--- a/src/ui/board.zig
++++ b/src/ui/board.zig
+@@ -605,7 +605,7 @@ pub const Board = struct {
+         // Only a host that is still here; a card can outlive its host by a moment.
+         if (std.mem.indexOfScalar(*app_mod.Host, b.app.hosts.items, c.host) == null) return;
+         b.app.showBoard(false);
+-        b.app.jumpTo(c.host, c.session_id, c.window_id, c.block_id);
++        b.app.jumpToAgent(c.host, c.session_id, c.window_id, c.block_id);
+     }
+ };
+ 
