@@ -144,3 +144,25 @@ home_of() {
   [ "$status" -eq 0 ]
   [ "$output" = /x ]
 }
+
+@test "with_timeout stops a command after N s" {
+  start=$SECONDS
+  run with_timeout 1 sleep 5
+  [ "$status" -eq 124 ]
+  [ $((SECONDS - start)) -lt 3 ]
+}
+
+@test "with_timeout gives the exit of the command" {
+  run with_timeout 5 false
+  [ "$status" -eq 1 ]
+  run with_timeout 5 printf 'out\n'
+  [ "$status" -eq 0 ]
+  [ "$output" = out ]
+}
+
+@test "with_timeout also stops the children of the command" {
+  start=$SECONDS
+  out=$(with_timeout 1 bash -c 'sleep 5; echo late') || true
+  [ -z "$out" ]
+  [ $((SECONDS - start)) -lt 3 ]
+}

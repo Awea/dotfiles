@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
-# Fake pass: log the call, print a connection URL.
+# Fake pass: log the call and the gpg options, print a connection URL, or fail with
+# FAKE_PASS_FAIL=1.
 printf 'pass %s\n' "$*" >>"$FAKE_LOG"
+printf 'PASSWORD_STORE_GPG_OPTS=%s\n' "${PASSWORD_STORE_GPG_OPTS:-}" >>"$FAKE_LOG"
+if [ "${FAKE_PASS_FAIL:-}" = 1 ]; then
+  echo 'gpg: decryption failed: No secret key' >&2
+  exit 2
+fi
 printf 'postgres://ro:secret@db.test/x\nsecond line\n'

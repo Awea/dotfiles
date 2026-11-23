@@ -125,6 +125,19 @@ wn_args() { mapfile -d '' RUN_ARGS <"$FAKE_DIR/rex/rex-window-new-${1:-1}.args";
   [[ "${RUN_ARGS[-1]}" != *"When the user tells you to close"* ]]
 }
 
+@test "start footer gives a task worker the start question of a new task, and an auto worker not (Rex)" {
+  rex_start_setup
+  rex_orchestrator "$RO" garden
+  start
+  wn_args
+  [[ "${RUN_ARGS[-1]}" == *"end your turn with this question alone on its last line: Start a worker in <repo> for <title>?"* ]]
+  [[ "${RUN_ARGS[-1]}" == *"add allow or branch to the yes"* ]]
+  auto_policy
+  start auto
+  wn_args 2
+  [[ "${RUN_ARGS[-1]}" != *"Start a worker in <repo>"* ]]
+}
+
 @test "start footer lets a task worker start agents for an independent review (Rex)" {
   rex_start_setup
   rex_orchestrator "$RO" garden
@@ -343,6 +356,45 @@ wn_args() { mapfile -d '' RUN_ARGS <"$FAKE_DIR/rex/rex-window-new-${1:-1}.args";
   ! has_arg --mcp-config
   ! jq -e '.permissions' <<<"$(arg_after --settings)"
   [[ "${RUN_ARGS[-1]}" != *"notebooks"* ]]
+}
+
+# login_hook SETTINGS: the SessionStart hook entry of the login check in SETTINGS.
+login_hook() { jq -c '.hooks.SessionStart[]? | select(.hooks[0].command | endswith("hooks/logins.sh'"'"'"))' <<<"$1"; }
+
+@test "start gives a task worker in a board folder the login hook (Rex)" {
+  rex_start_setup
+  rex_orchestrator "$RO" alpha
+  alpha_board
+  start
+  [ "$status" -eq 0 ]
+  wn_args
+  settings=$(arg_after --settings)
+  hook=$(login_hook "$settings")
+  jq -e '.matcher == "startup|resume" and .hooks[0].type == "command" and .hooks[0].timeout == 30' <<<"$hook"
+  [ "$(jq -r '.hooks[0].command' <<<"$hook")" = "bash '$SKILL_DIR/hooks/logins.sh'" ]
+  jq -e '.permissions.allow == ["Bash(board-ro *)","mcp__appsignal"]' <<<"$settings"
+}
+
+@test "start auto mode gives the login hook (Rex)" {
+  rex_start_setup
+  rex_orchestrator "$RO" alpha
+  alpha_board
+  start auto
+  [ "$status" -eq 0 ]
+  wn_args
+  [ "$(jq -c '.hooks.SessionStart[0].hooks[0].command' <<<"$(arg_after --settings)")" = "$(jq -cn --arg c "bash '$SKILL_DIR/hooks/logins.sh' auto" '$c')" ]
+}
+
+@test "start gives a worker outside a board no login hook (Rex)" {
+  rex_start_setup
+  rex_orchestrator "$RO" garden
+  alpha_board
+  REPO="$BATS_TEST_TMPDIR/other"
+  repo_with_push_policy "$REPO"
+  start
+  [ "$status" -eq 0 ]
+  wn_args
+  ! jq -e '.hooks' <<<"$(arg_after --settings)"
 }
 
 @test "start runs the worker claude with BOARD_RESOURCES_OFF=1 (Rex)" {

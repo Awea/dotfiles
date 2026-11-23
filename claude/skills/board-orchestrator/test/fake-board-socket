@@ -1,0 +1,18 @@
+#!/usr/bin/env perl
+# fake-board-socket PATH REPLY: listen on the Unix socket PATH. Read one line from each
+# client, send the line REPLY, and close. With an empty REPLY, close with no line. With
+# the REPLY HANG, keep the client open for 5 s and send nothing.
+use strict;
+use warnings;
+use IO::Socket::UNIX;
+
+my ($path, $reply) = @ARGV;
+unlink $path;
+my $server = IO::Socket::UNIX->new(Local => $path, Listen => 5) or die "listen: $!";
+$SIG{TERM} = sub { unlink $path; exit 0 };
+while (my $client = $server->accept) {
+  my $line = <$client>;
+  if (defined $reply && $reply eq 'HANG') { sleep 5; close $client; next }
+  print $client "$reply\n" if defined $reply && length $reply;
+  close $client;
+}

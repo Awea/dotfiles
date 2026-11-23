@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Tool of the board orchestrator: run a worker claude as a terminal of the orchestrator (a
-# window in Renux), talk to the workers (remind, answer, tell),
+# window in Renux), talk to the workers (remind, answer, tell), list the work that is
+# left for a worker before a close (left),
 # and the board commands that need no terminal (report, run-add, note-add, log,
-# inbox-clear, send, queue, queue-clear, policy, policy-set, triage-check, triage-apply).
+# inbox-clear, send, queue, queue-clear, policy, policy-set, triage-check, triage-apply,
+# init).
 set -euo pipefail
 here="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 # shellcheck source=lib.sh source-path=SCRIPTDIR
@@ -77,6 +79,12 @@ set_claude_args() {
       settings=$(merge_settings "$settings" "$(<"$f")")
     fi
     if f=$(board_file "$board" mcp.json); then mcp+=("$f"); fi
+    # At the start and the resume, hooks/logins.sh shows the board logins that fail.
+    # An automatic worker gets the argument auto: it has no user to ask.
+    local hook="bash '$here/hooks/logins.sh'"
+    [ "$mode" != auto ] || hook="$hook auto"
+    settings=$(merge_settings "$settings" "$(jq -cn --arg c "$hook" \
+      '{hooks: {SessionStart: [{matcher: "startup|resume", hooks: [{type: "command", command: $c, timeout: 30}]}]}}')")
   fi
   if [ "$mode" = auto ]; then
     claude_args+=(--setting-sources user --settings "$settings" --permission-mode dontAsk)
@@ -263,18 +271,39 @@ rev_merged() {
   done
 }
 
+# run_teardown WORK LOG: run make worktree-teardown for the folder WORK when its repo has
+# the target (make_dir), with its output in LOG. The target stops the dev servers of a
+# worktree, for example the database of a shop worktree. It can run on a worktree that
+# stays. make runs in the direnv env of the main checkout, as the worker (run_worker): a
+# nix devshell puts the tools of the target on PATH. Exit 1 when make fails.
+run_teardown() {
+  local dir envdir
+  local -a env_cmd=()
+  dir=$(make_dir "$1" worktree-teardown) || return 0
+  envdir=$(main_dir "$dir")
+  if [ -f "$envdir/.envrc" ] && command -v direnv >/dev/null 2>&1; then
+    env_cmd=(direnv exec "$envdir")
+  fi
+  printf 'dispatch: make worktree-teardown in %s\n' "$dir" >>"$2" || true
+  ${env_cmd[@]+"${env_cmd[@]}"} make -C "$dir" worktree-teardown </dev/null >>"$2" 2>&1
+}
+
 # drop_worktree WORK LOG [merged]: remove the linked git worktree of the folder WORK, for
-# close. First run make worktree-teardown when the repo has the target, with its output in
-# LOG: for example a shop worktree stops its database. Then delete the branch of the
-# worktree when the default branch has all its commits. Else the branch stays: a close
-# never deletes work. The worktree stays when it has changes that are not committed, when
-# it has a detached HEAD that the default branch does not have, or when make or git fails.
-# Each kept thing gets a line on stderr. With "merged", the worktree stays with no line
-# when the default branch does not have all the commits of its HEAD.
+# close. First run its teardown (run_teardown): the worker is gone, so its dev servers stop
+# also when the worktree stays. Then delete the branch of the worktree when the default
+# branch has all its commits. Else the branch stays: a close never deletes work. The
+# worktree stays when it has changes that are not committed, when it has a detached HEAD
+# that the default branch does not have, or when make or git fails. Each kept thing gets a
+# line on stderr. With "merged", the worktree stays with no line when the default branch
+# does not have all the commits of its HEAD.
 drop_worktree() {
   local work=$1 log=$2 only=${3:-} root top branch rev link target="" dir out merged=""
   root=$(git -C "$work" rev-parse --show-toplevel 2>/dev/null) || return 0
   top=$(dirname "$(common_dir "$root")")
+  if ! run_teardown "$work" "$log"; then
+    printf 'dispatch: kept the worktree %s: make worktree-teardown failed. Its output is in %s.\n' "$root" "$log" >&2
+    return 0
+  fi
   if branch=$(git -C "$root" symbolic-ref -q --short HEAD 2>/dev/null); then
     rev="refs/heads/$branch"
   else
@@ -300,14 +329,6 @@ drop_worktree() {
     [ -z "$target" ] || ln -s "$target" "$link" || true
     printf 'dispatch: kept the worktree %s: it has changes that are not committed.\n' "$root" >&2
     return 0
-  fi
-  if dir=$(make_dir "$work" worktree-teardown); then
-    printf 'dispatch: make worktree-teardown in %s\n' "$dir" >>"$log" || true
-    if ! make -C "$dir" worktree-teardown </dev/null >>"$log" 2>&1; then
-      [ -z "$target" ] || ln -s "$target" "$link" || true
-      printf 'dispatch: kept the worktree %s: make worktree-teardown failed. Its output is in %s.\n' "$root" "$log" >&2
-      return 0
-    fi
   fi
   if ! out=$(git -C "$top" worktree remove "$root" 2>&1); then
     [ -z "$target" ] || [ ! -d "$work/.claude" ] || ln -s "$target" "$link" || true
@@ -352,20 +373,160 @@ drop_card_worktrees() {
     if { [[ ! "$root" =~ ^"$(worktrees_of "$top")/$name"(-[0-9]+)?$ ]] &&
       [[ ! "$root" =~ ^"$top-$name"(-[0-9]+)?$ ]]; } || worktree_used "$root"; then root=""; fi
   fi
+  log="${report%.md}-worktree-teardown.log"
   if [ ! -f "$report" ]; then
-    [ -z "$root" ] || printf 'dispatch: kept the worktree %s: the worker wrote no report.\n' "$root" >&2
+    # The worker is gone: its dev servers stop, its worktrees stay.
+    if [ -n "$root" ]; then
+      run_teardown "$cwd" "$log" || printf 'dispatch: make worktree-teardown failed in %s. Its output is in %s.\n' "$root" "$log" >&2
+      printf 'dispatch: kept the worktree %s: the worker wrote no report.\n' "$root" >&2
+    fi
+    while IFS= read -r wt; do
+      worktree_used "$wt" || run_teardown "$wt" "$log" ||
+        printf 'dispatch: make worktree-teardown failed in %s. Its output is in %s.\n' "$wt" "$log" >&2
+    done < <(card_other_worktrees "$board" "${top:-$cwd}" "$name")
     return 0
   fi
-  log="${report%.md}-worktree-teardown.log"
   [ -z "$root" ] || drop_worktree "$cwd" "$log" "$only"
+  while IFS= read -r wt; do
+    worktree_used "$wt" || drop_worktree "$wt" "$log" "$only"
+  done < <(card_other_worktrees "$board" "${top:-$cwd}" "$name")
+}
+
+# card_other_worktrees BOARD TOP NAME: the worktree of the card NAME in each other repo of
+# BOARD (other_tops), one a line: the folder in the worktrees folder or beside the repo (a
+# worker that started before the worktrees folder), when it is a worktree of that repo.
+card_other_worktrees() {
+  local t wt
   while IFS= read -r t; do
-    for wt in "$(worktrees_of "$t")/$name" "$t-$name"; do
+    for wt in "$(worktrees_of "$t")/$3" "$t-$3"; do
       if [ -d "$wt" ] && [ "$(git -C "$wt" rev-parse --show-toplevel 2>/dev/null)" = "$wt" ] &&
-        [ "$(common_dir "$wt")" = "$(common_dir "$t")" ] && ! worktree_used "$wt"; then
-        drop_worktree "$wt" "$log" "$only"
+        [ "$(common_dir "$wt")" = "$(common_dir "$t")" ]; then
+        printf '%s\n' "$wt"
       fi
     done
-  done < <(other_tops "$board" "${top:-$cwd}")
+  done < <(other_tops "$1" "$2")
+}
+
+# sweep_orchestrator [SESSION]: print "ADDRESS<tab>BOARD" of a live orchestrator in the Rex
+# session SESSION, or of any live orchestrator with no SESSION. Exit 1 when none runs.
+sweep_orchestrator() {
+  local f addr board full
+  for f in "$(state_dir)"/orchestrator-*; do
+    [ -f "$f" ] || continue
+    board=$(cut -f2 "$f")
+    addr=$(orchestrator_of "$board") || continue
+    if [ -n "${1:-}" ]; then
+      full=$(rex_full "$addr") || continue
+      [ "$(rex_session_of "$full" 2>/dev/null)" = "$1" ] || continue
+    fi
+    printf '%s\t%s\n' "$addr" "$board"
+    return 0
+  done
+  return 1
+}
+
+# sweep_tell SESSION BOARD TEXT: post TEXT to the orchestrator of BOARD, else to the
+# orchestrator of the sweep (sweep_orchestrator). A < or > in TEXT could close the tag and
+# add a tag with another sender, as in notice: they become other signs.
+sweep_tell() {
+  local session=$1 board=$2 text=$3 addr="" line
+  text=${text//</‹}
+  text=${text//>/›}
+  [ -z "$board" ] || addr=$(orchestrator_of "$board") || addr=""
+  if [ -z "$addr" ]; then
+    line=$(sweep_orchestrator "$session") || return 0
+    addr=${line%%$'\t'*} board=${line#*$'\t'}
+  fi
+  term_post "$addr" "<rex>$text</rex>" "$board" || printf 'dispatch: could not send to the orchestrator %s.\n' "$addr" >&2
+}
+
+# sweep [SESSION]: board-watch.lua runs it every 10 minutes. ~/.bin/mem-top --orphans lists
+# the dev servers of the worktrees with no worker (no claude of the card, no terminal in the
+# worktree). For each worktree with a new set of such processes, run its teardown
+# (run_teardown), and tell the orchestrator of the board of the card. A repo with no
+# teardown target gets only the message: the sweep kills nothing. Then, when mem-top
+# --check warns and no RAM message went in the last hour, tell an orchestrator of SESSION
+# the warning and the top 5 programs. One sweep runs at a time: a lock older than 30
+# minutes is stale.
+sweep() {
+  local session=${1:-} mt="$HOME/.bin/mem-top" dir lock list root card board text names
+  local log warn stamp top seen left
+  [ -x "$mt" ] || return 0
+  dir="$(state_dir)/sweep"
+  lock="$dir/lock"
+  log="$dir/teardown.log"
+  seen="$dir/seen"
+  stamp="$dir/ram-notice"
+  mkdir -p "$dir"
+  if ! mkdir "$lock" 2>/dev/null; then
+    [ $(($(date +%s) - $(file_mtime "$lock" 2>/dev/null || date +%s))) -gt 1800 ] || return 0
+    rm -rf "$lock"
+    mkdir "$lock" 2>/dev/null || return 0
+  fi
+  # shellcheck disable=SC2064 # The path is fixed now.
+  trap "rm -rf '$lock'" EXIT
+  list=$("$mt" --orphans 2>/dev/null) || list=""
+  : >"$seen.new"
+  while IFS= read -r root; do
+    [ -n "$root" ] || continue
+    # One key for the root and its pids: the same processes get no second teardown.
+    printf '%s\t%s\n' "$root" "$(awk -F '\t' -v r="$root" '$1 == r { print $2 }' <<<"$list" | sort -n | tr '\n' ' ')" >>"$seen.new"
+    if [ -f "$seen" ] && grep -qxF "$(tail -n 1 "$seen.new")" "$seen"; then continue; fi
+    names=$(awk -F '\t' -v r="$root" '$1 == r { printf "%s%s (pid %s, %s MB)", sep, $4, $2, $3; sep = ", " }' <<<"$list")
+    card=$(basename "$root")
+    if ! make_dir "$root" worktree-teardown >/dev/null; then
+      text="sweep: $card has processes with no worker: $names. Nothing stopped."
+    elif run_teardown "$root" "$log" </dev/null; then
+      # A teardown can pass and stop nothing (a tool missing from its env): check again.
+      left=$("$mt" --orphans 2>/dev/null </dev/null | awk -F '\t' -v r="$root" '$1 == r { printf "%s%s (pid %s, %s MB)", sep, $4, $2, $3; sep = ", " }') || left=""
+      if [ -z "$left" ]; then
+        text="sweep: stopped the dev servers of $card (no worker): $names."
+      else
+        text="sweep: ran the teardown of $card (no worker), but these still run: $left. Nothing else stopped them."
+      fi
+    else
+      text="sweep: make worktree-teardown failed in $root. Its output is in $log."
+    fi
+    board=$(awk -F '\t' -v c="$card" '$7 == c { print $3; exit }' "$(workers_file)" 2>/dev/null) || board=""
+    sweep_tell "$session" "$board" "$text" </dev/null
+  done < <(cut -f1 <<<"$list" | sort -u)
+  mv "$seen.new" "$seen"
+  if ! warn=$("$mt" --check 2>/dev/null) && [ -n "$warn" ]; then
+    if [ ! -f "$stamp" ] || [ $(($(date +%s) - $(file_mtime "$stamp"))) -ge 3600 ]; then
+      # The rows of mem-top -n: "TOTAL_MB RSS_MB SWAP_MB PROCS NAME", after 2 lines.
+      top=$("$mt" -n 5 2>/dev/null | awk 'NR > 2 && $1 ~ /^[0-9]+$/ { n = $0; sub(/^ *[0-9]+ +[0-9]+ +[0-9]+ +[0-9]+  /, "", n)
+        printf "%s%s %s MB", sep, n, $1; sep = ", " }') || top=""
+      if sweep_orchestrator "$session" >/dev/null; then
+        sweep_tell "$session" "" "sweep: $warn Top: ${top:-?}. See: mem-top"
+        touch "$stamp"
+      fi
+    fi
+  fi
+}
+
+# worktree_left WORK: print the work that is left in the git worktree of the folder WORK,
+# for left. These are the things that drop_worktree keeps: "uncommitted: ROOT" for
+# changes that are not committed (not the push policy link that start made), "branch:
+# BRANCH of TOP" for a branch, and "detached: ROOT" for a detached HEAD, with commits that
+# the default branch does not have.
+worktree_left() {
+  local work=$1 root top branch rev prefix out
+  local -a skip=()
+  root=$(git -C "$work" rev-parse --show-toplevel 2>/dev/null) || return 0
+  top=$(dirname "$(common_dir "$root")")
+  if [ -L "$work/.claude/settings.local.json" ]; then
+    prefix=$(git -C "$work" rev-parse --show-prefix 2>/dev/null) || prefix=""
+    skip=(":(top,exclude)${prefix}.claude/settings.local.json")
+  fi
+  if ! out=$(git -C "$root" status --porcelain --untracked-files=all -- . ${skip[@]+"${skip[@]}"} 2>&1) ||
+    [ -n "$out" ]; then
+    printf 'uncommitted: %s\n' "$root"
+  fi
+  if branch=$(git -C "$root" symbolic-ref -q --short HEAD 2>/dev/null); then
+    rev_merged "$top" "refs/heads/$branch" || printf 'branch: %s of %s\n' "$branch" "$top"
+  elif rev=$(git -C "$root" rev-parse -q --verify 'HEAD^{commit}' 2>/dev/null); then
+    rev_merged "$top" "$rev" || printf 'detached: %s\n' "$root"
+  fi
 }
 
 # The workers: one line "ADDRESS<tab>MODE<tab>BOARD<tab>REPORT<tab>SESSION<tab>CWD<tab>NAME"
@@ -534,6 +695,12 @@ footer() {
     text="$text Change only the repo of your card: $cwd and its git worktrees, and the other repos of your board below. When the work needs a repo that is not in that list, do not change that repo: stop that work. Write it in the report as a new task under ## Vault changes, with the repo, the work and the reason on its context line. The orchestrator starts a worker in that repo."
     text="$text The other repos of your board: ${others%%$'\t'*}. When the work of the card needs one of them, change it too, in a git worktree on your branch: run ${others#*$'\t'}, or use that worktree when it exists. Never change the main checkout of that repo. Follow the push policy of that repo, not the policy of your card. Give the PR or commit links of each repo in the report."
   fi
+  # Report text never starts a worker. A yes that the user types in the worker to this
+  # exact question does: dispatch.sh report reads it in the claude transcript
+  # (start_approvals), so the orchestrator does not ask the user a second time.
+  if [ "$mode" = task ]; then
+    text="$text When the user wants a new task to start now, ask before you write a report with that task, and end your turn with this question alone on its last line: Start a worker in <repo> for <title>? <repo> is the absolute path of the repo of the task, and <title> is the exact title of the new task in your report. When the repo does not exist yet, tell the user before the question: the orchestrator makes it with an empty first commit. When the repo is new or has no push policy, tell the user to add allow or branch to the yes, else the policy is ask. After a yes, write the report with the task. Write no approval in the report: the orchestrator reads the yes of the user in this conversation and starts the worker with no second question. After any other answer, the new task is a card only."
+  fi
   local res_board notebooks
   if res_board=$(board_of "$cwd") && notebooks=$(board_notebooks "$res_board"); then
     text="$text You can also write and commit a notebook in $notebooks, the notebooks folder of this board. Use board-ro list to see the live data of this board."
@@ -655,6 +822,70 @@ worker_addr() {
   else
     printf '%s\n' "$1"
   fi
+}
+
+# start_approvals REPORT: one line "approved: policy=P repo=R title=T" for each yes that
+# the user typed in the worker of REPORT to its question "Start a worker in R for T?".
+# Report text cannot start a worker, so this reads the claude transcript of the worker
+# session, not the report. A yes counts only as a prompt of the user (not a tool
+# result, a meta entry, a subagent or another agent), right after a worker text whose
+# last line is the question (with no * or backtick). A no word (no, not, n't, card only)
+# or a ? in the reply cancels it. allow or branch in the reply gives that push policy,
+# else ask. The line waits for a report whose ## Vault changes have the title. Each
+# approval comes once: a mark in the approved/ folder of the state folder keeps it, and
+# with no mark there is no line.
+start_approvals() {
+  local session cfg t policy repo title key mark
+  [ -f "$(workers_file)" ] || return 0
+  session=$(awk -F '\t' -v r="$1" '$4 == r { s = $5 } END { print s }' "$(workers_file)")
+  [[ "$session" =~ ^[A-Za-z0-9_-]+$ ]] || return 0
+  cfg=${CLAUDE_CONFIG_DIR:-$HOME/.claude}
+  t=$(find "$cfg/projects" -mindepth 2 -maxdepth 2 -name "$session.jsonl" 2>/dev/null | head -n 1) || true
+  [ -n "$t" ] || return 0
+  { jq -nrR --arg home "$HOME" '
+      def typed:
+        .type == "user" and .isMeta != true and .isCompactSummary != true and .isSidechain != true
+        and ((.origin.kind // "human") == "human")
+        and ((.message.content | type) == "string"
+          or ((.message.content | type) == "array" and (.message.content | length) > 0
+            and all(.message.content[]; .type == "text")));
+      def text: if (.message.content | type) == "string" then .message.content
+        else [.message.content[].text] | join("\n") end;
+      reduce (inputs | fromjson? | select(type == "object" and .isSidechain != true)) as $e
+        ({last: null, out: []};
+        if $e.type == "assistant" then
+          ([$e.message.content[]? | select(type == "object" and .type == "text") | .text] | last) as $x
+          | if $x == null then . else .last = $x end
+        elif ($e | typed) then
+          (($e | text) | ascii_downcase) as $r
+          | (if .last == null then null
+              else [.last | split("\n")[] | select(test("\\S"))] | last end) as $q
+          | (if $q == null then null
+              else $q | gsub("[*`]"; "") | capture("^\\s*Start a worker in (?<repo>\\S+) for (?<title>.*\\S)\\s*\\?\\s*$") end) as $m
+          | (if $m == null then . else
+              ($m.repo | if startswith("~/") then $home + .[1:] else . end) as $repo
+              | if ($repo | startswith("/")) and ($r | test("^\\s*(yes|y|oui|ok|okay|go|start)\\b"))
+                  and ($r | test("\\b(no|not|non|never|card only)\\b|n[\u0027\u2019]t\\b|\\?") | not)
+                then .out += [[
+                  (if ($r | test("\\ballow\\b")) == ($r | test("\\bbranch\\b")) then "ask"
+                    elif ($r | test("\\ballow\\b")) then "allow" else "branch" end),
+                  $repo, ($m.title | gsub("\t"; " ") | sub("^\\s+"; ""))] | @tsv]
+                else . end
+            end)
+          | .last = null
+        else . end)
+      | .out[]' <"$t" 2>/dev/null || true; } |
+    while IFS=$'\t' read -r policy repo title; do
+      [ -n "$title" ] || continue
+      # The approval waits for a report whose Vault changes give the task: an earlier
+      # report of the worker does not use it up.
+      awk '/^## /{ on = ($0 ~ /^## Vault changes[ \t\r]*$/) } on' "$1" | grep -qF -- "$title" || continue
+      key=$(printf '%s\t%s\t%s' "$session" "$repo" "$title" | cksum | tr ' ' -)
+      mark="$(state_dir)/approved/$key"
+      # mkdir makes the mark at once: of two report runs, only one prints the line.
+      { mkdir -p "$(dirname "$mark")" && mkdir "$mark"; } 2>/dev/null || continue
+      printf 'approved: policy=%s repo=%s title=%s\n' "$policy" "$repo" "$title"
+    done
 }
 
 # need_worker ADDR: exit 1 with "no agent" when ADDR is not a live worker.
@@ -831,6 +1062,9 @@ case "${1:-}" in
         printf "%s", buf[name]
         if (n[name] > max) printf "[section cut: %d more lines]\n", n[name] - max
       }
+      # A report line must not look like a line of this command: approved:, say: or
+      # full report: (rule 7.9 of SKILL.md). It gets a "> " before it.
+      { if ($0 ~ /^(approved:|say:|full report:)/) $0 = "> " $0 }
       NR == 1 { first = $0 }
       NR <= 40 { head = head $0 "\n" }
       /^## / {
@@ -854,6 +1088,8 @@ case "${1:-}" in
     # more work, and the user reads that work in the worker. The marker is in the state
     # folder, never beside a path of a worker message. A failed marker write still gives
     # the line.
+    # A yes of the user in the worker, read in its transcript (rule 7.9 of SKILL.md).
+    start_approvals "$file"
     first=$(head -n 1 "$file" | tr -d '\r')
     case "$first" in
       'RESULT: DONE'* | 'STATUS: OK'*)
@@ -866,6 +1102,54 @@ case "${1:-}" in
         ;;
     esac
     printf 'say: nothing.\n'
+    ;;
+  init)
+    # The new repo of a task that the user approved: a git repo with an empty first
+    # commit, so that start can make the worktree of the card from HEAD.
+    dir="${2:-}"
+    if [ -z "$dir" ]; then
+      printf 'usage: dispatch.sh init DIR\n' >&2
+      exit 2
+    fi
+    # The start question of a worker can give the repo as ~/...: a literal tilde.
+    # shellcheck disable=SC2088
+    case "$dir" in '~/'*) dir="$HOME/${dir#\~/}" ;; esac
+    case "$dir" in
+      /*) ;;
+      *)
+        printf 'dispatch: %s is not an absolute path.\n' "$dir" >&2
+        exit 2
+        ;;
+    esac
+    dir=${dir%/}
+    if [ ! -d "$(dirname "$dir")" ]; then
+      printf 'dispatch: the folder %s does not exist.\n' "$(dirname "$dir")" >&2
+      exit 2
+    fi
+    if [ -e "$dir/.git" ]; then
+      if git -C "$dir" rev-parse -q --verify 'HEAD^{commit}' >/dev/null 2>&1; then
+        printf 'dispatch: %s is a repo with commits already.\n' "$dir" >&2
+        exit 2
+      fi
+      # The first commit is empty: it takes no staged file of the user.
+      if [ -n "$(git -C "$dir" ls-files 2>/dev/null)" ]; then
+        printf 'dispatch: %s has staged files.\n' "$dir" >&2
+        exit 2
+      fi
+    elif [ -e "$dir" ] && { [ ! -d "$dir" ] || [ -n "$(ls -A "$dir")" ]; }; then
+      printf 'dispatch: %s exists and is not an empty folder.\n' "$dir" >&2
+      exit 2
+    fi
+    mkdir -p "$dir"
+    if ! err=$(git -C "$dir" init -q 2>&1); then
+      printf 'dispatch: git init failed in %s: %s\n' "$dir" "$err" >&2
+      exit 1
+    fi
+    if ! err=$(git -C "$dir" commit -q --allow-empty -m 'init: empty repository' 2>&1); then
+      printf 'dispatch: the first commit failed in %s: %s\nWhen the signature failed, ask the user to run gpg-unlock, then run dispatch.sh init again.\n' "$dir" "$err" >&2
+      exit 1
+    fi
+    printf '%s\n' "$dir"
     ;;
   run-add)
     rel="${2:-}" file="${3:-}"
@@ -1409,6 +1693,40 @@ NOTE
       drop_card_worktrees "$line" merged || true
     done
     ;;
+  left)
+    # The /ok skill runs this in a task worker: the work that is left before a close. It
+    # checks the report and the worktrees that close removes (drop_card_worktrees), and
+    # changes nothing. One line for each left thing, and exit 3. Exit 0 when none is left.
+    if [ -z "${2:-${REX_BLOCK:-}}" ]; then
+      printf 'usage: dispatch.sh left [ADDRESS]\n' >&2
+      exit 2
+    fi
+    addr=$(worker_addr "${2:-$REX_BLOCK}")
+    line=$(worker_line "$addr")
+    if [ -z "$line" ]; then
+      printf 'dispatch: no worker in %s.\n' "$addr" >&2
+      exit 1
+    fi
+    IFS=$'\t' read -r _ mode board report _ cwd name <<<"$line"
+    if [ "$mode" != task ]; then
+      printf 'dispatch: left runs only for a task worker.\n' >&2
+      exit 1
+    fi
+    left=$(
+      [ -f "$report" ] || printf 'report: none\n'
+      if [ -d "$cwd" ]; then
+        worktree_left "$cwd"
+        top=""
+        if root=$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null); then
+          top=$(dirname "$(common_dir "$root")")
+        fi
+        while IFS= read -r wt; do
+          worktree_left "$wt"
+        done < <(card_other_worktrees "$board" "${top:-$cwd}" "$name")
+      fi
+    )
+    [ -z "$left" ] || { printf '%s\n' "$left"; exit 3; }
+    ;;
   close)
     addr=$(worker_addr "${2:?usage: dispatch.sh close ADDRESS [wait]}")
     if ! json=$(term_get "$addr"); then
@@ -1598,10 +1916,63 @@ NOTE
       printf 'usage: dispatch.sh tell TEXT\n' >&2
       exit 2
     fi
-    if ! term_tell "$BOARD_ORCHESTRATOR" "${*:2}" "${BOARD:-}"; then
+    # A < or > in the text could close the tag and add a tag with another sender, for
+    # example a start request of the board view (SKILL.md rule 6). So they become ‹ and ›.
+    text="${*:2}"
+    text=${text//</‹}
+    text=${text//>/›}
+    if ! term_tell "$BOARD_ORCHESTRATOR" "$text" "${BOARD:-}"; then
       printf 'dispatch: could not send to the orchestrator %s.\n' "$BOARD_ORCHESTRATOR" >&2
       exit 1
     fi
+    ;;
+  view-check)
+    # The orchestrator runs this on a start request of the board view (SKILL.md rule 6),
+    # before it starts a worker. The sender must be one live block in the window of the
+    # orchestrator, with the label "board view", that runs the board view of this board
+    # from the Nix store. Only the ctrl+b w action opens a pane in that window, and a worker
+    # can write no file in the Nix store. A worker can open a tab with that label
+    # (rex run --label), but in another window.
+    short=${2:-}
+    if [ -z "${REX_SESSION:-}" ] || [ -z "${REX_BLOCK:-}" ] || [ "${#short}" -lt 8 ]; then
+      printf 'usage: dispatch.sh view-check SHORT, in the orchestrator in Renux. SHORT has 8 characters or more.\n' >&2
+      exit 2
+    fi
+    if ! blocks=$(_rex_api session.list_blocks "$(jq -cn --arg s "$REX_SESSION" '{session_id: $s}')"); then
+      printf 'view-check: Rex does not answer.\n' >&2
+      exit 1
+    fi
+    window=$(jq -r --arg b "$REX_BLOCK" '.blocks[]? | select(.block_id == $b) | .window_id // empty' <<<"$blocks")
+    found=$(jq -r --arg s "$short" '[.blocks[]? | select(.block_id | endswith($s))]
+      | if length == 1 then .[0] | [.block_id, (.label // ""), (.window_id // "")] | @tsv else empty end' <<<"$blocks")
+    if [ -z "$found" ]; then
+      printf 'view-check: no live block %s in this session.\n' "$short" >&2
+      exit 1
+    fi
+    IFS=$'\t' read -r full label win <<<"$found"
+    if [ -z "$window" ] || [ "$win" != "$window" ]; then
+      printf 'view-check: the block %s is not in the window of this orchestrator.\n' "$short" >&2
+      exit 1
+    fi
+    if [ "$label" != "board view" ]; then
+      printf 'view-check: the block %s is not a board view pane (label "%s").\n' "$short" "$label" >&2
+      exit 1
+    fi
+    # The child of the pane is the Nix wrapper of board-view: its command line is
+    # "SHELL /nix/store/HASH-board-VERSION/bin/.board-view-wrapped BOARD". ps comes from the
+    # default PATH, not from a folder that a worker can write.
+    board=$(rex_record "$REX_BLOCK" | jq -r '.board // empty')
+    pid=$(_rex_method "$REX_SESSION" "$full" process | jq -r '.child.pid // empty' 2>/dev/null) || pid=""
+    args=""
+    [ -z "$pid" ] || args=$(command -p ps -o args= -p "$pid" 2>/dev/null) || args=""
+    args=${args%"${args##*[![:space:]]}"}
+    re='^[^ ]+ /nix/store/[0-9a-z]{32}-board-[^/ ]+/bin/\.board-view-wrapped (.+)$'
+    if [ -z "$board" ] || ! [[ "$args" =~ $re ]] || [ "${BASH_REMATCH[1]}" != "$board" ]; then
+      printf 'view-check: the block %s does not run the board view of the board %s (%s).\n' \
+        "$short" "$board" "${args:-no process}" >&2
+      exit 1
+    fi
+    printf 'view-check: ok\n'
     ;;
   notice)
     # board-watch.lua runs this for a worker block in Renux. It reads the record file, not
@@ -1611,6 +1982,10 @@ NOTE
     block="${2:-}" kind="${3:-}" detail="${4:-}" closed=""
     # The notice is one line: a newline in the detail would break it.
     detail=$(printf '%s' "$detail" | tr '\n\r' '  ')
+    # The detail of a blocked worker holds the command that it asks for: a < or > in it
+    # could close the tag and add a tag with another sender (as in tell).
+    detail=${detail//</‹}
+    detail=${detail//>/›}
     [ -n "$detail" ] || [ "$kind" != exited ] || detail='?'
     case "$kind" in
       blocked | exited | working) ;;
@@ -1624,10 +1999,14 @@ NOTE
     [ -f "$rec" ] || exit 0
     [ "$(jq -r '.role // empty' "$rec")" = worker ] || exit 0
     sent=$(jq -r '.notice // empty' "$rec")
+    # Always clear the field on working: a hand-back to this script must not lose the
+    # next notice.
     if [ "$kind" = working ]; then
       [ -z "$sent" ] || [ ! -f "$rec" ] || rex_record_set "$block" '{"notice":null}'
       exit 0
     fi
+    # The board service makes the notice when its mailbox for the session runs.
+    ! board_mailbox "$(jq -r '.rex_session // empty' "$rec")" || exit 0
     [ "$sent" != "$kind" ] || exit 0
     board=$(jq -r '.board // empty' "$rec")
     name=$(jq -r '.name // empty' "$rec")
@@ -1650,11 +2029,20 @@ NOTE
     # A close may remove the record meanwhile: do not make it again.
     [ ! -f "$rec" ] || rex_record_set "$block" "$(jq -cn --arg k "$kind" '{notice: $k}')"
     ;;
+  sweep)
+    # board-watch.lua runs this every 10 minutes, in the background.
+    sweep "${2:-}"
+    ;;
   deliver)
     # board-watch.lua runs this each second while the queue of its session has lines.
     if [ -z "${2:-}" ]; then
       printf 'usage: dispatch.sh deliver SESSION\n' >&2
       exit 2
+    fi
+    # The board service delivers the outbox when its mailbox runs: drop the quiet files.
+    if board_mailbox "$2"; then
+      rm -f "$(rex_outbox "$2")".quiet-* "$(rex_outbox "$2")".waits-*
+      exit 0
     fi
     # The watcher drops the output of the command, so the errors also go to its log.
     err=$(rex_deliver "$2" 2>&1 >/dev/null) && rc=0 || rc=$?
@@ -1665,7 +2053,7 @@ NOTE
     exit "$rc"
     ;;
   *)
-    printf 'usage: dispatch.sh start|workers|resumable|resume|resume-clear|close|last|remind|answer|tell|notice|deliver|policy|policy-set|report|run-add|note-add|log|inbox-clear|send|queue|queue-clear ...\n' >&2
+    printf 'usage: dispatch.sh start|workers|resumable|resume|resume-clear|left|close|last|remind|answer|tell|view-check|notice|sweep|deliver|policy|policy-set|report|run-add|note-add|log|inbox-clear|send|queue|queue-clear ...\n' >&2
     exit 2
     ;;
 esac

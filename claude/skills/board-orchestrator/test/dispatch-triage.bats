@@ -382,6 +382,13 @@ wn_args() { mapfile -d '' RUN_ARGS <"$FAKE_DIR/rex/rex-window-new-${1:-1}.args";
   ! has_arg --permission-mode
 }
 
+@test "the triage worker gets no login hook" {
+  triage_setup
+  triage
+  wn_args
+  ! jq -e '.hooks' <<<"$(arg_after --settings)"
+}
+
 @test "the triage worker gets only the forge MCP server of the board, found by the board name" {
   triage_setup
   triage

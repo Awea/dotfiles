@@ -5,3 +5,4 @@ Block events (`program_status_changed`, `child_exited`, source "session") came o
 In a Rex pane `env | grep -E '^(HC_|REX_)'` gives REX_SESSION, REX_BLOCK and REX_BIN_DIR, and no HC_ variable.
 Note: `program_status_changed` carries the `record` in `ctx.record`; `ev` has only block_id and session_id. The watcher started after the first blocked state, so that change has no event line (read it with block.method).
 `process-exited.json` is the real `block.method process` answer of a `--keep-open` block whose command ended: `last_exit` is set and there is no `child`.
+`process-board-view.json` has the shape of the real `block.method process` answer of a board view pane (`board view BOARD`, from the ctrl+b w action), read on 2026-11-22: the child has no `invoked_path`. The child is the Nix wrapper shell; `ps -o args=` of its pid gives `/nix/store/…-bash-5.3p20/bin/sh /nix/store/…-board-0.1.0/bin/.board-view-wrapped BOARD`. The foreground is beam.smp.

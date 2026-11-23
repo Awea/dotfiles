@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # A fake rex for the bats tests. It logs each call to $FAKE_LOG and keeps its state in
 # $FAKE_DIR/rex/: blocks.jsonl (one JSON line for each block: session_id, window_id,
-# window_label, block_id), process-<block>.json and status-<block>.json (the defaults are
+# window_label, block_id, and label when the block label is not the window label),
+# process-<block>.json and status-<block>.json (the defaults are
 # the real answers in test/fixtures/rex), title-<block>.json, capture.txt, and view.json
 # (when it exists, the answer of session.view). The hook on-api runs at each api call, the
 # hook on-wait at each wait. FAKE_REX_FAIL=1 makes every call fail. FAKE_REX_SEND_FAIL=1 makes only send fail,
@@ -131,7 +132,7 @@ case "$cmd" in
         ;;
       session.list_blocks)
         jq -s --arg s "$s" '{blocks: [.[] | select(.session_id == $s)
-          | {block_id, label: .window_label, creator_name: "com.superlogical.terminal",
+          | {block_id, label: (.label // .window_label), creator_name: "com.superlogical.terminal",
              flavor: "terminal", placement: "placed", window_id}]}' "$d/blocks.jsonl"
         ;;
       session.view)

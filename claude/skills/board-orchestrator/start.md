@@ -129,5 +129,8 @@ line. A card with no `project` has no repo.
    6. For "start", dispatch the card with rule 5 in the same turn: "start" is the yes for
       the worker.
 
+   An inbox request of the board view (rule 6 of `SKILL.md`) uses these steps for one
+   message.
+
    After the lists, when `triage-check` printed `due`, ask the T1 question of `triage.md`.
    After the lists and your questions, in the same turn, shorten the long cards (rule 8).

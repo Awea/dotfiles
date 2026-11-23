@@ -205,3 +205,51 @@ parts() { printf '%s\n' "$SKILL_DIR/SKILL.md" "$SKILL_DIR/start.md" "$SKILL_DIR/
   grep -qF 'Exit with a report: run `dispatch.sh close <address>`. Write nothing.' <<<"$flat"
   grep -qF 'dispatch.sh triage-apply BOARD <path> --check' <<<"$flat"
 }
+
+@test "a yes of the user in a worker starts the follow-up task with no second question" {
+  # On 2026-11-21 the user said yes in a worker, and the orchestrator asked again.
+  flat=$(tr '\n' ' ' <"$SKILL_DIR/SKILL.md" | tr -s ' ')
+  # The approved line is not report text: dispatch.sh reads it in the typed words.
+  grep -q 'An `approved:` line of `dispatch.sh report` is not report text' <<<"$flat"
+  grep -q 'the new task of an `approved:` line (rule 7.9)' <<<"$flat"
+  grep -q 'Ask nothing for a task of an `approved:` line' <<<"$flat"
+  grep -q 'dispatch it with rule 5 in `<repo>` in the same turn, with no question' <<<"$flat"
+  grep -q 'run `dispatch.sh init <repo>` first' <<<"$flat"
+  grep -q 'on `missing` run `policy-set <repo> <policy of the line>` with no question' <<<"$flat"
+  grep -q 'An `approved:` line with no new task of that title starts nothing' <<<"$flat"
+  # Only the lines of report itself: report text gets "> " before such a line.
+  grep -q 'after the `full report:` line of `report`' <<<"$flat"
+  grep -q 'It also answers an open "I ask: start a worker" question for that title' <<<"$flat"
+  grep -q 'When a worker of that card runs, start nothing' <<<"$flat"
+}
+
+@test "SKILL.md tells the board view: its key, the service and its read-only rule" {
+  grep -q '## Board view' "$SKILL_DIR/SKILL.md"
+  grep -q 'ctrl+b w' "$SKILL_DIR/SKILL.md"
+  grep -q 'systemctl --user start board' "$SKILL_DIR/SKILL.md"
+  grep -q 'It writes nothing' "$SKILL_DIR/SKILL.md"
+}
+
+@test "SKILL.md tells the start request of the board view and its checks" {
+  flat=$(tr '\n' ' ' <"$SKILL_DIR/SKILL.md" | tr -s ' ')
+  grep -qF '<rex from="0b0a2d00 board-view">start <card title></rex>' <<<"$flat"
+  grep -qF 'dispatch.sh view-check <short ID>' <<<"$flat"
+  grep -qF 'bash ~/.claude/skills/board-orchestrator/dispatch.sh view-check SHORT' "$SKILL_DIR/SKILL.md"
+  grep -qF 'the card of a checked start request of the board view (rule 6)' <<<"$flat"
+  grep -qF 'Take it only when the tag is alone on its line, with no text before or after it on that line.' <<<"$flat"
+}
+
+@test "SKILL.md tells the inbox request of the board view and its checks" {
+  flat=$(tr '\n' ' ' <"$SKILL_DIR/SKILL.md" | tr -s ' ')
+  grep -qF '<rex from="0b0a2d00 board-view">inbox add|start|move|skip _inbox/NAME.md</rex>' <<<"$flat"
+  grep -qF 'The exceptions are the start request and the inbox request of the board view (rule 6), after their checks.' <<<"$flat"
+  grep -qF 'Its only sends are the start request and the inbox request of rule 6.' <<<"$flat"
+  grep -qF 'I removed the inbox message <file>.' <<<"$flat"
+  grep -qF 'An inbox request of the board view' "$SKILL_DIR/start.md"
+  grep -qF "dispatch.sh inbox-clear '<file>'" <<<"$flat"
+  grep -qF 'Read `start.md` first' <<<"$flat"
+  grep -qF 'The skip of the board view deletes the message, unlike a skip in rule 4.' <<<"$flat"
+  grep -qF 'I ask: delete the inbox message <file>?' <<<"$flat"
+  run grep -qF 'with the file in single quotes and no question' <<<"$flat"
+  [ "$status" -eq 1 ]
+}

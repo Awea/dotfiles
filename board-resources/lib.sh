@@ -94,3 +94,36 @@ board_notebooks() {
   [ -n "$line" ] || return 1
   expand_path "$line"
 }
+
+# with_timeout SECS CMD...: run CMD, stop it and its children with TERM after SECS
+# seconds. Exit 124 on a time-out, else the exit of CMD. Pure bash: macOS has no timeout
+# command.
+with_timeout() {
+  local secs=$1 pid watcher status=0 m=${-//[^m]/}
+  shift
+  # Job control puts CMD in its own process group: the TERM also stops its children, so
+  # no child keeps an output pipe open.
+  set -m
+  "$@" &
+  pid=$!
+  [ -n "$m" ] || set +m
+  # The watcher kills its sleep when it gets TERM, so no sleep keeps an output open.
+  (
+    trap 'kill "$s" 2>/dev/null; exit 0' TERM
+    sleep "$secs" &
+    s=$!
+    wait "$s"
+    kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null
+    exit 1
+  ) >/dev/null 2>&1 &
+  watcher=$!
+  wait "$pid" || status=$?
+  if kill -0 "$watcher" 2>/dev/null; then
+    kill -TERM "$watcher" 2>/dev/null
+    wait "$watcher" 2>/dev/null || true
+    return "$status"
+  fi
+  # The watcher exits 1 after it sent TERM.
+  if wait "$watcher" 2>/dev/null; then return "$status"; fi
+  return 124
+}

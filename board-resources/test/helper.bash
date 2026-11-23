@@ -15,7 +15,7 @@ br_setup() {
   export FAKE_LOG="$BATS_TEST_TMPDIR/calls.log"
   mkdir -p "$HOME/ws/alpha/db1" "$HOME/ws/beta" "$BOARD_RESOURCES_HOME/alpha" "$BOARD_RESOURCES_HOME/beta"
   : >"$FAKE_LOG"
-  unset BOARD_RESOURCES_OFF FAKE_PSQL_FAIL
+  unset BOARD_RESOURCES_OFF FAKE_PSQL_FAIL FAKE_PASS_FAIL FAKE_MCP_LIST FAKE_CLAUDE_SLEEP BOARD_CHECK_TIMEOUT
   printf '~/ws/alpha\n' >"$BOARD_RESOURCES_HOME/alpha/roots"
   printf '# name pass-entry\ndb1 alpha/db-readonly/db1\n' >"$BOARD_RESOURCES_HOME/alpha/databases"
   printf '~/ws/alpha/notebooks\n' >"$BOARD_RESOURCES_HOME/alpha/notebooks"

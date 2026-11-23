@@ -631,3 +631,52 @@ ssh_origin() {
   ctx=$(jq -r .hookSpecificOutput.additionalContext <<<"$output")
   [[ "$ctx" == *'with "my board" as the whole argument text'* ]]
 }
+
+# logins [EXIT [OUT]]: run hooks/logins.sh (with the argument LOGINS_MODE) with a fake
+# board-ro check that prints OUT and exits EXIT. With no EXIT, no board-ro is on PATH.
+logins() {
+  local bin="$BATS_TEST_TMPDIR/fake-bin"
+  mkdir -p "$bin"
+  rm -f "$bin/board-ro"
+  if [ $# -gt 0 ]; then
+    printf '#!/usr/bin/env bash\n[ "$1" = check ] || exit 9\nprintf "%%s\\n" "%s"\nexit %s\n' "${2:-}" "$1" >"$bin/board-ro"
+    chmod +x "$bin/board-ro"
+  fi
+  PATH="$bin:/usr/bin:/bin" run bash "$SKILL_DIR/hooks/logins.sh" ${LOGINS_MODE:+"$LOGINS_MODE"} <<<'{"source":"startup"}'
+}
+
+@test "logins says nothing when all logins work" {
+  logins 0 'board-ro check: all logins work (1 MCP servers, 1 databases)'
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "logins gives the failures to the user and the worker" {
+  logins 1 'mcp aiven: Needs authentication. Fix: x'
+  [ "$status" -eq 0 ]
+  jq -e '.systemMessage | contains("mcp aiven: Needs authentication. Fix: x")' <<<"$output"
+  jq -e '.hookSpecificOutput.hookEventName == "SessionStart"' <<<"$output"
+  jq -e '.hookSpecificOutput.additionalContext | contains("mcp aiven: Needs authentication. Fix: x")' <<<"$output"
+  jq -e '.hookSpecificOutput.additionalContext | contains("first reply")' <<<"$output"
+}
+
+@test "logins says nothing outside a board" {
+  logins 2 'board-ro: no board holds /x'
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "logins reports a missing board-ro" {
+  logins
+  [ "$status" -eq 0 ]
+  jq -e '.systemMessage | contains("board-ro: not on PATH")' <<<"$output"
+}
+
+@test "logins tells an automatic worker to stop with STATUS: STOP, not to wait" {
+  LOGINS_MODE=auto logins 1 'mcp aiven: Needs authentication. Fix: x'
+  [ "$status" -eq 0 ]
+  ctx=$(jq -r '.hookSpecificOutput.additionalContext' <<<"$output")
+  [[ "$ctx" == *"mcp aiven: Needs authentication. Fix: x"* ]]
+  [[ "$ctx" == *"STATUS: STOP"* ]]
+  [[ "$ctx" != *"ask the user"* ]]
+}

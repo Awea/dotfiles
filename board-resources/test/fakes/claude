@@ -1,3 +1,10 @@
 #!/usr/bin/env bash
-# Fake claude: log each argument on its own line.
+# Fake claude: log each argument on its own line. With FAKE_MCP_LIST set, a call with
+# "mcp list" also logs the .mcp.json of the current folder, sleeps FAKE_CLAUDE_SLEEP and
+# prints the file FAKE_MCP_LIST.
 for a in "$@"; do printf '%s\n' "$a"; done >>"$FAKE_LOG"
+[ -n "${FAKE_MCP_LIST:-}" ] || exit 0
+case " $* " in *" mcp list "*) ;; *) exit 0 ;; esac
+[ ! -f .mcp.json ] || printf 'mcp.json %s\n' "$(jq -c . .mcp.json)" >>"$FAKE_LOG"
+[ -z "${FAKE_CLAUDE_SLEEP:-}" ] || sleep "$FAKE_CLAUDE_SLEEP"
+cat "$FAKE_MCP_LIST"

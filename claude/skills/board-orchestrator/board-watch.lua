@@ -14,7 +14,9 @@
 --
 -- Every 10 minutes, the script runs rex-job --sweep: it closes the ended jobs that no live
 -- block uses, also when a worker went away with no dispatch.sh close (the user closed its
--- tab). A sweep costs about 0.6 s of CPU, so not more often.
+-- tab). A sweep costs about 0.6 s of CPU, so not more often. It also runs dispatch.sh
+-- sweep: it stops the dev servers of a worktree with no worker, and tells the orchestrator
+-- when the swap or the RAM is low.
 local dispatch = rex.args.dispatch
 local own = rex.args.session
 local outbox = rex.args.outbox
@@ -57,7 +59,9 @@ if outbox then
   end)
 end
 
--- In the background: the sweep can wait for the lock of rex-resource.
+-- In the background: the sweep can wait for the lock of rex-resource. dispatch.sh sweep
+-- stops the dev servers of the worktrees with no worker and tells a low swap or RAM.
 rex.every(600, function()
   rex.exec({ "sh", "-c", 'f="$HOME/.bin/rex-job"; [ -x "$f" ] || exit 0; ("$f" --sweep >/dev/null 2>&1 </dev/null &)' })
+  rex.exec({ "sh", "-c", '("$0" sweep "$1" >/dev/null 2>&1 </dev/null &)', dispatch, own })
 end)

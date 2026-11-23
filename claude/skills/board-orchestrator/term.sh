@@ -252,10 +252,37 @@ _rex_watcher_args() {
   printf '%s\n' "$args"
 }
 
-# rex_queues SESSION: exit 0 when the live watcher of SESSION delivers the queue. An
-# older watcher has no outbox argument.
+# board_socket: the path of the socket of the board service.
+board_socket() {
+  local dir=${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}
+  printf '%s\n' "${BOARD_SOCKET:-${dir%/}/board.sock}"
+}
+
+# board_mailbox SESSION: exit 0 when the board service runs the mailbox of SESSION. The
+# service delivers the outbox and makes the worker notices then. A missing socket, a
+# refused connect, a close with no line, or a time-out (1 s) gives exit 1.
+board_mailbox() {
+  local req reply
+  req=$(jq -cn --arg s "$1" '{v:1, mailbox:$s}') || return 1
+  reply=$(perl -MIO::Socket::UNIX -e '
+    my ($path, $req) = @ARGV;
+    $SIG{ALRM} = sub { exit 1 };
+    alarm 1;
+    my $s = IO::Socket::UNIX->new(Peer => $path, Timeout => 1) or exit 1;
+    $s->timeout(1);
+    print $s "$req\n";
+    my $line = <$s>;
+    exit 1 unless defined $line;
+    print $line;
+  ' "$(board_socket)" "$req" 2>/dev/null) || return 1
+  jq -e '.mailbox == true' <<<"$reply" >/dev/null 2>&1
+}
+
+# rex_queues SESSION: exit 0 when the board service runs the mailbox of SESSION, or the
+# live watcher of SESSION delivers the queue. An older watcher has no outbox argument.
 rex_queues() {
   local args
+  board_mailbox "$1" && return 0
   args=$(_rex_watcher_args "$1") || return 1
   [[ "$args" == *" outbox="* ]]
 }

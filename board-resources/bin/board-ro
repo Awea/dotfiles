@@ -3,6 +3,8 @@
 #   board-ro sql DB QUERY   run QUERY on the database DB of the board, print CSV
 #   board-ro list           print the board, its databases and its notebooks folder
 #   board-ro notebook TOPIC make a Livebook notebook for TOPIC, print its path
+#   board-ro check          check the MCP and database logins of the board, print each
+#                           failure with its fix (exit 1)
 # Exit 2: no board, an unknown database or a wrong use.
 set -euo pipefail
 here="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
@@ -10,7 +12,7 @@ here="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 source "$here/../lib.sh"
 
 usage() {
-  printf 'usage: board-ro sql DB QUERY | board-ro list | board-ro notebook TOPIC\n' >&2
+  printf 'usage: board-ro sql DB QUERY | board-ro list | board-ro notebook TOPIC | board-ro check\n' >&2
   exit 2
 }
 
@@ -18,6 +20,9 @@ die() {
   printf 'board-ro: %s\n' "$1" >&2
   exit 2
 }
+
+# A read-only transaction with a timeout, for each query.
+PG_RO_OPTIONS='-c default_transaction_read_only=on -c statement_timeout=30s'
 
 board=""
 need_board() {
@@ -41,8 +46,7 @@ cmd_sql() {
   [ -n "$found" ] || die "no database $db in the board $board (run board-ro list)"
   url=$(pass show "$found" | head -n 1)
   [ -n "$url" ] || die "the pass entry of $db is empty"
-  PGOPTIONS='-c default_transaction_read_only=on -c statement_timeout=30s' \
-    psql -X --csv -v ON_ERROR_STOP=1 -d "$url" -c "$query"
+  PGOPTIONS=$PG_RO_OPTIONS psql -X --csv -v ON_ERROR_STOP=1 -d "$url" -c "$query"
 }
 
 cmd_list() {
@@ -71,6 +75,112 @@ cmd_notebook() {
   printf '%s\n' "$file"
 }
 
+# mcp_fix NAME STATUS CONFIG: the fix of the MCP server NAME with STATUS. CONFIG is the
+# JSON of the server.
+mcp_fix() {
+  local name=$1 status=$2 config=$3
+  case $status in
+    "Needs authentication"*)
+      printf 'run /mcp in this pane, pick %s, and log in.\n' "$name" ;;
+    *)
+      if jq -e '[.command // "", (.args // [])[]] | join(" ") | test("\\bbao ")' <<<"$config" >/dev/null 2>&1; then
+        printf 'its token comes from bao: run bao login, then run /mcp in this pane, pick %s, and reconnect.\n' "$name"
+      else
+        printf 'run /mcp in this pane, pick %s, and reconnect.\n' "$name"
+      fi ;;
+  esac
+}
+
+# check_mcp TMP: print a line for each MCP server of the board and the repo that does not
+# connect. Write the number of servers to TMP/mcp.n.
+check_mcp() {
+  local tmp=$1 dir="$1/mcp" f top names name line list status code=0
+  local timeout=${BOARD_CHECK_TIMEOUT:-20}
+  local -a files=()
+  echo 0 >"$tmp/mcp.n"
+  if f=$(board_file "$board" mcp.json); then files+=("$f"); fi
+  top=$(git rev-parse --show-toplevel 2>/dev/null) || top=$PWD
+  [ ! -f "$top/.mcp.json" ] || files+=("$top/.mcp.json")
+  [ ${#files[@]} -gt 0 ] || return 0
+  mkdir -p "$dir"
+  if ! jq -s '{mcpServers: (map(.mcpServers // {}) | add // {})}' "${files[@]}" >"$dir/.mcp.json" 2>/dev/null; then
+    printf 'mcp: a config is not valid JSON. Fix: check %s.\n' "${files[*]}"
+    return 0
+  fi
+  names=$(jq -r '.mcpServers | keys[]' "$dir/.mcp.json")
+  [ -n "$names" ] || return 0
+  printf '%s\n' "$names" | wc -l | tr -d ' ' >"$tmp/mcp.n"
+  # In the scratch folder, the merged servers are project servers: approve them all.
+  list=$(cd "$dir" && export BOARD_RESOURCES_OFF=1 && with_timeout "$timeout" \
+    claude --settings '{"enableAllProjectMcpServers":true}' mcp list 2>&1 </dev/null) || code=$?
+  if [ "$code" -eq 124 ]; then
+    printf 'mcp: the check did not end in %s s. Fix: run /mcp in this pane to see each server.\n' "$timeout"
+    return 0
+  fi
+  while IFS= read -r name; do
+    status=""
+    while IFS= read -r line; do
+      # A literal prefix, not a pattern: a name can hold * or [.
+      [ "${line:0:${#name}+2}" = "$name: " ] || continue
+      status=$(printf '%s\n' "$line" | sed -E 's/.* - (✔|!|✘|⏸) /\1 /')
+      break
+    done <<<"$list"
+    case $status in
+      "✔ "*) ;;
+      "")
+        printf 'mcp %s: not in the list. Fix: run /mcp in this pane to see its state.\n' "$name" ;;
+      *)
+        status=${status#* }
+        status=${status%.}
+        printf 'mcp %s: %s. Fix: %s\n' "$name" "$status" \
+          "$(mcp_fix "$name" "$status" "$(jq -c --arg n "$name" '.mcpServers[$n]' "$dir/.mcp.json")")" ;;
+    esac
+  done <<<"$names"
+}
+
+# check_dbs TMP: print a line for each database of the board whose login fails. Write the
+# number of databases to TMP/db.n.
+check_dbs() {
+  local tmp=$1 n=0 name entry url err
+  while read -r name entry _ <&3; do
+    n=$((n + 1))
+    # No pinentry: a locked gpg agent fails at once.
+    if ! url=$(PASSWORD_STORE_GPG_OPTS='--pinentry-mode error' pass show "$entry" 2>"$tmp/db.err" </dev/null | head -n 1) \
+      || [ -z "$url" ]; then
+      err=$(grep -v '^[[:space:]]*$' "$tmp/db.err" | head -n 1) || true
+      err=${err%.}
+      printf 'db %s: %s. Fix: run gpg-unlock, or add the pass entry %s.\n' "$name" "${err:-the pass entry is empty}" "$entry"
+      continue
+    fi
+    if ! PGCONNECT_TIMEOUT=5 PGOPTIONS=$PG_RO_OPTIONS \
+      psql -X --csv -v ON_ERROR_STOP=1 -d "$url" -c 'select 1' >/dev/null 2>"$tmp/db.err" </dev/null; then
+      err=$(grep -v '^[[:space:]]*$' "$tmp/db.err" | head -n 1) || true
+      err=${err%.}
+      printf 'db %s: %s. Fix: renew the read-only login in the pass entry %s.\n' "$name" "${err:-psql failed}" "$entry"
+    fi
+  done 3< <(databases)
+  echo "$n" >"$tmp/db.n"
+}
+
+cmd_check() {
+  [ $# -eq 0 ] || usage
+  local tmp nm nd
+  need_board
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/board-check.XXXXXX")
+  # shellcheck disable=SC2064 # Expand tmp now.
+  trap "rm -rf '$tmp'" EXIT
+  check_mcp "$tmp" >"$tmp/mcp.out" 2>&1 &
+  check_dbs "$tmp" >"$tmp/db.out" 2>&1 &
+  wait
+  if [ -s "$tmp/mcp.out" ] || [ -s "$tmp/db.out" ]; then
+    cat "$tmp/mcp.out" "$tmp/db.out"
+    exit 1
+  fi
+  nm=$(cat "$tmp/mcp.n" 2>/dev/null) || nm='?'
+  nd=$(cat "$tmp/db.n" 2>/dev/null) || nd='?'
+  printf 'board-ro check: all logins work (%s MCP servers, %s databases)\n' "$nm" "$nd"
+}
+
 [ $# -ge 1 ] || usage
 cmd=$1
 shift
@@ -78,5 +188,6 @@ case $cmd in
   sql) cmd_sql "$@" ;;
   list) cmd_list "$@" ;;
   notebook) cmd_notebook "$@" ;;
+  check) cmd_check "$@" ;;
   *) usage ;;
 esac

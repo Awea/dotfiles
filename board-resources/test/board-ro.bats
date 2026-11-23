@@ -116,3 +116,149 @@ setup() {
   [ "$status" -eq 2 ]
   [[ "$output" == *"usage"* ]]
 }
+
+# board_mcp JSON: the mcpServers object of the board alpha.
+board_mcp() { printf '{"mcpServers":%s}\n' "$1" >"$BOARD_RESOURCES_HOME/alpha/mcp.json"; }
+
+# mcp_list LINE...: the output of the fake "claude mcp list".
+mcp_list() {
+  export FAKE_MCP_LIST="$BATS_TEST_TMPDIR/mcp-list"
+  printf 'Checking MCP server health…\n\n' >"$FAKE_MCP_LIST"
+  printf '%s\n' "$@" >>"$FAKE_MCP_LIST"
+}
+
+HTTP_A='{"aiven":{"type":"http","url":"https://a.test/mcp"}}'
+
+@test "check passes when each MCP server connects and each database answers" {
+  cd "$HOME/ws/alpha/db1"
+  board_mcp "$HTTP_A"
+  mcp_list 'aiven: https://a.test/mcp (HTTP) - ✔ Connected'
+  run board-ro check
+  [ "$status" -eq 0 ]
+  [ "$output" = "board-ro check: all logins work (1 MCP servers, 1 databases)" ]
+}
+
+@test "check reports an MCP server that needs authentication" {
+  cd "$HOME/ws/alpha/db1"
+  board_mcp "$HTTP_A"
+  mcp_list 'aiven: https://a.test/mcp (HTTP) - ! Needs authentication'
+  run board-ro check
+  [ "$status" -eq 1 ]
+  [ "$output" = "mcp aiven: Needs authentication. Fix: run /mcp in this pane, pick aiven, and log in." ]
+}
+
+@test "check merges the board mcp.json and the repo .mcp.json" {
+  cd "$HOME/ws/alpha/db1"
+  git init -q .
+  mkdir sub && cd sub
+  board_mcp "$HTTP_A"
+  printf '{"mcpServers":{"forgejo":{"command":"forgejo-mcp"}}}\n' >"$HOME/ws/alpha/db1/.mcp.json"
+  mcp_list 'aiven: https://a.test/mcp (HTTP) - ✔ Connected' 'forgejo: forgejo-mcp - ✔ Connected'
+  run board-ro check
+  [ "$status" -eq 0 ]
+  grep '^mcp.json ' "$FAKE_LOG" | sed 's/^mcp.json //' | jq -e '.mcpServers | keys == ["aiven","forgejo"]'
+}
+
+@test "check approves the scratch servers and runs the real claude" {
+  cd "$HOME/ws/alpha/db1"
+  board_mcp "$HTTP_A"
+  mcp_list 'aiven: https://a.test/mcp (HTTP) - ✔ Connected'
+  run board-ro check
+  [ "$status" -eq 0 ]
+  [ "$(grep -A1 -x -- --settings "$FAKE_LOG" | tail -1)" = '{"enableAllProjectMcpServers":true}' ]
+  grep -qx mcp "$FAKE_LOG"
+  grep -qx list "$FAKE_LOG"
+  ! grep -q -- '--mcp-config' "$FAKE_LOG"
+}
+
+@test "check ignores the servers of other scopes" {
+  cd "$HOME/ws/alpha/db1"
+  board_mcp "$HTTP_A"
+  mcp_list 'superlogical: https://s.test (HTTP) - ✘ Failed to connect' \
+    'aiven: https://a.test/mcp (HTTP) - ✔ Connected'
+  run board-ro check
+  [ "$status" -eq 0 ]
+  [[ "$output" != *superlogical* ]]
+}
+
+@test "check reports a merged server that is not in the list" {
+  cd "$HOME/ws/alpha/db1"
+  board_mcp '{"aiven":{"type":"http","url":"https://a.test/mcp"},"forgejo":{"command":"f"}}'
+  mcp_list 'aiven: https://a.test/mcp (HTTP) - ✔ Connected'
+  run board-ro check
+  [ "$status" -eq 1 ]
+  [[ "$output" == "mcp forgejo: not in the list. Fix: "* ]]
+}
+
+@test "check matches the server name exactly" {
+  cd "$HOME/ws/alpha/db1"
+  board_mcp '{"a.b":{"command":"x"},"axb":{"command":"y"}}'
+  mcp_list 'axb: y - ✘ Failed to connect' 'a.b: x - ✔ Connected'
+  run board-ro check
+  [ "$status" -eq 1 ]
+  [[ "$output" == "mcp axb: Failed to connect. Fix: "* ]]
+  [[ "$output" != *"mcp a.b"* ]]
+}
+
+@test "check gives the bao hint for a failed server that reads bao" {
+  cd "$HOME/ws/alpha/db1"
+  board_mcp '{"forgejo":{"command":"sh","args":["-c","T=$(bao kv get -field=token x) && exec f"]}}'
+  mcp_list 'forgejo: sh -c T=... - ✘ Failed to connect'
+  run board-ro check
+  [ "$status" -eq 1 ]
+  [[ "$output" == "mcp forgejo: Failed to connect. Fix: "* ]]
+  [[ "$output" == *"bao login"* ]]
+  [[ "$output" == *"/mcp"* ]]
+}
+
+@test "check reports an MCP check that does not end" {
+  cd "$HOME/ws/alpha/db1"
+  board_mcp "$HTTP_A"
+  mcp_list 'aiven: https://a.test/mcp (HTTP) - ✔ Connected'
+  start=$SECONDS
+  FAKE_CLAUDE_SLEEP=5 BOARD_CHECK_TIMEOUT=1 run board-ro check
+  [ "$status" -eq 1 ]
+  [[ "$output" == "mcp: the check did not end in 1 s."* ]]
+  [ $((SECONDS - start)) -lt 4 ]
+}
+
+@test "check with no MCP servers runs no claude" {
+  cd "$HOME/ws/alpha/db1"
+  mcp_list
+  run board-ro check
+  [ "$status" -eq 0 ]
+  [ "$output" = "board-ro check: all logins work (0 MCP servers, 1 databases)" ]
+  ! grep -qx mcp "$FAKE_LOG"
+}
+
+@test "check reports a database whose login fails" {
+  cd "$HOME/ws/alpha/db1"
+  FAKE_PSQL_FAIL=1 run board-ro check
+  [ "$status" -eq 1 ]
+  [[ "$output" == "db db1: ERROR:  cannot execute"* ]]
+  [[ "$output" == *"alpha/db-readonly/db1"* ]]
+  [[ "$output" != *"postgres://"* ]]
+  grep -q -- '-c select 1' "$FAKE_LOG"
+}
+
+@test "check runs pass with no pinentry" {
+  cd "$HOME/ws/alpha/db1"
+  run board-ro check
+  grep -qx 'PASSWORD_STORE_GPG_OPTS=--pinentry-mode error' "$FAKE_LOG"
+}
+
+@test "check reports a pass entry that fails" {
+  cd "$HOME/ws/alpha/db1"
+  FAKE_PASS_FAIL=1 run board-ro check
+  [ "$status" -eq 1 ]
+  [[ "$output" == "db db1: gpg: decryption failed: No secret key. Fix: "* ]]
+  [[ "$output" == *gpg-unlock* ]]
+  [[ "$output" == *"alpha/db-readonly/db1"* ]]
+  ! grep -q '^psql' "$FAKE_LOG"
+}
+
+@test "check exits 2 outside a board" {
+  cd "$HOME"
+  run board-ro check
+  [ "$status" -eq 2 ]
+}

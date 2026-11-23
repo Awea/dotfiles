@@ -123,6 +123,8 @@
 - To read live data, run `board-ro list`. It shows the databases and the notebooks folder
   of the board of the current folder.
 - Run a read-only SQL query with `board-ro sql <db> "<query>"`. Write long output to a file.
+- When an MCP server or a database of the board fails, run `board-ro check`. It gives each
+  login that fails, with its fix, for example `/mcp` or `gpg-unlock`.
 - Run a read-only query without asking the user: SQL, an MCP read, an API read. Ask first
   only when the query is expensive, for example a full scan of a big table.
 - Use the board MCP servers (for example Cloudflare, AppSignal) for the other live data.

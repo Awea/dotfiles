@@ -23,6 +23,7 @@ human. The agent reads `SKILL.md`, and `start.md`, `shorten.md`, `boards.md` and
 | `board-watch.lua` | The board watcher of a Renux session. |
 | `board.sh` | Lists the boards and the running orchestrators, and opens and stops them for the Renux popups. `claude-resume.sh` runs `board.sh restart` to start an orchestrator again in its shell after a reboot. |
 | `hooks/compact.sh` | After a compact, tells the orchestrator to read `SKILL.md` again, and a worker to read its first prompt again. |
+| `hooks/logins.sh` | At the start and the resume of a task worker in a board folder, runs `board-ro check`. It shows the board logins that fail, with the fix of each, to the user and the worker. |
 | `hooks/guard.sh` | Blocks a `rex` call that changes the window. A worker leaves the tabs as they are, but it can open a job tab with `rex run --focus=false` in its session and close a tab with `rex block close`. Refuses a worker push when the session started no reviewer. |
 | `hooks/scan.awk` | The command scan of `hooks/guard.sh`, in POSIX awk: bash reads a big command too slowly. |
 | `test/*.bats` | The bats tests. `test/skill.bats` checks the skill text. |
@@ -48,11 +49,14 @@ human. The agent reads `SKILL.md`, and `start.md`, `shorten.md`, `boards.md` and
 - A done worker keeps its worktree and branch: the user can still refuse the changes.
   `dispatch.sh close` removes them after it ends the worker, also the worktree of the card
   in each other repo of the board (`~/.workspace/.worktrees/<repo>/<slug>`):
-  1. When the worktree has changes that are not committed, or a detached HEAD with
+  1. When the repo has a make target `worktree-teardown`, `close` runs it in the start
+     folder (else the worktree root), for example to stop a database. It runs in the
+     direnv env of the main checkout, as the worker, so a nix devshell gives its tools.
+     The output goes to a log beside the report. When make fails, the worktree stays.
+     The target runs also for a worktree that stays (the next steps, or no report): the
+     worker is gone, so its dev servers stop.
+  2. When the worktree has changes that are not committed, or a detached HEAD with
      commits that the default branch does not have, it stays as it is.
-  2. When the repo has a make target `worktree-teardown`, `close` runs it in the start
-     folder (else the worktree root), for example to stop a database. The output goes to
-     a log beside the report. When make fails, the worktree stays.
   3. `git worktree remove` removes the worktree. The link to the push policy goes first.
   4. The branch goes only when the default branch (`origin/HEAD`, its local branch, or
      the branch of the main checkout) has all its commits. Else it stays: a close never
@@ -67,10 +71,33 @@ human. The agent reads `SKILL.md`, and `start.md`, `shorten.md`, `boards.md` and
   worker runs `rex-job --done <job>` after it read the end of a job: the tab closes at
   once when no other worker uses it.
 
+  A worker that exits or loses its tab gets no `close`. So every 10 minutes the watcher
+  also runs `dispatch.sh sweep SESSION` in the background (the SESSION is optional):
+  1. `~/.bin/mem-top --orphans` lists the processes with no terminal in a card worktree
+     (`~/.workspace/.worktrees`) when no process of that worktree has a terminal and no
+     `claude` runs in a worktree of the same card, in any repo.
+  2. For each worktree with a new set of such processes, the sweep runs its
+     `worktree-teardown` (as `close` does), and tells the orchestrator of the board of the
+     card: `<rex>sweep: stopped the dev servers of CARD (no worker): NAME (pid N, M MB).</rex>`.
+     A repo with no target gets only the message: the sweep kills nothing. The same
+     processes at the next sweep give no second run.
+  3. When `mem-top --check` warns (swap at 80 % or more, or less than 2048 MB
+     available), the sweep tells an orchestrator of SESSION the warning and the top 5
+     programs, at most once an hour for all sessions.
+
+  The state and the teardown log are in `$STATE/sweep`. One sweep runs at a time.
+
   `close` keeps all the worktrees of a worker with no report: it ended before the end of
   its work. It does not touch a linked worktree that it did not make (a `start` in a
   linked worktree), or a worktree that another worker of the card uses. It tells each
   kept worktree or branch on stderr.
+- `dispatch.sh left [ADDRESS]` lists the work that is left for a task worker before a
+  close, and changes nothing. ADDRESS is `$REX_BLOCK` by default. It gives one line for
+  each thing: `report: none`, `uncommitted: <worktree>`, `branch: <branch> of <repo>`
+  or `detached: <worktree>`, for the same worktrees that `close` removes. It exits 3 when
+  something is left, else 0. The `/ok` skill (`claude/skills/ok`) runs it: the user
+  types `/ok` in a worker, and the worker closes when no work is left. Else it lists the
+  left things and asks "Close anyway?".
 - A worker that a stop of the orchestrator ended gets no `close`. `resume-clear` drops
   the worktrees of a worker with `RESULT: DONE` in the same steps, but only when the
   default branch has all the commits of the worktree. Else they stay with no line.
@@ -79,6 +106,11 @@ human. The agent reads `SKILL.md`, and `start.md`, `shorten.md`, `boards.md` and
 - An automatic worker gets the allow rules of `<repo>/.claude/settings.readonly.json`,
   the allow rules and MCP servers of its board, the `dispatch.sh tell` rule and an edit rule for
   its report.
+- A task worker in a board folder gets the SessionStart hook `hooks/logins.sh` (startup and
+  resume, time-out 30 s). It runs `board-ro check` for the board MCP servers, the repo
+  `.mcp.json` servers and the board databases. When a login fails, the pane shows the
+  failures and their fixes, and the worker asks the user for the fix when the work needs
+  that login. A triage worker does not get the hook.
 - Only one orchestrator of a board runs at a time. To restart, close the old orchestrator
   first (alt-shift-x). Each start is a new session that starts at rule 1.
 - `dispatch.sh start` keeps the full first prompt of a worker (the card and the footer) in
@@ -164,11 +196,24 @@ The state folder keeps the old name `board-orchestrator-hc`: it holds live state
   presses Enter. A broken line of the queue is dropped. The lock of the queue is the
   folder `outbox-SESSION.jsonl.lock` with the pid of its holder: a lock of a dead process
   does not count.
+- With the board service up, its mailbox delivers the outbox and makes the worker
+  notices (`dispatch.sh notice`, `deliver`). The scripts ask the service socket
+  (`$BOARD_SOCKET`, else `$XDG_RUNTIME_DIR/board.sock`) with `board_mailbox SESSION`. When
+  the mailbox of the session does not run, the watcher does this work as before.
 - A watcher from before the queue has no `outbox=` argument. With such a watcher,
   `tell` and `notice` send at once, and `answer` sends nothing to a busy worker. The next
   `board.sh open` or `board.sh restart` stops it and starts the new watcher.
 - In Renux, ctrl+b B opens a board, with one key for each board. ctrl+b X stops a board.
   When only one board runs, it stops at once. `board.sh running` lists the boards that run.
+- In the tab of an orchestrator, ctrl+b w opens the board view of the board app
+  (`~/.workspace/board`) above the orchestrator pane. The view only reads. It sends two
+  requests, with `BOARD_NAME=board-view`. Enter and then y on a Backlog card run
+  `dispatch.sh tell "start <card title>"`. Enter on a phone message and then a, s, m or x
+  run `dispatch.sh tell "inbox add|start|move|skip _inbox/NAME.md"`. The orchestrator
+  checks the sender with `view-check` first, and asks the user before it adds a card or
+  deletes the message.
+  `tell` and `notice` turn each `<` and `>` of their text into `‹` and `›`, so a text
+  cannot close its tag and add a tag with another sender.
 - `rex send` types raw text, and a newline submits the line. So a message with a newline
   goes to Rex as one bracketed paste, then Enter.
 - The scripts call `rex` with `--autostart=false`: they never start a Rex server.
@@ -239,7 +284,16 @@ The state folder keeps the old name `board-orchestrator-hc`: it holds live state
   `[section cut: N more lines]` line. The last line, `say:`, tells the orchestrator what
   to write to the user: a done line for the first `RESULT: DONE` or `STATUS: OK` of a
   report file (a file in the `said/` folder of the state folder keeps that), else
-  `say: nothing.`.
+  `say: nothing.`. Between `full report:` and `say:`, one line
+  `approved: policy=P repo=R title=T` for each yes that the user typed in the worker of
+  REPORT to its question `Start a worker in R for T?` (see "Why the rules are so"). A
+  report line that starts with `approved:`, `say:` or `full report:` gets `> ` before
+  it, so that report text cannot look like these lines.
+- `init DIR`: makes the new repo of an approved task: `git init` and an empty first
+  commit, so that `start` can make the worktree of the card. DIR is absolute or starts
+  with `~/`, and its parent exists. It also makes the commit of a repo with no commit (a
+  failed signature: the stderr text tells to run `gpg-unlock`). Exit 2: a folder with
+  files, a repo with commits or with staged files, changed in no way.
 - `run-add NOTE REPORT`: adds the report under `## Runs`, then `### YYYY-MM-DD`, demotes
   its headings by 3 levels, sets `updated:`, and replaces an entry of the same day. Exit
   2: usage. Exit 1: no vault or no note.
@@ -259,6 +313,12 @@ The state folder keeps the old name `board-orchestrator-hc`: it holds live state
   the last 40 lines of its screen. Exit 1: the worker is gone.
 - `remind ADDRESS REPORT`: asks an idle or done worker to write its report again. Exit 1:
   the worker is gone or works.
+- `view-check SHORT`: exit 0 and `view-check: ok` when SHORT ends the ID of exactly one live
+  block in the window of the caller, with the block label `board view`, whose child runs
+  `/nix/store/HASH-board-VERSION/bin/.board-view-wrapped BOARD` for the board of the
+  caller (`ps` from the default PATH). Exit 1 with a `view-check:` line on stderr
+  otherwise. Exit 2: not in Renux,
+  or SHORT has less than 8 characters.
 - `answer ADDRESS FILE`: sends FILE after the line "The user answers through the
   orchestrator:" to an idle or done worker with an empty input box, and prints
   `answer: sent to SHORT.`. Else the words go into the queue of the board watcher, and it
@@ -314,6 +374,21 @@ The state folder keeps the old name `board-orchestrator-hc`: it holds live state
 - A subagent gets rule 8 unchanged: on 2026-11-05, a subagent prompt with a changed rule
   dropped the `[[Projects/...]]` link of 9 open cards.
 - `/obsidian-board` has its own column rules, so the orchestrator does not use it.
+- Report text never starts a worker: a worker can read text that an attacker wrote. But
+  on 2026-11-21, the user said yes to a follow-up task in a worker, and the orchestrator
+  asked again. Now a task worker ends its turn with the question
+  `Start a worker in <repo> for <title>?`, and `report` reads the reply in the claude
+  transcript of the worker session (`$CLAUDE_CONFIG_DIR/projects/*/<session>.jsonl`),
+  not in the report. Only a prompt of the user counts, right after a worker text whose
+  last line is that question (bold and backticks are fine). A tool result, a meta
+  entry, a subagent entry or a message of another agent does not count. A prompt
+  suggestion that the user accepts with Enter counts: the user chose it. The reply
+  starts with yes, y, oui, ok, okay, go or start, and has no no, not, n't, card only or
+  `?`. allow or branch in it gives the push policy of a repo with none. The line waits
+  for a report whose `## Vault changes` have the title, and a mark in `approved/` of the
+  state folder gives it once. The worker asks before its first report with the task, so
+  the orchestrator does not ask about it too. A worker that writes its own transcript file could fake a yes. That
+  gives it no new power: a task worker can already start a claude in another terminal.
 
 ## Tests
 

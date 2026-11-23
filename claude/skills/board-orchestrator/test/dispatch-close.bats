@@ -76,6 +76,21 @@ resume_clear() { run --separate-stderr bash "$SKILL_DIR/dispatch.sh" resume-clea
   grep -q "make worktree-teardown in $WT" "${REPORT%.md}-worktree-teardown.log"
 }
 
+@test "close runs the teardown in the direnv env of the main checkout" {
+  # The fake direnv logs its call, then runs the command after "exec DIR". lib.sh puts
+  # ~/.local/bin first on PATH.
+  mkdir -p "$HOME/.local/bin"
+  printf '#!/usr/bin/env bash\nprintf "direnv %%s\\n" "$*" >>"$FAKE_LOG"\nshift 2\nexec "$@"\n' >"$HOME/.local/bin/direnv"
+  chmod +x "$HOME/.local/bin/direnv"
+  start_worker
+  : >"$REPO/.envrc"
+  close
+  [ "$status" -eq 0 ]
+  [ -n "$(calls "^direnv exec $REPO make -C $WT worktree-teardown")" ]
+  [ "$(cat "$BATS_TEST_TMPDIR/teardown-ran")" = "$WT with git" ]
+  [ ! -e "$WT" ]
+}
+
 @test "close deletes the branch when the default branch has all its commits" {
   start_worker
   close
@@ -107,14 +122,14 @@ resume_clear() { run --separate-stderr bash "$SKILL_DIR/dispatch.sh" resume-clea
   ! git -C "$REPO" show-ref -q --verify refs/heads/login-fix
 }
 
-@test "close keeps a worktree with changes that are not committed, and runs no teardown" {
+@test "close keeps a worktree with changes that are not committed, and runs its teardown" {
   start_worker
   printf 'draft\n' >"$WT/draft.txt"
   close
   [ "$status" -eq 0 ]
   [ -f "$WT/draft.txt" ]
   [ -L "$WT/.claude/settings.local.json" ]
-  [ ! -e "$BATS_TEST_TMPDIR/teardown-ran" ]
+  [ "$(cat "$BATS_TEST_TMPDIR/teardown-ran")" = "$WT with git" ]
   git -C "$REPO" show-ref -q --verify refs/heads/fix-login
   [[ "$stderr" == *"kept the worktree $WT: it has changes that are not committed"* ]]
 }
@@ -141,13 +156,13 @@ resume_clear() { run --separate-stderr bash "$SKILL_DIR/dispatch.sh" resume-clea
   [ ! -e "$BATS_TEST_TMPDIR/teardown-ran" ]
 }
 
-@test "close keeps the worktree of a worker with no report" {
+@test "close keeps the worktree of a worker with no report, and runs its teardown" {
   start_worker
   rm "$REPORT"
   close
   [ "$status" -eq 0 ]
   [ -d "$WT" ]
-  [ ! -e "$BATS_TEST_TMPDIR/teardown-ran" ]
+  [ "$(cat "$BATS_TEST_TMPDIR/teardown-ran")" = "$WT with git" ]
   [[ "$stderr" == *"kept the worktree $WT: the worker wrote no report"* ]]
 }
 
@@ -276,7 +291,7 @@ other_repo_close() {
   close
   [ "$status" -eq 0 ]
   [ -d "$WT" ]
-  [ ! -e "$BATS_TEST_TMPDIR/teardown-ran" ]
+  [ "$(cat "$BATS_TEST_TMPDIR/teardown-ran")" = "$WT with git" ]
   [[ "$stderr" == *"kept the worktree $WT: its detached HEAD has commits that the default branch does not have"* ]]
 }
 
@@ -311,7 +326,7 @@ other_repo_close() {
   ! git -C "$REPO" show-ref -q --verify refs/heads/fix-login
 }
 
-@test "resume-clear keeps the worktree of a done worker with work that is not merged" {
+@test "resume-clear keeps the worktree of a done worker with work that is not merged, and runs its teardown" {
   start_worker
   git -C "$WT" commit -q --allow-empty -m work
   gone "$W"
@@ -319,7 +334,7 @@ other_repo_close() {
   [ "$status" -eq 0 ]
   [ -d "$WT" ]
   [ -z "$stderr" ]
-  [ ! -e "$BATS_TEST_TMPDIR/teardown-ran" ]
+  [ "$(cat "$BATS_TEST_TMPDIR/teardown-ran")" = "$WT with git" ]
 }
 
 @test "resume-clear keeps the worktree of a worker that is not done" {
