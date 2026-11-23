@@ -10,7 +10,7 @@ rules="$BATS_TEST_DIRNAME/../CLAUDE.md"
 }
 
 @test "the Rex block has the rex run line" {
-  grep -qF 'rex run -s "$REX_SESSION" --focus=false --keep-open --interactive --label <n> --cwd <dir> --json -- ~/.bin/when-free <cmd>' "$rules"
+  grep -qF 'rex run -s "$REX_SESSION" --focus=false --keep-open --interactive --label <n> --cwd <dir> --json -- ~/.bin/rex-starter "$REX_BLOCK" ~/.bin/when-free <cmd>' "$rules"
 }
 
 @test "the Rex block has the rex wait line" {

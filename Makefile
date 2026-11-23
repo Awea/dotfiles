@@ -23,7 +23,7 @@ endif
 
 ## Create symbolic links for files/folders with a .symlink suffix
 .PHONY: links
-links: $(symlink_paths) $(sublime_links) antibody/zsh_plugins.sh $(HOME)/.config/direnv $(HOME)/.config/nix config/nix/os.conf $(HOME)/.config/zed/settings.json $(HOME)/.config/zed/keymap.json $(HOME)/.config/fresh/config.json $(HOME)/.config/fresh/themes/herdr-graphite.json $(HOME)/.config/leaf/config.toml $(HOME)/.claude/CLAUDE.md $(HOME)/.claude/rules/elixir.md $(HOME)/.claude/settings.json $(HOME)/.claude/statusline.sh $(HOME)/.claude/agents/reviewer.md $(HOME)/.claude/hooks/plugin-skill-overrides.sh $(HOME)/.claude/hooks/when-free-guard.py $(HOME)/.claude/hooks/review-agent-type.sh $(HOME)/.config/ghostty/config.ghostty $(HOME)/.config/ghostty/os.ghostty $(HOME)/.claude/skills/handoff $(HOME)/.claude/skills/ste-writing $(HOME)/.claude/skills/writing-for-agents $(HOME)/.claude/skills/retro $(HOME)/.claude/skills/grilling $(HOME)/.claude/skills/domain-modeling $(HOME)/.claude/skills/prototype $(HOME)/.claude/skills/project-tool-check $(HOME)/.claude/skills/board-orchestrator
+links: $(symlink_paths) $(sublime_links) antibody/zsh_plugins.sh $(HOME)/.config/direnv $(HOME)/.config/nix config/nix/os.conf $(HOME)/.config/zed/settings.json $(HOME)/.config/zed/keymap.json $(HOME)/.config/fresh/config.json $(HOME)/.config/fresh/themes/herdr-graphite.json $(HOME)/.config/leaf/config.toml $(HOME)/.claude/CLAUDE.md $(HOME)/.claude/rules/elixir.md $(HOME)/.claude/settings.json $(HOME)/.claude/statusline.sh $(HOME)/.claude/agents/reviewer.md $(HOME)/.claude/hooks/plugin-skill-overrides.sh $(HOME)/.claude/hooks/when-free-guard.py $(HOME)/.claude/hooks/review-agent-type.sh $(HOME)/.claude/hooks/plugin-file-overrides.sh $(HOME)/.claude/plugin-overrides $(HOME)/.config/ghostty/config.ghostty $(HOME)/.config/ghostty/os.ghostty $(HOME)/.claude/skills/handoff $(HOME)/.claude/skills/ste-writing $(HOME)/.claude/skills/writing-for-agents $(HOME)/.claude/skills/retro $(HOME)/.claude/skills/grilling $(HOME)/.claude/skills/domain-modeling $(HOME)/.claude/skills/prototype $(HOME)/.claude/skills/project-tool-check $(HOME)/.claude/skills/board-orchestrator $(HOME)/.claude/skills/ok
 
 # Create all symlink
 # Documentation: https://www.gnu.org/software/make/manual/html_node/Automatic-Variables.html#Automatic-Variables
@@ -121,6 +121,16 @@ $(HOME)/.claude/hooks/review-agent-type.sh:
 	@mkdir -p $(dir $@)
 	ln -s $(PWD)/claude/hooks/review-agent-type.sh $@
 
+# A SessionStart hook: copy our own versions of plugin files over the plugin cache
+$(HOME)/.claude/hooks/plugin-file-overrides.sh:
+	@mkdir -p $(dir $@)
+	ln -s $(PWD)/claude/hooks/plugin-file-overrides.sh $@
+
+# Our own versions of plugin files, read by the plugin-file-overrides hook
+$(HOME)/.claude/plugin-overrides:
+	@mkdir -p $(dir $@)
+	ln -s $(PWD)/claude/plugin-overrides $@
+
 $(HOME)/.config/ghostty/config.ghostty:
 	@mkdir -p $(dir $@)
 	ln -s $(PWD)/ghostty/config.ghostty $@
@@ -161,6 +171,10 @@ $(HOME)/.claude/skills/prototype:
 $(HOME)/.claude/skills/project-tool-check:
 	@mkdir -p $(dir $@)
 	ln -s $(PWD)/claude/skills/project-tool-check $@
+
+$(HOME)/.claude/skills/ok:
+	@mkdir -p $(dir $@)
+	ln -s $(PWD)/claude/skills/ok $@
 
 $(HOME)/.claude/skills/board-orchestrator:
 	@mkdir -p $(dir $@)

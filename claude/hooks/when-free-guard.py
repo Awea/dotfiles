@@ -78,6 +78,9 @@ def command_position(segment, i):
         j -= 1
     if j < 0 or segment[j] == "--":
         return True
+    # rex-starter BLOCK runs the words after its one argument.
+    if j >= 1 and base(segment[j - 1]) == "rex-starter":
+        return True
     # A prefix word (xargs -n1, nice -n 10, timeout 600) runs the words after its
     # options. Options and numbers after another word (grep -A 3) are its arguments.
     while j >= 0 and segment[j] != "--" and (

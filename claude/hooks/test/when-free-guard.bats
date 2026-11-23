@@ -154,3 +154,13 @@ allowed() {
   guard "grep -A 3 mix test.log"
   allowed
 }
+
+@test "refuses mix test after rex-starter in a rex run" {
+  guard 'rex run -s main --focus=false --keep-open --interactive --label t --cwd /tmp/x --json -- ~/.bin/rex-starter "$REX_BLOCK" mix test'
+  refused
+}
+
+@test "allows when-free mix test after rex-starter in a rex run" {
+  guard 'rex run -s main --focus=false --keep-open --interactive --label t --cwd /tmp/x --json -- ~/.bin/rex-starter "$REX_BLOCK" ~/.bin/when-free mix test'
+  allowed
+}

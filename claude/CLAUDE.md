@@ -3,6 +3,7 @@
 - Use a subagent only for independent work that runs in parallel, or for a wide search
   that would put many file dumps into the main context. Do a task of a few tool calls
   inline. Each subagent starts at 20k to 30k tokens before it does any work.
+  Subagent-driven execution of a plan is an exception.
 - Give each subagent one task.
 - When you start more than one subagent, wait until all of them finish. Do not write a
   summary of the results before that.
@@ -71,6 +72,9 @@
   one program: for env vars write `when-free env MIX_ENV=test mix test`, for a shell line
   `when-free bash -c '...'`. A hook refuses a heavy `mix` task (test, compile, dialyzer)
   without `when-free`.
+- When when-free warns about the swap or the RAM, or the host is slow, run
+  `~/.bin/mem-top`. It shows the programs that hold the RAM and the swap, and the dev
+  servers of the worktrees with no worker. Tell the user what holds the most.
 - Agents only read a shared database: a read-only role with a `statement_timeout`, and no
   write credentials in the environment or in a file. The project `CLAUDE.md` has a short
   schema note.
@@ -84,7 +88,8 @@
   Outside Renux, run a slow command as a background Bash call (`run_in_background`), and
   write its output to a file in the scratchpad.
 - Run a slow command (a build, a test suite, a deploy) in a tab the user can watch:
-  `rex run -s "$REX_SESSION" --focus=false --keep-open --interactive --label <n> --cwd <dir> --json -- ~/.bin/when-free <cmd>`.
+  `rex run -s "$REX_SESSION" --focus=false --keep-open --interactive --label <n> --cwd <dir> --json -- ~/.bin/rex-starter "$REX_BLOCK" ~/.bin/when-free <cmd>`.
+  rex-starter tells Renux that you started the tab: the sidebar shows it under your tab.
   It prints `{window_id, block_ids:[…]}`. Keep the block ID and use it, not the label:
   Rex does not refuse a second tab with the same label. Put the task or branch name in
   the label, for example `shop323-test`, never `fix` or `test`.
@@ -131,6 +136,25 @@
 - When you explore an idea on live data, run `board-ro notebook <topic>`. Write the
   queries and the result in that notebook, then commit it in the notebooks folder.
 
+## Keep the results small
+
+A large tool result fills the context: a forge search, a Loki read or an AppSignal log
+read gives 20 KB to 58 KB.
+
+- To find or list issues and PRs, run `~/.bin/forge-find [-s all] [-t pulls] <words>`.
+  It prints one line for each: number, state, kind and title. Use it in place of the
+  search and list tools of the forge MCP. `forge-find -i <N>` gives the state of one
+  issue or PR, for example to see if a PR is merged. Read the full issue only when you
+  need its body or its comments.
+- Read the comments of a long issue with a `limit` of 10 or less, and read the last page
+  first.
+- Loki: count the lines with `count_over_time` first. Then read with a `limit` of 20 or
+  less, and keep only the fields you need with `line_format` or `regexp`.
+- AppSignal logs: give a `limit` of 20 or less, and a time range of 1 hour or less.
+- AppSignal metrics: use a daily resolution for a range of more than 2 days. Give a `*`
+  tag only when you need a series for each value, for example for each host.
+- AppSignal `get_app_resources` gives 22 KB: read it once in a session.
+
 # Replies
 
 - In Renux, write the tab name of a job, not its block ID.
@@ -149,4 +173,14 @@
 - Write specs and plans under `docs/`, the skill default:
   `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` and
   `docs/superpowers/plans/YYYY-MM-DD-<feature>.md`.
+- At the execution handoff of a plan, pick native (inline) or subagent-driven execution
+  yourself. Do not ask the user which approach to use. When the user already gave an
+  approach, use it. Pick subagent-driven when the tasks are mostly independent and the
+  plan is long, or when a shipped mistake costs much. Else pick native. Tell the choice
+  and its reason in one sentence, and still ask the user to review the plan.
+- After native execution, the final whole-branch review of the Verification section
+  replaces the Final Review of executing-plans. Start one `reviewer` on `base..HEAD` with
+  the goal, the plan path, the Review Focus section of the plan and the `Ruling:` lines of
+  the ledger. Do not pass a `model`: its file sets it. The Fable review runs only when the
+  user asks for it.
 

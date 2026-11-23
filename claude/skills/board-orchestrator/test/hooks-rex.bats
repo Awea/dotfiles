@@ -80,6 +80,7 @@ blocked() {
 @test "guard allows a Rex worker a job tab with no focus in its session" {
   rex_worker
   for c in 'rex run -s "$REX_SESSION" --focus=false --keep-open --interactive --label t-test --cwd /tmp --json -- ~/.bin/when-free make test' \
+    'rex run -s "$REX_SESSION" --focus=false --keep-open --interactive --label t-test --cwd /tmp --json -- ~/.bin/rex-starter "$REX_BLOCK" ~/.bin/when-free make test' \
     'rex run --session $REX_SESSION --focus=false -- make' 'rex run -s rs1 --focus=false -- make' 'rex run --focus=false -- make' \
     'rex run --session=rs1 --focus=false --wait -c /tmp --shell=none -- make' 'rex run --focus=false -- make -s rs2 --split=right' \
     'rex run --session "rs1" --focus=false --cwd "$PWD" --label="x" -- make'; do
