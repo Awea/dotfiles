@@ -27,7 +27,9 @@ setup() {
   git -C "$REPO" remote set-head origin main
   repo_with_push_policy "$REPO"
   printf 'Fix the login bug.\n' >"$BATS_TEST_TMPDIR/p.md"
-  WT="$BATS_TEST_TMPDIR/repo-fix-login"
+  # The test repos are outside ~/.workspace: their worktrees go in _ext.
+  WTS="$HOME/.workspace/.worktrees/_ext$BATS_TEST_TMPDIR"
+  WT="$WTS/repo/fix-login"
   STATE="$XDG_STATE_HOME/board-orchestrator-hc"
   rex_orchestrator "$O" garden
 }
@@ -171,7 +173,9 @@ resume_clear() { run --separate-stderr bash "$SKILL_DIR/dispatch.sh" resume-clea
   git -C "$REPO" show-ref -q --verify refs/heads/mine
 }
 
-@test "close removes the worktree of the card in another repo of the board" {
+# other_repo_close WT: close removes the worktree WT of the card in another repo of the
+# board.
+other_repo_close() {
   v="$BATS_TEST_TMPDIR/vault"
   export OBSIDIAN_VAULT_PATH="$v"
   OTHER="$BATS_TEST_TMPDIR/api"
@@ -182,14 +186,52 @@ resume_clear() { run --separate-stderr bash "$SKILL_DIR/dispatch.sh" resume-clea
   printf -- '---\nrepo: %s\n---\n' "$OTHER" >"$v/Projects/api.md"
   printf -- '---\nkanban-plugin: board\n---\n\n## 📥 Backlog\n\n- [ ] 🟢 **[card] Fix login**\n\tA. [[Projects/card]]\n- [ ] 🟢 **[api] One**\n\tB. [[Projects/api]]\n' >"$v/Boards/garden.md"
   start_worker
-  git -C "$OTHER" worktree add -q -b fix-login "$OTHER-fix-login" origin/HEAD
-  git -C "$OTHER-fix-login" commit -q --allow-empty -m 'api work'
+  git -C "$OTHER" worktree add -q -b fix-login "$1" origin/HEAD
+  git -C "$1" commit -q --allow-empty -m 'api work'
   close
   [ "$status" -eq 0 ]
-  [ ! -e "$OTHER-fix-login" ]
-  [ "$(sort "$BATS_TEST_TMPDIR/teardown-ran")" = "$(printf '%s with git\n%s with git' "$OTHER-fix-login" "$WT" | sort)" ]
+  [ ! -e "$1" ]
+  [ "$(sort "$BATS_TEST_TMPDIR/teardown-ran")" = "$(printf '%s with git\n%s with git' "$1" "$WT" | sort)" ]
   git -C "$OTHER" show-ref -q --verify refs/heads/fix-login
   [[ "$stderr" == *"kept the branch fix-login of $OTHER"* ]]
+}
+
+@test "close removes the worktree of the card in another repo of the board" {
+  other_repo_close "$WTS/api/fix-login"
+}
+
+@test "close removes the worktree of the card in another repo with the old path beside the repo" {
+  other_repo_close "$BATS_TEST_TMPDIR/api-fix-login"
+}
+
+@test "close removes the worktree of a repo of a linked ~/.workspace and its empty folders" {
+  mkdir -p "$BATS_TEST_TMPDIR/ws/org"
+  ln -s "$BATS_TEST_TMPDIR/ws" "$HOME/.workspace"
+  APP="$BATS_TEST_TMPDIR/ws/org/app"
+  git clone -q "$ORIGIN" "$APP" 2>/dev/null
+  git -C "$APP" remote set-head origin main
+  repo_with_push_policy "$APP"
+  start_worker "$HOME/.workspace/org/app"
+  wt="$BATS_TEST_TMPDIR/ws/.worktrees/org/app/fix-login"
+  [ -d "$wt" ]
+  mkdir -p "$BATS_TEST_TMPDIR/ws/.worktrees/other"
+  close
+  [ "$status" -eq 0 ]
+  [ "$(cat "$BATS_TEST_TMPDIR/teardown-ran")" = "$wt with git" ]
+  [ ! -e "$BATS_TEST_TMPDIR/ws/.worktrees/org" ]
+  [ -d "$BATS_TEST_TMPDIR/ws/.worktrees/other" ]
+}
+
+@test "close removes a worktree with the old path beside the repo" {
+  old="$REPO-fix-login"
+  git -C "$REPO" worktree add -q -b fix-login "$old" origin/HEAD
+  mkdir -p "$old/.claude"
+  ln -s "$REPO/.claude/settings.local.json" "$old/.claude/settings.local.json"
+  start_worker "$old"
+  close
+  [ "$status" -eq 0 ]
+  [ "$(cat "$BATS_TEST_TMPDIR/teardown-ran")" = "$old with git" ]
+  [ ! -e "$old" ]
 }
 
 @test "close of an auto worker removes no folder" {

@@ -313,6 +313,18 @@ EOF
   [[ "$stderr" == *"card BOARD TEXT"* ]]
 }
 
+@test "board-scan card with an empty text gives the full line of each card of the open columns" {
+  # The triage worker gets the exact text of each card, to name it in a change.
+  make_board
+  run --separate-stderr bash "$PLUGIN_DIR/board-scan.sh" card main ''
+  [ "$status" -eq 0 ]
+  [ "${#lines[@]}" -eq 8 ]
+  [ "$(line 0 | jq -r .title_line)" = '- [ ] 🟢 🔁 **[alpha] Daily check** @{2000-01-01}' ]
+  [ "$(line 5 | jq -r .context_line)" = $'\tFirst line, owner: someone\n\tSecond line [[Tasks/Tilde task]] [[Projects/beta]]' ]
+  [ "$(line 2 | jq -c '[has("task"), has("repo"), .context_line]')" = '[true,true,""]' ]
+  [ "$(line 7 | jq -r .board)" = main ]
+}
+
 @test "board-scan card ends with the same summary line as cards, after a user edit" {
   make_board
   # The user removes the blank line after the Done heading in Obsidian.

@@ -5,7 +5,7 @@ bats_require_minimum_version 1.5.0
 load helper
 
 # The skill text: SKILL.md and the parts that it tells the orchestrator to read.
-parts() { printf '%s\n' "$SKILL_DIR/SKILL.md" "$SKILL_DIR/start.md" "$SKILL_DIR/shorten.md" "$SKILL_DIR/boards.md"; }
+parts() { printf '%s\n' "$SKILL_DIR/SKILL.md" "$SKILL_DIR/start.md" "$SKILL_DIR/shorten.md" "$SKILL_DIR/boards.md" "$SKILL_DIR/triage.md"; }
 
 @test "skill names only dispatch commands that exist" {
   [ -f "$SKILL_DIR/SKILL.md" ]
@@ -60,7 +60,7 @@ parts() { printf '%s\n' "$SKILL_DIR/SKILL.md" "$SKILL_DIR/start.md" "$SKILL_DIR/
 }
 
 @test "skill parts exist, and the core tells when to read each" {
-  for part in start.md shorten.md boards.md; do
+  for part in start.md shorten.md boards.md triage.md; do
     [ -f "$SKILL_DIR/$part" ]
     grep -q "~/.claude/skills/board-orchestrator/$part" "$SKILL_DIR/SKILL.md"
   done
@@ -82,7 +82,7 @@ parts() { printf '%s\n' "$SKILL_DIR/SKILL.md" "$SKILL_DIR/start.md" "$SKILL_DIR/
 }
 
 @test "the parts are not skills: no frontmatter" {
-  for part in start.md shorten.md boards.md; do
+  for part in start.md shorten.md boards.md triage.md triage-worker.md; do
     run head -1 "$SKILL_DIR/$part"
     [ "$output" != "---" ]
   done
@@ -158,4 +158,50 @@ parts() { printf '%s\n' "$SKILL_DIR/SKILL.md" "$SKILL_DIR/start.md" "$SKILL_DIR/
   # The record reads the own-card move before it picks the column.
   grep -q 'Apply it after the record, except an own-card change (below)' <<<"$flat"
   grep -q 'Before the record, look for an own-card move (rule 7.9)' <<<"$flat"
+}
+
+@test "the core points to triage.md for a request, a due check and a triage worker" {
+  flat=$(tr '\n' ' ' <"$SKILL_DIR/SKILL.md" | tr -s ' ')
+  grep -qF '`~/.claude/skills/board-orchestrator/triage.md`: the board triage. Read it when the user asks for a triage, when `triage-check` prints `due`, and on each message, `workers` line or `resumable` line of a triage worker' <<<"$flat"
+}
+
+@test "rule 6 sends each message of a triage worker to triage.md, not to rule 7" {
+  awk '/^6\. \*\*/ { on = 1 } on && /^7\. \*\*/ { exit } on' "$SKILL_DIR/SKILL.md" | tr '\n' ' ' | tr -s ' ' |
+    grep -qF 'A message of a triage worker (name `triage-<board>`) follows `triage.md`, not rule 7.'
+}
+
+@test "triage.md gives the rules T1 to T4, each with a done criterion" {
+  for n in 1 2 3 4; do
+    grep -q -E "^T$n\. \*\*" "$SKILL_DIR/triage.md" || { echo "T$n"; return 1; }
+  done
+  [ "$(grep -c '^ *Done:' "$SKILL_DIR/triage.md")" -eq 4 ]
+  for c in triage-check triage triage-apply report close; do
+    grep -q "dispatch.sh $c " "$SKILL_DIR/triage.md" || { echo "missing: $c"; return 1; }
+  done
+}
+
+@test "the orchestrator asks once before a triage apply, and the worker brief proposes only" {
+  grep -qF 'I ask: apply the vault changes of the triage of BOARD?' "$SKILL_DIR/triage.md"
+  grep -qF 'Read only: the report is the one file you write.' "$SKILL_DIR/triage-worker.md"
+  grep -qF 'The user decides.' "$SKILL_DIR/triage-worker.md"
+  grep -qF 'info string `jsonl`' "$SKILL_DIR/triage-worker.md"
+}
+
+@test "the worker brief gives each op that triage-apply takes" {
+  for op in done delete context title; do
+    grep -q "\"$op\"" "$SKILL_DIR/triage.sh" || { echo "triage.sh: $op"; return 1; }
+    grep -q "\`$op\`" "$SKILL_DIR/triage-worker.md" || { echo "brief: $op"; return 1; }
+  done
+}
+
+@test "the start of a session runs triage-check, and a triage worker line has no card" {
+  grep -q 'dispatch.sh triage-check BOARD' "$SKILL_DIR/start.md"
+  flat=$(tr '\n' ' ' <"$SKILL_DIR/start.md" | tr -s ' ')
+  grep -qF 'A line with `mode` `triage` has no card' <<<"$flat"
+}
+
+@test "T4 closes a triage worker that exits after its report, and applies a report once" {
+  flat=$(tr '\n' ' ' <"$SKILL_DIR/triage.md" | tr -s ' ')
+  grep -qF 'Exit with a report: run `dispatch.sh close <address>`. Write nothing.' <<<"$flat"
+  grep -qF 'dispatch.sh triage-apply BOARD <path> --check' <<<"$flat"
 }

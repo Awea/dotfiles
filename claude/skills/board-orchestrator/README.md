@@ -2,8 +2,8 @@
 
 The `/board-orchestrator <board>` skill runs one Kanban board of the vault. It dispatches
 worker claudes for the cards and records their reports on the board. This README is for a
-human. The agent reads `SKILL.md`, and `start.md`, `shorten.md` and `boards.md` when
-`SKILL.md` sends it there.
+human. The agent reads `SKILL.md`, and `start.md`, `shorten.md`, `boards.md` and
+`triage.md` when `SKILL.md` sends it there.
 
 ## Files
 
@@ -13,6 +13,9 @@ human. The agent reads `SKILL.md`, and `start.md`, `shorten.md` and `boards.md` 
 | `start.md` | Rules 1 to 4: the start of a session, the inbox, the resume of workers. |
 | `shorten.md` | Rule 8: shorten the long cards. |
 | `boards.md` | Send a card to the orchestrator of another board, and receive one. |
+| `triage.md` | Rules T1 to T4: offer, start and record a board triage. |
+| `triage-worker.md` | The brief of a triage worker. `dispatch.sh triage` puts it in the first prompt. The orchestrator does not read it. |
+| `triage.sh` | The triage functions of `dispatch.sh`: the card-count check, the apply of the changes, the permissions of a triage worker. |
 | `board-scan.sh` | Reads the board, the task notes, the project notes and the inbox. |
 | `dispatch.sh` | Starts, lists and closes the workers, and writes reports, runs and logs. |
 | `lib.sh` | Shared shell functions. |
@@ -31,13 +34,20 @@ human. The agent reads `SKILL.md`, and `start.md`, `shorten.md` and `boards.md` 
 - A worker has an address: its Rex block ID.
 - A task worker gets the slug of its card: its branch, worktree and agent name. When 2
   card titles give the same slug, the second card gets the slug with `-2`.
+- The worktree of a card goes in `~/.workspace/.worktrees/<repo>/<slug>`. `<repo>` is the
+  path of the repo in `~/.workspace`, for example `acme/shop`. A repo outside
+  `~/.workspace` gets `_ext` and its full path, for example `_ext/home/me/code/api`. So
+  `~/.workspace` shows only the main checkouts. `close` also removes the empty folders
+  of the repo in `.worktrees`. When the folder is in use, the
+  worktree gets `<slug>-2`. A worker that started before this layout keeps its worktree
+  beside the repo (`<repo>-<slug>`), and `close` still removes that worktree.
 - When `start` makes a new worktree and the repo has a make target `worktree-setup`, the
   worker terminal runs `worktree-setup.sh` before claude. It runs `make worktree-setup`
   in the start folder (else the worktree root) and keeps the output in a log beside the
   report. The prompt gives the worker that log. A worktree used again gets no setup.
 - A done worker keeps its worktree and branch: the user can still refuse the changes.
   `dispatch.sh close` removes them after it ends the worker, also the worktree of the card
-  in each other repo of the board (`REPO-SLUG`):
+  in each other repo of the board (`~/.workspace/.worktrees/<repo>/<slug>`):
   1. When the worktree has changes that are not committed, or a detached HEAD with
      commits that the default branch does not have, it stays as it is.
   2. When the repo has a make target `worktree-teardown`, `close` runs it in the start
@@ -52,7 +62,10 @@ human. The agent reads `SKILL.md`, and `start.md`, `shorten.md` and `boards.md` 
   `~/.bin/rex-resource` (a database in the Rex session `resources`) is not in the
   worktree: after the close, `close` runs `rex-resource --sweep` and `rex-job --sweep` in
   the background. The sweep stops and closes a shared resource that only closed blocks
-  used, and closes the ended jobs that no live block uses.
+  used, and closes the ended jobs that no live block uses. The board watcher also runs
+  `rex-job --sweep` every 10 minutes, for a worker that went away with no `close`. A
+  worker runs `rex-job --done <job>` after it read the end of a job: the tab closes at
+  once when no other worker uses it.
 
   `close` keeps all the worktrees of a worker with no report: it ended before the end of
   its work. It does not touch a linked worktree that it did not make (a `start` in a
@@ -78,6 +91,30 @@ human. The agent reads `SKILL.md`, and `start.md`, `shorten.md` and `boards.md` 
   vault task note, the card. On a conflict that changes the work, the worker asks the user.
 - `SKILL.md` keeps `disable-model-invocation: true`. It stops worker claudes from loading
   the skill and its `Bash(dispatch.sh *)` permission. `test/skill.bats` checks it.
+
+## Triage
+
+A board triage finds the open cards that are done, obsolete or stale, with a proof for
+each. The procedure comes from a first triage run of 2026-11-20. The board notes and the
+lessons of each run stay in the vault note `Knowledge/Board triage procedure.md`.
+
+- Trigger: the user asks, or `triage-check` finds more open cards than the limit at the
+  start of a session. The limit is `triage-limit: N` in the frontmatter of the board, else
+  100. After an offer or a start, the next offer comes 14 days later at the earliest
+  (`triage/<board slug>` in the state folder).
+- Worker: `dispatch.sh triage BOARD` starts one triage worker of the board, with no card
+  and no worktree, in the vault. It gets `triage-worker.md`, the board, the repos of the
+  board projects and a cards file (`board-scan.sh card BOARD ''`, beside the report). Its
+  permissions: the default mode of the user, the `gh` view and list calls and the git
+  reads allowed, and the push, the forge writes, the merge, `gh api`, `board-ro`, `ssh`,
+  `mosh` and each edit of the vault and the repos denied. The board MCP servers and rules
+  come by the board name. A deny rule wins over an allow rule of the board.
+- Decision: the worker shows the decision list, and the user decides in the worker. The
+  report has the approved changes in a `jsonl` block under `## Vault changes`.
+- Apply: the orchestrator asks once, then runs `dispatch.sh triage-apply`. The script
+  finds each card by its exact title and context lines, in an open column, so a line
+  number that moved does no harm. It writes the board once, and only when the board file
+  did not change during the run.
 
 ## Renux
 
@@ -172,6 +209,8 @@ The state folder keeps the old name `board-orchestrator-hc`: it holds live state
     Only `cards` names those headings on stderr. Exit 2 is a board error.
 - `cards BOARD`: the same lines with no card text, task path or repo, and with no null or
   false field. The Bash tool shows only 30 000 characters of an output.
+- `card BOARD ''`: the full `card` line of each card of the open columns. The triage
+  worker gets it as its cards file.
 - `prompt TASK`: the prompt block of a task note, with no fence lines. Exit 1: no prompt
   block. Exit 2: no note.
 - `inbox`: one JSON line for each phone message in `_inbox`, oldest first: `file` (for
@@ -245,6 +284,22 @@ The state folder keeps the old name `board-orchestrator-hc`: it holds live state
   FROM is the live orchestrator that sent the card: only then a `start` card starts a
   worker with no question. A file that is not one open card is skipped. Exit 1: gone.
 - `queue-clear ID`: deletes one card of the queue. Exit 1: gone. Exit 2: not a queue ID.
+- `triage-check BOARD`: `triage: due N open cards, limit L`, or
+  `triage: not due, N open cards, limit L[, last YYYY-MM-DD]`. Both exit 0. A checked card
+  is not open. Exit 2: no vault or no board.
+- `triage BOARD`: starts the triage worker of BOARD (mode `triage`, name
+  `triage-<board slug>`), and prints its address and its report path, as `start` does.
+  Exit 2: not the orchestrator of BOARD, or a triage worker of BOARD runs. Exit 1: `rex`
+  failed.
+- `triage-apply BOARD REPORT`: applies the first `jsonl` block under `## Vault changes` of
+  REPORT. Each line is `{"op", "title_line", "context_line", "new"}`, with `op` `done`
+  (to the top of `✅ Done`, in the form of the top Done card, with today), `delete`,
+  `context` (`new` is the new context text, with no tab) or `title` (`new` is the new
+  title line). It prints `triage-apply: applied N of M`, then
+  `skipped: <title line> — <reason>` for each change that it did not apply: not found,
+  found twice, changed by an earlier change, live worker, no Done column. Exit 1: the
+  board changed during the run, nothing written. Exit 2: usage, no board, no block or a
+  bad line, nothing written.
 
 ## Why the rules are so
 

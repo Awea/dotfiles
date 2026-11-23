@@ -26,7 +26,9 @@ setup() {
   git -C "$REPO" commit -q --allow-empty -m local
   repo_with_push_policy "$REPO"
   printf 'Fix the login bug.\n' >"$BATS_TEST_TMPDIR/p.md"
-  WT="$BATS_TEST_TMPDIR/repo-fix-login"
+  # The test repos are outside ~/.workspace: their worktrees go in _ext.
+  WTS="$HOME/.workspace/.worktrees/_ext$BATS_TEST_TMPDIR"
+  WT="$WTS/repo/fix-login"
   rex_orchestrator "$O" garden
 }
 
@@ -35,7 +37,7 @@ rex_args() { mapfile -d '' RUN_ARGS <"$FAKE_DIR/rex/rex-$1-${2:-1}.args"; }
 
 start() { run bash "$SKILL_DIR/dispatch.sh" start "${1:-task}" "${2:-$REPO}" "${3:-Fix login}" "$BATS_TEST_TMPDIR/p.md"; }
 
-@test "start task runs the worker in a new worktree beside the repo" {
+@test "start task runs the worker in a new worktree in ~/.workspace/.worktrees" {
   start
   [ "$status" -eq 0 ]
   rex_args window-new
@@ -43,6 +45,34 @@ start() { run bash "$SKILL_DIR/dispatch.sh" start "${1:-task}" "${2:-$REPO}" "${
   [ "$(git -C "$WT" rev-parse --abbrev-ref HEAD)" = fix-login ]
   [ "$(git -C "$WT" rev-parse HEAD)" = "$(git -C "$REPO" rev-parse origin/main)" ]
   [ "$(git -C "$WT" rev-parse --path-format=absolute --git-common-dir)" = "$REPO/.git" ]
+}
+
+@test "start task keeps the path of a repo of ~/.workspace in ~/.workspace/.worktrees" {
+  APP="$HOME/.workspace/org/app"
+  git clone -q "$ORIGIN" "$APP" 2>/dev/null
+  git -C "$APP" remote set-head origin main
+  repo_with_push_policy "$APP"
+  start task "$APP"
+  [ "$status" -eq 0 ]
+  rex_args window-new
+  [ "$(arg_after --cwd)" = "$HOME/.workspace/.worktrees/org/app/fix-login" ]
+  [ "$(git -C "$HOME/.workspace/.worktrees/org/app/fix-login" rev-parse --abbrev-ref HEAD)" = fix-login ]
+}
+
+@test "start task uses the real folder of ~/.workspace when it is a link" {
+  mkdir -p "$BATS_TEST_TMPDIR/ws"
+  ln -s "$BATS_TEST_TMPDIR/ws" "$HOME/.workspace"
+  APP="$BATS_TEST_TMPDIR/ws/app"
+  git clone -q "$ORIGIN" "$APP" 2>/dev/null
+  git -C "$APP" remote set-head origin main
+  repo_with_push_policy "$APP"
+  start task "$HOME/.workspace/app"
+  [ "$status" -eq 0 ]
+  touch "$BATS_TEST_TMPDIR/ws/.worktrees/app/fix-login/work"
+  start task "$HOME/.workspace/app"
+  [ "$status" -eq 0 ]
+  rex_args window-new 2
+  [ "$(arg_after --cwd)" = "$BATS_TEST_TMPDIR/ws/.worktrees/app/fix-login" ]
 }
 
 @test "start task links the push policy of the repo into the worktree" {
@@ -84,13 +114,13 @@ PAGE="Fix login bug in the signup page"
 @test "start task gives a card its own branch and worktree when another card has the same slug" {
   start task "$REPO" "$FORM"
   [ "$status" -eq 0 ]
-  touch "$REPO-fix-login-bug-in-the-signup/form"
+  touch "$WTS/repo/fix-login-bug-in-the-signup/form"
   start task "$REPO" "$PAGE"
   [ "$status" -eq 0 ]
   rex_args window-new 2
-  [ "$(arg_after --cwd)" = "$REPO-fix-login-bug-in-the-signup-2" ]
-  [ "$(git -C "$REPO-fix-login-bug-in-the-signup-2" rev-parse --abbrev-ref HEAD)" = fix-login-bug-in-the-signup-2 ]
-  [ ! -e "$REPO-fix-login-bug-in-the-signup-2/form" ]
+  [ "$(arg_after --cwd)" = "$WTS/repo/fix-login-bug-in-the-signup-2" ]
+  [ "$(git -C "$WTS/repo/fix-login-bug-in-the-signup-2" rev-parse --abbrev-ref HEAD)" = fix-login-bug-in-the-signup-2 ]
+  [ ! -e "$WTS/repo/fix-login-bug-in-the-signup-2/form" ]
   [ "$(arg_after -n)" = fix-login-bug-in-the-signup-2 ]
   [[ "${RUN_ARGS[-1]}" == *"\"report fix-login-bug-in-the-signup-2 $XDG_STATE_HOME/board-orchestrator-hc/fix-login-bug-in-the-signup-2-"* ]]
   [ "$(tail -n 1 "$XDG_STATE_HOME/board-orchestrator-hc/workers" | cut -f7)" = fix-login-bug-in-the-signup-2 ]
@@ -102,11 +132,11 @@ PAGE="Fix login bug in the signup page"
   start task "$REPO" "$FORM"
   [ "$status" -eq 0 ]
   rex_args window-new 3
-  [ "$(arg_after --cwd)" = "$REPO-fix-login-bug-in-the-signup" ]
+  [ "$(arg_after --cwd)" = "$WTS/repo/fix-login-bug-in-the-signup" ]
   start task "$REPO" "$PAGE"
   [ "$status" -eq 0 ]
   rex_args window-new 4
-  [ "$(arg_after --cwd)" = "$REPO-fix-login-bug-in-the-signup-2" ]
+  [ "$(arg_after --cwd)" = "$WTS/repo/fix-login-bug-in-the-signup-2" ]
 }
 
 @test "start task gives a card its slug again when its title comes in another case or with other marks" {
@@ -114,7 +144,7 @@ PAGE="Fix login bug in the signup page"
   start task "$REPO" "fix login bug in the signup form. "
   [ "$status" -eq 0 ]
   rex_args window-new 2
-  [ "$(arg_after --cwd)" = "$REPO-fix-login-bug-in-the-signup" ]
+  [ "$(arg_after --cwd)" = "$WTS/repo/fix-login-bug-in-the-signup" ]
 }
 
 @test "start task finds a slug of another card in a long cards file" {
@@ -135,7 +165,7 @@ PAGE="Fix login bug in the signup page"
   start task "$REPO" "$PAGE"
   [ "$status" -eq 0 ]
   rex_args window-new 2
-  [[ "${RUN_ARGS[-1]}" == *"worktree add -b fix-login-bug-in-the-signup-2 $OTHER-fix-login-bug-in-the-signup-2 origin/HEAD,"* ]]
+  [[ "${RUN_ARGS[-1]}" == *"worktree add -b fix-login-bug-in-the-signup-2 $WTS/api/fix-login-bug-in-the-signup-2 origin/HEAD,"* ]]
 }
 
 @test "start task takes another folder when the name is used by something else" {
@@ -224,8 +254,8 @@ board_vault() {
   rex_args window-new
   prompt=${RUN_ARGS[-1]}
   [[ "$prompt" == *"Change only the repo of your card: $REPO and its git worktrees, and the other repos of your board below. When the work needs a repo that is not in that list, do not change that repo: stop that work."* ]]
-  [[ "$prompt" == *"The other repos of your board: $OTHER (push policy ask, worktree $OTHER-fix-login)."* ]]
-  [[ "$prompt" == *"run git -C $OTHER worktree add -b fix-login $OTHER-fix-login origin/HEAD, or use that worktree when it exists."* ]]
+  [[ "$prompt" == *"The other repos of your board: $OTHER (push policy ask, worktree $WTS/api/fix-login)."* ]]
+  [[ "$prompt" == *"run git -C $OTHER worktree add -b fix-login $WTS/api/fix-login origin/HEAD, or use that worktree when it exists."* ]]
   [[ "$prompt" == *"Follow the push policy of that repo, not the policy of your card. Give the PR"* ]]
   [[ "$prompt" == *"Each push policy: allow, push and open a PR; ask, ask the user before each push and each PR; branch, run each push as one git push command"* ]]
   [[ "$prompt" == *"a push to the default branch, a PR and a PR body edit always ask; deny, missing or invalid, do not push"* ]]
@@ -242,7 +272,7 @@ board_vault() {
   start
   [ "$status" -eq 0 ]
   rex_args window-new
-  [[ "${RUN_ARGS[-1]}" == *"worktree add -b fix-login $OTHER-fix-login HEAD,"* ]]
+  [[ "${RUN_ARGS[-1]}" == *"worktree add -b fix-login $WTS/api/fix-login HEAD,"* ]]
 }
 
 @test "start task from a linked worktree does not list the card repo as another repo" {

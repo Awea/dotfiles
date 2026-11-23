@@ -14,6 +14,7 @@ bash ~/.claude/skills/board-orchestrator/dispatch.sh queue
 bash ~/.claude/skills/board-orchestrator/dispatch.sh resumable BOARD
 bash ~/.claude/skills/board-orchestrator/dispatch.sh resume BOARD SESSION
 bash ~/.claude/skills/board-orchestrator/dispatch.sh resume-clear BOARD [SESSION]
+bash ~/.claude/skills/board-orchestrator/dispatch.sh triage-check BOARD
 ```
 
 `cards` gives the lines of `card` for the full board, with no card text and no task path:
@@ -33,10 +34,13 @@ line. A card with no `project` has no repo.
       Run `dispatch.sh queue` for the cards that other boards sent. When it prints a
       line, read `~/.claude/skills/board-orchestrator/boards.md` and add the cards as its
       last section tells. Start no worker for them here.
-      Done: you have the `rules`, `cards`, `inbox` and `queue` output, and each `queue`
-      card is on the board.
-   b. **Adopt the running workers.** Run `dispatch.sh workers BOARD`. Find the card of
-      each line: match `name` on the card title, then on the report text. When nothing
+      Run `dispatch.sh triage-check BOARD`. On a `due` line, read
+      `~/.claude/skills/board-orchestrator/triage.md`: rule 4 asks its T1 question.
+      Done: you have the `rules`, `cards`, `inbox`, `queue` and `triage-check` output, and
+      each `queue` card is on the board.
+   b. **Adopt the running workers.** Run `dispatch.sh workers BOARD`. A line with `mode`
+      `triage` has no card: follow T4 of `triage.md` for it. Find the card of each other
+      line: match `name` on the card title, then on the report text. When nothing
       matches, ask the user. Then:
       - `report_exists` false: do nothing. The report comes as a message (rule 6).
       - The card shows the report (its column and the `context_line` of `card` agree with
@@ -50,7 +54,8 @@ line. A card with no `project` has no repo.
    c. **Resume the closed workers.** Run `dispatch.sh resumable BOARD`: one line for each
       worker that a stop of the orchestrator or a reboot closed. With no output, this step
       is done.
-      - Find the card of each line as step 1b does.
+      - Find the card of each line as step 1b does. A line with `mode` `triage` has no
+        card: follow T4 of `triage.md` for it.
       - A line with `report_exists` true: when the card does not show the report (the
         check of step 1b), record it with rule 7 first, as a new result. Run no `close`:
         the worker is closed already.
@@ -124,4 +129,5 @@ line. A card with no `project` has no repo.
    6. For "start", dispatch the card with rule 5 in the same turn: "start" is the yes for
       the worker.
 
-   After the lists and your question, in the same turn, shorten the long cards (rule 8).
+   After the lists, when `triage-check` printed `due`, ask the T1 question of `triage.md`.
+   After the lists and your questions, in the same turn, shorten the long cards (rule 8).

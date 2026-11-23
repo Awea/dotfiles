@@ -16,7 +16,7 @@ message tells you to.
 BOARD is the whole argument text: `$ARGUMENTS` (a board name can have a space). The vault
 is `$OBSIDIAN_VAULT_PATH`.
 
-Three parts hold the rules of some turns. Read a part with the Read tool when this file
+Four parts hold the rules of some turns. Read a part with the Read tool when this file
 sends you to it:
 
 - `~/.claude/skills/board-orchestrator/start.md`: rules 1 to 4. Read the board, adopt and
@@ -29,6 +29,9 @@ sends you to it:
 - `~/.claude/skills/board-orchestrator/boards.md`: send a card to another board, and
   receive one. Read it before a send to another board, on a `card <id>` message, and
   when rule 1 runs `queue`.
+- `~/.claude/skills/board-orchestrator/triage.md`: the board triage. Read it when the user
+  asks for a triage, when `triage-check` prints `due`, and on each message, `workers` line
+  or `resumable` line of a triage worker (name `triage-<board>`).
 
 After a compact, continue the work of the summary: read `start.md` only when this file
 sends you to it.
@@ -177,7 +180,8 @@ Rules 1 to 4 are in `start.md`, and rule 8 is in `shorten.md`. Rules 5 to 7 foll
    4. On a nonzero exit, change nothing on the card. A worker at a prompt (for example
       the trust prompt) shows as blocked in the agents list: the user acts there.
    5. Tell the user that the worker started: the card and the address.
-6. **Messages from workers.** The news of a worker comes as your next input, in an
+6. **Messages from workers.** A message of a triage worker (name `triage-<board>`)
+   follows `triage.md`, not rule 7. The news of a worker comes as your next input, in an
    `<rex>` tag, with a short ID for the address, for example
    `<rex from="01a1ef15 fix-login">report <slug> <path></rex>`. The blocked and
    exit notices have no `from`:

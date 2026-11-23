@@ -2,11 +2,13 @@
 # Tool of the board orchestrator: run a worker claude as a terminal of the orchestrator (a
 # window in Renux), talk to the workers (remind, answer, tell),
 # and the board commands that need no terminal (report, run-add, note-add, log,
-# inbox-clear, send, queue, queue-clear, policy, policy-set).
+# inbox-clear, send, queue, queue-clear, policy, policy-set, triage-check, triage-apply).
 set -euo pipefail
 here="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 # shellcheck source=lib.sh source-path=SCRIPTDIR
 source "$here/lib.sh"
+# shellcheck source=triage.sh source-path=SCRIPTDIR
+source "$here/triage.sh"
 # The board resources (board_of, board_file, board_notebooks): a worker gets the MCP
 # servers, the rules and the notebooks folder of the board of its folder.
 if [ -f "$here/../../../board-resources/lib.sh" ]; then
@@ -47,14 +49,30 @@ set_claude_args() {
   # The worker reports to the orchestrator that runs this script: dispatch.sh tell.
   local send; send=$(term_tell_rule)
   board=$(board_of "$cwd") || board=""
+  # A triage worker runs in the vault, which is in no board folder: it gets the board
+  # resources by the board name (argument 5).
+  [ "$mode" != triage ] || board=${5:-}
   if [ "$mode" = auto ]; then
     # One --settings value: the readonly settings with the plugin switch merged in.
     settings=$(jq -c --argjson off "$off" '. * $off' "$cwd/.claude/settings.readonly.json")
     [ ! -f "$cwd/.mcp.json" ] || mcp+=("$cwd/.mcp.json")
+  elif [ "$mode" = triage ]; then
+    settings=$(jq -c --argjson off "$off" '. * $off' <<<"$(triage_settings "$board" "$cwd")")
   else
     settings=$off
   fi
-  if [ -n "$board" ]; then
+  if [ -n "$board" ] && [ "$mode" = triage ]; then
+    # A triage worker reads only: it gets the deny rules of the board, not its allow
+    # rules, and only the forge servers of its MCP config (no live data, no cloud API).
+    if f=$(board_file "$board" settings.json); then
+      settings=$(merge_settings "$settings" "$(jq -c '{permissions: {deny: (.permissions.deny // [])}}' "$f")")
+    fi
+    if f=$(board_file "$board" mcp.json); then
+      local forge="${report%.md}-mcp.json"
+      jq '.mcpServers |= with_entries(select(.key | test("forgejo|gitea|github"; "i")))' "$f" >"$forge"
+      if [ "$(jq '.mcpServers | length' "$forge")" -gt 0 ]; then mcp+=("$forge"); else rm -f "$forge"; fi
+    fi
+  elif [ -n "$board" ]; then
     if f=$(board_file "$board" settings.json); then
       settings=$(merge_settings "$settings" "$(<"$f")")
     fi
@@ -68,7 +86,7 @@ set_claude_args() {
   [ ${#mcp[@]} -eq 0 ] || claude_args+=(--mcp-config "${mcp[@]}")
   # --allowedTools takes many values, so it must be the last option. A claude rule for an
   # absolute path starts with a double slash. Edit also covers Write.
-  if [ "$mode" = auto ]; then
+  if [ "$mode" = auto ] || [ "$mode" = triage ]; then
     claude_args+=(--allowedTools "Edit(/$report)" "$send")
     # After a compact, hooks/compact.sh tells the worker to read its first prompt.
     if pfile=$(prompt_path "$session"); then claude_args+=("Read(/$pfile)"); fi
@@ -132,29 +150,44 @@ main_dir() {
   fi
 }
 
+# worktrees_of TOP: the folder of the card worktrees of the main checkout TOP, in
+# ~/.workspace/.worktrees: the path of TOP in ~/.workspace (org/app for
+# ~/.workspace/org/app). A repo outside ~/.workspace gets _ext and its full path
+# (_ext/home/me/code/api), so 2 repos never share a folder. It gives the real folder of
+# a link ~/.workspace: git gives real paths, and card_worktree compares them.
+worktrees_of() {
+  local top=$1 ws
+  ws=$(cd -- "$HOME/.workspace" 2>/dev/null && pwd -P) || ws="$HOME/.workspace"
+  case $top in
+    "$ws"/*) printf '%s/.worktrees/%s\n' "$ws" "${top#"$ws"/}" ;;
+    *) printf '%s/.worktrees/_ext%s\n' "$ws" "$top" ;;
+  esac
+}
+
 # card_worktree DIR SLUG: the folder of the work of the card SLUG, the same folder as DIR
-# in a git worktree on the branch SLUG, beside the main checkout: REPO-SLUG (else
-# REPO-SLUG-2, ...). The worker claude starts there, so Renux and herdr-reviewr see
-# where it works. It uses the worktree again when it is there. A new branch starts at
-# origin/HEAD (else HEAD), with no upstream: a push never goes to the default branch. DIR
-# when DIR is not in a main git checkout. A second line "new" when it made the worktree.
-# Exit 1 when git fails.
+# in a git worktree on the branch SLUG, in the worktrees folder of the repo
+# (worktrees_of): WORKTREES/SLUG (else WORKTREES/SLUG-2, ...). The worker claude
+# starts there, so Renux and herdr-reviewr see where it works. It uses the worktree
+# again when it is there. A new branch starts at origin/HEAD (else HEAD), with no
+# upstream: a push never goes to the default branch. DIR when DIR is not in a main git
+# checkout. A second line "new" when it made the worktree. Exit 1 when git fails.
 card_worktree() {
-  local dir=$1 slug=$2 top common path base err="" n=2 rel made=""
+  local dir=$1 slug=$2 top common path base err="" n=2 rel made="" home
   if ! top=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null) || ! common=$(common_dir "$dir") ||
     [ "$common" != "$(cd -- "$top" && pwd -P)/.git" ]; then
     printf '%s\n' "$dir"
     return 0
   fi
   rel=${dir#"$top"}
-  path="$(dirname "$top")/$(basename "$top")-$slug"
+  home=$(worktrees_of "$top")
+  path="$home/$slug"
   while [ -e "$path" ]; do
     if [ "$(git -C "$path" rev-parse --show-toplevel 2>/dev/null)" = "$path" ] &&
       [ "$(common_dir "$path")" = "$common" ] &&
       [ "$(git -C "$path" rev-parse --abbrev-ref HEAD 2>/dev/null)" = "$slug" ]; then
       break
     fi
-    path="$(dirname "$top")/$(basename "$top")-$slug-$n"
+    path="$home/$slug-$n"
     n=$((n + 1))
   done
   if [ ! -e "$path" ]; then
@@ -281,6 +314,10 @@ drop_worktree() {
     printf 'dispatch: kept the worktree %s: git worktree remove failed: %s\n' "$root" "$out" >&2
     return 0
   fi
+  # git removes only the worktree folder: remove the empty folders of its repo in
+  # ~/.workspace/.worktrees too (worktrees_of), but not .worktrees itself.
+  dir=$(dirname "$root")
+  while [[ "$dir" == */.worktrees/* ]] && rmdir "$dir" 2>/dev/null; do dir=$(dirname "$dir"); done
   [ -n "$branch" ] || return 0
   if [ "$merged" != true ] && ! rev_merged "$top" "$rev"; then
     printf 'dispatch: kept the branch %s of %s: the default branch does not have all its commits.\n' "$branch" "$top" >&2
@@ -311,7 +348,9 @@ drop_card_worktrees() {
   if [ "$mode" != task ] || [ -z "$name" ] || [ ! -d "$cwd" ]; then return 0; fi
   if root=$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null); then
     top=$(dirname "$(common_dir "$root")")
-    if [[ ! "$root" =~ ^"$top-$name"(-[0-9]+)?$ ]] || worktree_used "$root"; then root=""; fi
+    # A worker that started before the worktrees folder has its worktree beside the repo.
+    if { [[ ! "$root" =~ ^"$(worktrees_of "$top")/$name"(-[0-9]+)?$ ]] &&
+      [[ ! "$root" =~ ^"$top-$name"(-[0-9]+)?$ ]]; } || worktree_used "$root"; then root=""; fi
   fi
   if [ ! -f "$report" ]; then
     [ -z "$root" ] || printf 'dispatch: kept the worktree %s: the worker wrote no report.\n' "$root" >&2
@@ -320,11 +359,12 @@ drop_card_worktrees() {
   log="${report%.md}-worktree-teardown.log"
   [ -z "$root" ] || drop_worktree "$cwd" "$log" "$only"
   while IFS= read -r t; do
-    wt="$t-$name"
-    if [ -d "$wt" ] && [ "$(git -C "$wt" rev-parse --show-toplevel 2>/dev/null)" = "$wt" ] &&
-      [ "$(common_dir "$wt")" = "$(common_dir "$t")" ] && ! worktree_used "$wt"; then
-      drop_worktree "$wt" "$log" "$only"
-    fi
+    for wt in "$(worktrees_of "$t")/$name" "$t-$name"; do
+      if [ -d "$wt" ] && [ "$(git -C "$wt" rev-parse --show-toplevel 2>/dev/null)" = "$wt" ] &&
+        [ "$(common_dir "$wt")" = "$(common_dir "$t")" ] && ! worktree_used "$wt"; then
+        drop_worktree "$wt" "$log" "$only"
+      fi
+    done
   done < <(other_tops "$board" "${top:-$cwd}")
 }
 
@@ -437,7 +477,7 @@ other_repos() {
   while IFS= read -r top; do
     base=HEAD
     git -C "$top" rev-parse -q --verify 'origin/HEAD^{commit}' >/dev/null 2>&1 && base=origin/HEAD
-    wt="$top-$slug"
+    wt="$(worktrees_of "$top")/$slug"
     items="${items:+$items; }$top (push policy $( (push_policy "$top") 2>/dev/null || echo invalid), worktree $wt)"
     cmds="${cmds:+$cmds, or }git -C $top worktree add -b $slug $wt $base"
   done < <(other_tops "$board" "$cwd")
@@ -450,6 +490,18 @@ footer() {
   local mode=$1 cwd=$2 report=$3 slug=$4 vault text others=""
   shift 4
   local win="Renux"
+  # A triage worker has no card, no repo and no push: triage-worker.md gives its report
+  # form.
+  if [ "$mode" = triage ]; then
+    text="When you finish, write your report to $report, in one Write call, as your last step. When the user answers you or asks for more work after your report, write the full report again when you finish: the new report replaces the old one. Do not change the $win window."
+    text="$text After you write the report, run: $(term_tell_cmd "report $slug $report")"
+    text="$text When the user tells you to close, run: $(term_tell_cmd "close $slug") and end your turn. The orchestrator then closes you."
+    if vault=$(vault_path); then
+      text="$text The vault is at $vault. To read it, read _CLAUDE.md first, then grep the vault and read the notes."
+    fi
+    printf '%s\n' "$text"
+    return 0
+  fi
   text="When you finish, write your report to $report. Do not merge, deploy or change production. Write the report in one Write call, as your last step. Do not edit the vault. When the user asks for a change to the board or to a task note, write it in the report under a heading ## Vault changes, one change for each item. For a new task, write only its title, its project, its priority and one context line: the orchestrator writes the card in the board format, so do not read the vault for it. For a move of your own card, write only the target column, and the new context line when the user gives one. For a change to existing text, give the note path and the exact old and new text only in the report. Do not show them in the conversation: write there only that the report has vault changes. When the user answers you or asks for more work after your report, write the full report again when you finish. The new report replaces the old one. After the first line, write a section ## Result of at most 10 lines: the result, and the PR, commit or issue links. Do not change the $win window."
   text="$text After you write the report, run: $(term_tell_cmd "report $slug $report")"
   # An auto check can use only its listed tools, so only a task worker gets this.
@@ -463,7 +515,7 @@ footer() {
   # in the Rex session "jobs": the name finds the job, and
   # an ended job stays while a live worker uses it, so a second worker reads its result.
   if [ "$mode" = task ]; then
-    text="$text Run a long job (a wait for a deploy, a build) as a shared job, so that other workers can use the same job. Name the job after what it does, not after your card, for example deploy-web-4fb7f80. Run ~/.bin/rex-job <job> <dir> -- <command>. It starts the job, or gives the job that another worker started: its JSON tells the block, the session, started, ended and exit_code. To use a job, run rex wait -s <session> <block> --for 3600s --json as a background Bash call, end your turn with \"I wait for <job>.\", then read the end of the job with rex capture -s <session> -b <block> --trim | tail -40. A time-out gives the error \"wait timed out\": wait again. An ended job stays: run rex-job --again <job> <dir> -- <command> only to start it again. Do not close a shared job: another worker can still use it. rex-job closes an ended job when no live worker uses it."
+    text="$text Run a long job (a wait for a deploy, a build) as a shared job, so that other workers can use the same job. Name the job after what it does, not after your card, for example deploy-web-4fb7f80. Run ~/.bin/rex-job <job> <dir> -- <command>. It starts the job, or gives the job that another worker started: its JSON tells the block, the session, started, ended and exit_code. To use a job, run rex wait -s <session> <block> --for 3600s --json as a background Bash call, end your turn with \"I wait for <job>.\", then read the end of the job with rex capture -s <session> -b <block> --trim | tail -40. A time-out gives the error \"wait timed out\": wait again. When the job ended and you read its end, run ~/.bin/rex-job --done <job>: the tab closes when no other worker uses it. An ended job stays: run rex-job --again <job> <dir> -- <command> only to start it again. Do not close a shared job: another worker can still use it. rex-job closes an ended job when no live worker uses it, at each call and every 10 minutes."
   fi
   # A worker has no obsidian plugin (set_claude_args), so it gets the way to read the vault.
   if vault=$(vault_path); then
@@ -509,7 +561,7 @@ run_worker() {
   local mode=$1 board=$2 cwd=$3 name=$4 session=$5 report=$6 prompt=$7 envdir
   local -a env_cmd=()
   shift 7
-  set_claude_args "$mode" "$cwd" "$report" "$session"
+  set_claude_args "$mode" "$cwd" "$report" "$session" "$board"
   # A project with an .envrc (a nix devshell) needs its tools on PATH (bao for the MCP
   # tokens): start the worker claude in that environment.
   # set_claude_args gives the board flags: the claude wrapper must not add them again.
@@ -628,6 +680,72 @@ case "${1:-}" in
   policy)
     push_policy "${2:-}"
     ;;
+  triage-check)
+    if [ -z "${2:-}" ]; then
+      printf 'usage: dispatch.sh triage-check BOARD\n' >&2
+      exit 2
+    fi
+    triage_check "$2"
+    ;;
+  triage)
+    if [ -z "${2:-}" ]; then
+      printf 'usage: dispatch.sh triage BOARD\n' >&2
+      exit 2
+    fi
+    board=$(caller_board) || exit 2
+    if [ "$board" != "$2" ]; then
+      printf 'dispatch: this is the orchestrator of %s, not of %s.\n' "$board" "$2" >&2
+      exit 2
+    fi
+    if ! vault=$(vault_path); then
+      printf 'dispatch: no vault path: set OBSIDIAN_VAULT_PATH.\n' >&2
+      exit 2
+    fi
+    vault=$(cd -- "$vault" >/dev/null && pwd -P)
+    # One triage of a board at a time.
+    if [ -f "$(workers_file)" ]; then
+      while IFS= read -r line; do
+        if live_session "$line"; then
+          printf 'dispatch: a triage worker of %s runs: %s\n' "$board" "$(cut -f1 <<<"$line")" >&2
+          exit 2
+        fi
+      done < <(awk -F '\t' -v b="$board" '$2 == "triage" && $3 == b' "$(workers_file)")
+    fi
+    slug="triage-$(board_slug "$board")"
+    report="$(state_dir)/$slug-$(date +%Y%m%d-%H%M%S)-$$-$RANDOM.md"
+    # The worker names each card of a change by its exact text: it copies it from this file.
+    cards="${report%.md}-cards.jsonl"
+    if ! bash "$here/board-scan.sh" card "$board" '' >"$cards"; then
+      rm -f "$cards"
+      exit 2
+    fi
+    repos=$(other_tops "$board" "$vault" | paste -sd ',' - | sed 's/,/, /g')
+    session=$(new_uuid)
+    prompt="$(<"$here/triage-worker.md")"$'\n\n'"Board: $board. Cards file: $cards. Repos: ${repos:-none}."
+    prompt="$prompt"$'\n\n'"$(footer triage "$vault" "$report" "$slug")"
+    pfile=$(prompt_path "$session")
+    mkdir -p "$(dirname "$pfile")"
+    printf '%s\n' "$prompt" >"$pfile"
+    if ! addr=$(run_worker triage "$board" "$vault" "$slug" "$session" "$report" "$prompt" --session-id "$session") || [ -z "$addr" ]; then
+      rm -f "$pfile" "$cards"
+      printf 'dispatch: %s did not start the worker.\n' rex >&2
+      exit 1
+    fi
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$addr" triage "$board" "$report" "$session" "$vault" "$slug" >>"$(workers_file)"
+    triage_mark "$board"
+    printf '%s\n%s\n' "$addr" "$report"
+    ;;
+  triage-apply)
+    if [ -z "${2:-}" ] || [ -z "${3:-}" ] || { [ -n "${4:-}" ] && [ "$4" != --check ]; }; then
+      printf 'usage: dispatch.sh triage-apply BOARD REPORT [--check]\n' >&2
+      exit 2
+    fi
+    if [ "${4:-}" = --check ]; then
+      if triage_applied "$3"; then echo 'triage-apply: applied already'; else echo 'triage-apply: not applied'; fi
+      exit 0
+    fi
+    triage_apply "$2" "$3"
+    ;;
   policy-set)
     cwd="${2:-}" kind="${3:-}"
     if [ "$kind" != allow ] && [ "$kind" != ask ] && [ "$kind" != branch ]; then
@@ -720,6 +838,10 @@ case "${1:-}" in
         if ($0 ~ /^## Result[ \t\r]*$/) { sec = "result"; seen = 1 }
         else if ($0 ~ /^## Vault changes[ \t\r]*$/) sec = "vault"
       }
+      # A triage report has its changes in a jsonl block: give only their count.
+      sec == "vault" && jl && /^[ \t]*```[ \t]*$/ { keep(sec, "[jsonl block: " jn " changes]"); jl = 0; next }
+      sec == "vault" && jl { if ($0 ~ /[^ \t]/) jn++; next }
+      sec == "vault" && /^[ \t]*```jsonl[ \t]*$/ { jl = 1; jn = 0; next }
       sec != "" { keep(sec, $0); next }
       NR > 1 && /^REFUSED:/ { refused = refused $0 "\n" }
       END {

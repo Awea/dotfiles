@@ -18,7 +18,8 @@
 #       Print one line with all the fields for each card whose title has TEXT (a fixed
 #       text, in any case): also the exact title and context lines, the task note path,
 #       the repo, the push policy and the read-only rule count. Then the summary line of
-#       cards. The orchestrator uses it to check one card just before an edit, and for
+#       cards. An empty TEXT ('') gives the full line of each card: the triage worker
+#       names a card by its exact text. The orchestrator uses it to check one card just before an edit, and for
 #       the text of a prompt. The summary line gives the board layout at that time,
 #       after the edits of the user.
 #   board-scan.sh prompt TASK
@@ -58,10 +59,11 @@ prompt_block() {
 
 case "${1:-}" in
   cards | card)
-    board="${2:-}" match=""
-    if [ "$1" = card ]; then
+    subcmd=$1 board="${2:-}" match=""
+    if [ "$subcmd" = card ]; then
       match="${3:-}"
-      if [ -z "$match" ]; then
+      # An empty TEXT matches each card: the triage worker gets the full text of all cards.
+      if [ $# -lt 3 ]; then
         printf 'usage: board-scan.sh card BOARD TEXT\n' >&2
         exit 2
       fi
@@ -122,7 +124,7 @@ case "${1:-}" in
       jq -cn --arg column "$column" --argjson line "$line" --arg tl "$title_line" --arg cl "$context_line" \
         --arg today "$today" --arg task "$task" --argjson task_exists "$task_exists" --arg mode "$mode" \
         --arg recurrence "$recurrence" --argjson prompt "$prompt" --arg project "$project" --arg repo "$repo" \
-        --arg policy "$policy" --arg readonly "$readonly" --arg match "$match" --argjson max "$context_max" '
+        --arg policy "$policy" --arg readonly "$readonly" --arg match "$match" --arg subcmd "$subcmd" --argjson max "$context_max" '
         def n: if . == "" then null else . end;
         def after($re): ([match($re).captures[0].string] | first // null)
           | if . == null then null else sub("^\\s+"; "") | sub("\\s+$"; "") end;
@@ -151,7 +153,7 @@ case "${1:-}" in
         | select($match == "" or ((.title // "") | ascii_downcase | contains($match | ascii_downcase)))
         # The full scan goes into the orchestrator context: keep only the fields that
         # classify a card. The repo of each project is on the summary line.
-        | if $match == "" then
+        | if $subcmd == "cards" then
             del(.title_line, .context_line, .task, .task_exists, .repo, .policy, .readonly)
             | with_entries(select(.value != null and .value != false))
           else . end'
@@ -176,7 +178,7 @@ case "${1:-}" in
         for (i = 1; i <= ncols; i++) flags = flags (blank[cols[i]] ? 1 : 0)
         printf "\x1d\x1f%d\x1f%s\x1f%s\x1f%s\x1f%d\x1f%s\x1e", done, dtitle, dctx, flags, other, heads
       }' "$file")
-    if [ -z "$match" ] && [ "${summary[4]}" -gt 0 ]; then
+    if [ "$subcmd" = cards ] && [ "${summary[4]}" -gt 0 ]; then
       printf 'board-scan: %s cards under other headings: %s\n' "${summary[4]}" "${summary[5]//$'\n'/, }" >&2
     fi
     # Project, repo, policy and read-only count for each project of the board.

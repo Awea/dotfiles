@@ -71,6 +71,7 @@ sent_text() { rex_args send "${1:-1}"; printf '%s' "${RUN_ARGS[-1]}"; }
   [[ "$prompt" == *"~/.bin/rex-job <job> <dir> -- <command>"* ]]
   [[ "$prompt" == *"rex wait -s <session> <block> --for 3600s --json"* ]]
   [[ "$prompt" == *"rex capture -s <session> -b <block> --trim | tail -40"* ]]
+  [[ "$prompt" == *'A time-out gives the error "wait timed out": wait again. When the job ended and you read its end, run ~/.bin/rex-job --done <job>'* ]]
   grep -q "^$new"$'\t' "$STATE/workers"
 }
 
@@ -464,6 +465,12 @@ notice_setup() {
 @test "the watcher sends a closed notice when a block closes" {
   grep -Eq 'rex\.on\("block_closed"' "$SKILL_DIR/board-watch.lua"
   grep -Eq 'notice\(ev\.block_id or ctx\.block_id, "closed"\)' "$SKILL_DIR/board-watch.lua"
+}
+
+@test "the watcher sweeps the ended jobs every 10 minutes" {
+  grep -Eq 'rex\.every\(600,' "$SKILL_DIR/board-watch.lua"
+  grep -Fq '.bin/rex-job"' "$SKILL_DIR/board-watch.lua"
+  grep -Fq '"$f" --sweep >/dev/null 2>&1 </dev/null &' "$SKILL_DIR/board-watch.lua"
 }
 
 @test "notice for a block with no record does nothing" {
