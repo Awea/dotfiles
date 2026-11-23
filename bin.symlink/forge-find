@@ -1,0 +1,189 @@
+#!/usr/bin/env bash
+
+# Find issues and PRs on a forge, one short line for each. A forge MCP search returns the
+# full body of each issue (10 results take about 46 KB of the context of an agent). This
+# script prints only the number, the state, the kind and the title.
+#
+#   Usage: forge-find [-R owner/repo] [-H host] [-s open|closed|all] [-t issues|pulls|all]
+#                     [-n limit] [-i number] [query...]
+#
+#   -R  the repo (default: the origin remote of the current folder)
+#   -H  the forge host (default: the host of the origin remote)
+#   -s  the state (default: open). -t  the kind (default: all). -n  the limit (default: 20).
+#   -i  print one issue or PR, for example to see if a PR is merged.
+#   query  words to find in the issues and PRs.
+#
+# The first line is the web URL of the repo. Each next line is "#N state kind title": state is
+# open, closed or merged, kind is issue or PR.
+#
+# github.com goes through `gh api` and its login. A host of FORGE_FIND_FORGEJO_HOSTS (a list
+# with spaces) is a Forgejo: the script calls its API with curl. The token is
+# FORGEJO_ACCESS_TOKEN, else the field "token" of the bao secret FORGE_FIND_BAO_PATH (default
+# secret/forgejo/api-tokens/claude) at BAO_ADDR. With no bao on PATH, the script runs bao
+# with nix. With no BAO_ADDR, bao does not run.
+#
+# The hosts are private, so the repo does not keep them. Set FORGE_FIND_FORGEJO_HOSTS,
+# BAO_ADDR and FORGE_FIND_BAO_PATH in the env, or as KEY=value lines in
+# ~/.config/forge-find/config (or $XDG_CONFIG_HOME/forge-find/config). An env var wins over
+# the file. The script reads the file as text: it does not run it.
+# Exit 1: a forge or token error. Exit 2: a usage error.
+
+set -euo pipefail
+
+say() { printf 'forge-find: %s\n' "$*" >&2; }
+usage() {
+  say "usage: forge-find [-R owner/repo] [-H host] [-s open|closed|all] [-t issues|pulls|all] [-n limit] [-i number] [query...]"
+  exit 2
+}
+
+repo='' host='' state=open kind=all limit=20 number=''
+while getopts 'R:H:s:t:n:i:h' opt; do
+  case $opt in
+    R) repo=$OPTARG ;;
+    H) host=$OPTARG ;;
+    s) state=$OPTARG ;;
+    t) kind=$OPTARG ;;
+    n) limit=$OPTARG ;;
+    i) number=$OPTARG ;;
+    *) usage ;;
+  esac
+done
+shift $((OPTIND - 1))
+query="$*"
+
+case $state in open | closed | all) ;; *) usage ;; esac
+case $kind in issues | pulls | all) ;; *) usage ;; esac
+case $limit in '' | *[!0-9]*) usage ;; esac
+case $number in *[!0-9]*) usage ;; esac
+
+# The private settings: KEY=value lines, read as text. The script trims the spaces, a CR, an
+# `export ` and one pair of quotes. The last line of a key wins, and an env var wins over all.
+config_home=${XDG_CONFIG_HOME:-${HOME:+$HOME/.config}}
+config=${config_home:+$config_home/forge-find/config}
+trim() {
+  local v=$1
+  v=${v#"${v%%[![:space:]]*}"}
+  printf '%s' "${v%"${v##*[![:space:]]}"}"
+}
+env_hosts=${FORGE_FIND_FORGEJO_HOSTS:-} env_addr=${BAO_ADDR:-} env_path=${FORGE_FIND_BAO_PATH:-}
+if [ -n "$config" ] && [ -f "$config" ]; then
+  while IFS= read -r line || [ -n "$line" ]; do
+    line=${line%$'\r'}
+    case $line in *=*) ;; *) continue ;; esac
+    key=$(trim "${line%%=*}")
+    key=$(trim "${key#export }")
+    value=$(trim "${line#*=}")
+    case $value in \"*\" | \'*\') value=${value:1:${#value}-2} ;; esac
+    case $key in
+      FORGE_FIND_FORGEJO_HOSTS) [ -n "$env_hosts" ] || FORGE_FIND_FORGEJO_HOSTS=$value ;;
+      BAO_ADDR) [ -n "$env_addr" ] || BAO_ADDR=$value ;;
+      FORGE_FIND_BAO_PATH) [ -n "$env_path" ] || FORGE_FIND_BAO_PATH=$value ;;
+    esac
+  done <"$config"
+fi
+config=${config:-~/.config/forge-find/config}
+
+# The host and the repo of the origin remote, in the three URL forms:
+# ssh://user@host:port/owner/repo.git, user@host:owner/repo.git and https://host/owner/repo.
+if [ -z "$repo" ] || [ -z "$host" ]; then
+  url=$(git remote get-url origin 2>/dev/null || true)
+  url=${url%/}
+  url=${url%.git}
+  case $url in
+    *://*)
+      rest=${url#*://}
+      rest=${rest#*@}
+      origin_host=${rest%%/*}
+      origin_host=${origin_host%%:*}
+      origin_repo=${rest#*/}
+      ;;
+    *:*)
+      rest=${url#*@}
+      origin_host=${rest%%:*}
+      origin_repo=${rest#*:}
+      ;;
+    *) origin_host='' origin_repo='' ;;
+  esac
+  repo=${repo:-$origin_repo}
+  host=${host:-$origin_host}
+fi
+if [ -z "$repo" ] || [ -z "$host" ]; then
+  say "no origin remote here: give -R owner/repo and -H host"
+  exit 2
+fi
+
+# One line for each issue: a list, a search result ({items: [...]}) or one issue.
+# shellcheck disable=SC2016 # A jq filter, not a shell string.
+format='(if type == "array" then .[] elif has("items") then .items[] else . end)
+  | (if .pull_request == null then "issue" else "PR" end) as $kind
+  | (if .pull_request.merged == true or .pull_request.merged_at != null then "merged"
+     else .state end) as $state
+  | "#\(.number) \($state) \($kind) \(.title | gsub("[[:cntrl:]]"; " "))"'
+
+uri() { jq -rn --arg v "$1" '$v | @uri'; }
+
+if [ "$host" = github.com ]; then
+  printf 'https://github.com/%s\n' "$repo"
+  if [ -n "$number" ]; then
+    args=("repos/$repo/issues/$number")
+  else
+    q="repo:$repo"
+    case $kind in issues) q="$q is:issue" ;; pulls) q="$q is:pr" ;; esac
+    [ "$state" = all ] || q="$q state:$state"
+    [ -z "$query" ] || q="$q $query"
+    args=(-X GET search/issues -f "q=$q" -f "per_page=$limit")
+  fi
+  body=$(gh api "${args[@]}" </dev/null) || exit 1
+  jq -r "$format" <<<"$body"
+  exit 0
+fi
+
+# The token goes only to a known Forgejo host: an origin on another forge (GitLab, a plain
+# ssh host) must not get it.
+case " ${FORGE_FIND_FORGEJO_HOSTS:-} " in
+  *" $host "*) ;;
+  *)
+    say "$host is not a known Forgejo host: add it to FORGE_FIND_FORGEJO_HOSTS, in the env or in $config"
+    exit 2
+    ;;
+esac
+
+token=${FORGEJO_ACCESS_TOKEN:-}
+if [ -z "$token" ] && [ -n "${BAO_ADDR:-}" ]; then
+  export BAO_ADDR
+  bao_args=(kv get -field=token "${FORGE_FIND_BAO_PATH:-secret/forgejo/api-tokens/claude}")
+  if command -v bao >/dev/null; then
+    token=$(bao "${bao_args[@]}" </dev/null) || true
+  elif command -v nix >/dev/null; then
+    token=$(nix run nixpkgs#openbao -- "${bao_args[@]}" </dev/null) || true
+  fi
+fi
+if [ -z "$token" ]; then
+  if [ -n "${BAO_ADDR:-}" ]; then
+    say "no Forgejo token: set FORGEJO_ACCESS_TOKEN, or log in to bao at $BAO_ADDR"
+  else
+    say "no Forgejo token: set FORGEJO_ACCESS_TOKEN, or set BAO_ADDR (in the env or in $config) and log in to bao"
+  fi
+  exit 1
+fi
+
+api="https://$host/api/v1/repos/$repo/issues"
+if [ -n "$number" ]; then
+  api="$api/$number"
+else
+  api="$api?state=$state&limit=$limit"
+  [ "$kind" = all ] || api="$api&type=$kind"
+  [ -z "$query" ] || api="$api&q=$(uri "$query")"
+fi
+
+printf 'https://%s/%s\n' "$host" "$repo"
+# The token goes on stdin, so that ps does not show it.
+if ! body=$(printf 'Authorization: token %s\n' "$token" |
+  curl -sS --fail-with-body -H @- -H 'Accept: application/json' "$api"); then
+  message=$(jq -r '.message // empty' <<<"$body" 2>/dev/null || true)
+  # An HTML error page of a proxy can be large: keep its first 300 bytes.
+  say "${message:-${body:0:300}}"
+  [ -n "$message$body" ] || say "the request to $host failed"
+  exit 1
+fi
+jq -r "$format" <<<"$body"
