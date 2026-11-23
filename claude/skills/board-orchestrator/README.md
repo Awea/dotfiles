@@ -210,14 +210,9 @@ The state folder keeps the old name `board-orchestrator-hc`: it holds live state
 - `cards BOARD`: the same lines with no card text, task path or repo, and with no null or
   false field. The Bash tool shows only 30 000 characters of an output.
 - `card BOARD ''`: the full `card` line of each card of the open columns. The triage
-  worker gets it as its cards file, and `multica-perso` reads the board with it.
+  worker gets it as its cards file.
 - `prompt TASK`: the prompt block of a task note, with no fence lines. Exit 1: no prompt
   block. Exit 2: no note.
-- `multica BOARD`: one JSON line `{id, kind, key, title, edit}` for each open item of
-  `_multica/BOARD.changes.md` (written by `multica-perso export`), then `{"multica": N}`.
-  A done item, a hand note or a broken line is not printed. No file: only `{"multica": 0}`.
-  The `cards` and `card` lines get `multica` (a Multica key) for a `⏳ Waiting On` card
-  with `in Multica KEY` on its context line, or a card with an open `with-agent` item.
 - `inbox`: one JSON line for each phone message in `_inbox`, oldest first: `file` (for
   example `_inbox/2026-11-04-173424.md`), `text` (cut at 2000 characters) and
   `truncated`. The last line is `{"inbox": N, "boards": {BOARD: [project notes]}}`.
@@ -278,9 +273,6 @@ The state folder keeps the old name `board-orchestrator-hc`: it holds live state
   wait" (a queued `answer`): it closed nothing.
 - `log BOARD FILE`: adds one line to `Dev Logs/YYYY-MM-DD - BOARD (board orchestrator).md`
   and a link to it in the daily note.
-- `multica-done BOARD ID`: marks the open item ID (`mc-` and 8 hex digits) of
-  `_multica/BOARD.changes.md` done, and prints `multica-done: ID`. Exit 1: no open item ID.
-  Exit 2: a bad ID or board name.
 - `inbox-clear FILE`: deletes one `_inbox/<name>.md` file. Exit 2: another path. Exit 1:
   the file is gone (the orchestrator of another board took it).
 - `send BOARD start|save FILE`: writes the card of FILE and the instruction to

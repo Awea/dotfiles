@@ -10,8 +10,6 @@ bash ~/.claude/skills/board-orchestrator/board-scan.sh cards BOARD
 bash ~/.claude/skills/board-orchestrator/board-scan.sh prompt TASK
 bash ~/.claude/skills/board-orchestrator/board-scan.sh inbox
 bash ~/.claude/skills/board-orchestrator/dispatch.sh inbox-clear FILE
-bash ~/.claude/skills/board-orchestrator/board-scan.sh multica BOARD
-bash ~/.claude/skills/board-orchestrator/dispatch.sh multica-done BOARD ID
 bash ~/.claude/skills/board-orchestrator/dispatch.sh queue
 bash ~/.claude/skills/board-orchestrator/dispatch.sh resumable BOARD
 bash ~/.claude/skills/board-orchestrator/dispatch.sh resume BOARD SESSION
@@ -30,8 +28,7 @@ line. A card with no `project` has no repo.
    a. **Read.** Run `board-scan.sh rules`, and keep the frontmatter when you write a task
       note. Run `board-scan.sh cards BOARD` for the cards, and `board-scan.sh inbox` for
       the inbox of rule 4. These two give all that rules 1 to 4 need: read no board,
-      task note or project note one by one. Run `board-scan.sh multica BOARD` for the
-      Multica list of rule 4. Run `cards` again to refresh the state.
+      task note or project note one by one. Run `cards` again to refresh the state.
       When `other` of the last `cards` line is more than 0, tell the user the headings
       that stderr names.
       Run `dispatch.sh queue` for the cards that other boards sent. When it prints a
@@ -104,8 +101,6 @@ line. A card with no `project` has no repo.
    a card with no repo, write "no folder" and ask for the folder. Ask which tasks to
    dispatch. Then show the skipped cards of rule 2, one line for each:
    `- [<project>] <title> — <why it waits> <links>`.
-   A card with a `multica` field is with a Multica agent: it is not a due board task.
-   Show it with the skipped cards, why it waits: `with a Multica agent (<multica>)`.
    A card that you added from `queue` in rule 1a is a due board task, once in the list.
    When its `instruction` is `start`, add `— from <from>, to start` at the end of its
    line. Dispatch it only when the user picks it.
@@ -133,22 +128,6 @@ line. A card with no `project` has no repo.
    5. Tell the user "I added the task <title>." with the board, and log it (rule 7.10).
    6. For "start", dispatch the card with rule 5 in the same turn: "start" is the yes for
       the worker.
-
-   **Multica.** Then show the open items of `board-scan.sh multica BOARD` in a third list,
-   "Multica", numbered after the inbox lists. One line for each item:
-   `<n>. <key> <title> — <edit>`. Write no empty list. The items come from
-   `multica-perso export`, which the user runs. Ask which items to apply. No answer is a
-   skip, and a skipped item stays open. For each approved item:
-   1. Find the card with `board-scan.sh card BOARD '<title>'`, except for `new-card`.
-      When no card or more than one card agrees, tell the user and change nothing for
-      that item.
-   2. Apply the edit with the normal rules of rule 7: `move to <column>` moves the card
-      ("Move a card"), `context: <text>` writes the context line ("Context line"), and
-      `move to ✅ Done` also marks it done (rule 7.4). For `new-card`, write the card
-      with the "New card" steps, with the title of the item and `in Multica <key>` on
-      its context line.
-   3. After the edit worked, run `dispatch.sh multica-done BOARD <id>`.
-   4. Log it (rule 7.10).
 
    After the lists, when `triage-check` printed `due`, ask the T1 question of `triage.md`.
    After the lists and your questions, in the same turn, shorten the long cards (rule 8).
