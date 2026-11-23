@@ -494,3 +494,61 @@ BOARD
   [ "$(line 0 | jq -c .links)" = '["[PR #796](https://forge.example/o/r/pull/796)","[plan](file:///home/u/plan.md)"]' ]
   [ "$(line 1 | jq -c 'has("links")')" = false ]
 }
+
+# Write the Multica changes file of the board main: 2 open items, 1 done item, 1 broken
+# line, and a hand note.
+multica_changes() {
+  mkdir -p "$V/_multica"
+  cat >"$V/_multica/main.changes.md" <<'MC'
+# Multica changes of the board main
+
+- [ ] mc-0123abcd with-agent PER-1: [beta] Two lines → move to ⏳ Waiting On, context: in Multica PER-1
+- [x] mc-11111111 status PER-2: [beta] Later work → move to 🔨 In Progress
+- [ ] mc-2222beef new-card PER-7: A → b | c → new card in 📋 This Week, priority 🟠, project alpha, context: in Multica PER-7
+- [ ] mc-zz broken item
+notes by hand
+MC
+}
+
+@test "board-scan multica lists the open items and skips done and broken lines" {
+  multica_changes
+  run --separate-stderr bash "$PLUGIN_DIR/board-scan.sh" multica main
+  [ "$status" -eq 0 ]
+  [ "${#lines[@]}" -eq 3 ]
+  [ "$(line 0)" = '{"id":"mc-0123abcd","kind":"with-agent","key":"PER-1","title":"[beta] Two lines","edit":"move to ⏳ Waiting On, context: in Multica PER-1"}' ]
+  [ "$(line 1 | jq -r .title)" = 'A → b | c' ]
+  [ "$(line 1 | jq -r .edit)" = 'new card in 📋 This Week, priority 🟠, project alpha, context: in Multica PER-7' ]
+  [ "$(line 2)" = '{"multica":2}' ]
+}
+
+@test "board-scan multica with no changes file prints only the count 0" {
+  run --separate-stderr bash "$PLUGIN_DIR/board-scan.sh" multica main
+  [ "$status" -eq 0 ]
+  [ "$output" = '{"multica":0}' ]
+}
+
+@test "a card with an open with-agent item or a Multica key has the multica field" {
+  make_board
+  multica_changes
+  run --separate-stderr bash "$PLUGIN_DIR/board-scan.sh" cards main
+  [ "$(jq -r 'select(.title == "[beta] Two lines") | .multica' <<<"$output")" = PER-1 ]
+  [ "$(jq -r 'select(.title == "[beta] Later work") | .multica' <<<"$output")" = null ]
+  run --separate-stderr bash "$PLUGIN_DIR/board-scan.sh" card main "later work"
+  [ "$(line 0 | jq -r .multica)" = null ]
+  sed -i.bak 's/^\tLast run ok\./\tin Multica PER-9, last run ok./' "$V/Boards/main.md"
+  run --separate-stderr bash "$PLUGIN_DIR/board-scan.sh" card main "daily check"
+  [ "$(line 0 | jq -r .multica)" = null ]
+}
+
+@test "a Multica key on a Waiting On card gives the multica field" {
+  make_board
+  cat >>"$V/Boards/main.md" <<'MD'
+
+## ⏳ Waiting On
+
+- [ ] 🟢 **[alpha] With the agent**
+	in Multica PER-9 [[Projects/alpha]]
+MD
+  run --separate-stderr bash "$PLUGIN_DIR/board-scan.sh" card main "with the agent"
+  [ "$(line 0 | jq -r .multica)" = PER-9 ]
+}

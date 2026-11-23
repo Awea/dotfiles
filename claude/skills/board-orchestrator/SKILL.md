@@ -153,7 +153,9 @@ Rules 1 to 4 are in `start.md`, and rule 8 is in `shorten.md`. Rules 5 to 7 foll
 
 5. **Dispatch the approved board tasks**: only the cards that the user approved in this
    conversation, and a card that the live orchestrator of another board sent with
-   `start` (`boards.md`). For each task:
+   `start` (`boards.md`). Never start a worker on a card whose `card` line has a
+   `multica` field: tell the user "<title> is with a Multica agent (<multica>)." For each
+   task:
    1. **Policy.** Take the `policy` of the card project in `projects`. Run
       `dispatch.sh policy <repo>` only after a `policy-set`, or when it is `invalid`. On
       `missing`, ask this question alone: "I ask: what is the push policy of workers in

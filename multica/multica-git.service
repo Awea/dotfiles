@@ -1,0 +1,15 @@
+# The git server of the repos that you share with the Multica agent (dotfiles
+# multica/README.md). "multica-agent share" installs it in ~/.config/systemd/user and
+# starts it. It runs as you, so that it can read your repos. It listens on 127.0.0.1 only,
+# is read-only and serves only the repos of "multica-agent share".
+
+[Unit]
+Description=Git server of the repos shared with the Multica agent
+
+[Service]
+ExecStart=%h/.bin/multica-agent serve
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target

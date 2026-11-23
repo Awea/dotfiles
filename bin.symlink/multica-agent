@@ -1,0 +1,225 @@
+#!/usr/bin/env bash
+
+# Set up and run the Multica agent user of the perso trial (dotfiles multica/README.md).
+#
+#   Usage: multica-agent setup
+#          multica-agent daemon
+#          multica-agent share <repo folder>
+#          multica-agent unshare <repo name or folder>
+#          multica-agent serve
+#
+# setup   Run it as yourself. It asks for sudo. Each step does nothing when it is already
+#         done, so you can run it again:
+#         1. Makes the user multica-agent, with no docker or sudo group.
+#         2. Adds you to its group and sets its home to mode 750, so that you can read
+#            the agent repos and fetch their branches.
+#         3. Removes the rights of others on your home, so that the agent cannot read
+#            your vault or your repos.
+#         4. Copies claude/CLAUDE.md, your multica command and multica/agent-init (as
+#            multica-agent-init) to the agent user.
+#         5. Installs Claude Code for the agent user and points its multica command at
+#            the local server.
+#         6. Installs the systemd unit multica/multica-daemon.service.
+#         Then run "sudo -iu multica-agent" and "multica-agent-init" for the logins and
+#         the GitHub tokens.
+# daemon  Enable and start the systemd service multica-daemon: the Multica daemon of the
+#         agent user, with five runs at a time. It starts again after a reboot. Read its
+#         log with "journalctl -u multica-daemon".
+# share   Give the agent a local repo, with no GitHub: the agent cannot read your home,
+#         and Multica refuses a folder path. Run it as yourself, with no sudo:
+#         1. Links the git folder of the repo as <name> in ~/.local/share/multica/git.
+#            <name> is the name of the top folder, with no .git suffix.
+#         2. Installs the systemd user unit multica/multica-git.service, then starts it
+#            again so that it serves the new repo.
+#         3. Adds git://localhost/<name> to the repos of the Multica workspace.
+#         The repo needs a commit. Each local user can read a shared repo.
+# unshare Remove the link and the Multica repo. It stops the service after the last repo.
+# serve   The command of the service: git daemon on 127.0.0.1:9418, read-only, for the
+#         linked git folders only (--strict-paths). MULTICA_GIT_PORT changes the port.
+#
+# Linux only: the user commands differ on macOS. Exit 1: a failed step. Exit 2: a usage
+# error or another system. SUDO_BIN, GETENT_BIN, ID_BIN, UNAME_BIN, SYSTEMCTL_BIN and
+# GIT_BIN are for the tests.
+
+set -euo pipefail
+
+say() { printf 'multica-agent: %s\n' "$*"; }
+
+repo="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd -P)"
+agent="multica-agent"
+agent_home=/home/$agent
+sudo_bin="${SUDO_BIN:-sudo}"
+as_agent() { "$sudo_bin" -iu "$agent" "$@"; }
+install_to_agent() { "$sudo_bin" install -D -o "$agent" -g "$agent" -m "$1" "$2" "$3"; }
+links="${XDG_DATA_HOME:-$HOME/.local/share}/multica/git"
+git_unit="multica-git.service"
+user_systemctl() { "${SYSTEMCTL_BIN:-systemctl}" --user "$@"; }
+usage() { say "usage: multica-agent setup|daemon|share <repo folder>|unshare <repo>|serve"; }
+
+# repo_top DIR: the real path of the top folder of the repo of DIR (the git folder of a
+# bare repo). Its folder name gives the name of the share. Exit 1 when DIR is not in a
+# git repo.
+repo_top() {
+  local top
+  git -C "$1" rev-parse --git-dir >/dev/null 2>&1 || return 1
+  if [ "$(git -C "$1" rev-parse --is-inside-work-tree)" = true ]; then
+    top=$(git -C "$1" rev-parse --show-toplevel)
+  else
+    top=$(git -C "$1" rev-parse --absolute-git-dir)
+  fi
+  (cd "$top" && pwd -P)
+}
+
+# repo_git_dir DIR: the real path of the git folder of the repo of DIR. The link points
+# at it: with --strict-paths, git daemon then serves this exact folder and nothing under
+# the work tree, for example a link or another repo in it.
+repo_git_dir() {
+  (cd "$(git -C "$1" rev-parse --absolute-git-dir)" && pwd -P)
+}
+
+# repo_name PATH: the folder name of PATH, with no .git suffix.
+repo_name() {
+  local name=${1##*/}
+  printf '%s\n' "${name%.git}"
+}
+
+# shared_links: the links of the shared repos, one for each line.
+shared_links() {
+  local l
+  for l in "$links"/*; do
+    if [ -L "$l" ]; then printf '%s\n' "$l"; fi
+  done
+}
+
+if [ "$("${UNAME_BIN:-uname}" -s)" != Linux ]; then
+  say "Linux only."
+  exit 2
+fi
+
+case "${1:-}" in
+  setup)
+    multica=$(command -v multica || true)
+    if [ -z "$multica" ]; then
+      say "no multica command for you: install it first (README part 2)."
+      exit 1
+    fi
+    if "${GETENT_BIN:-getent}" passwd "$agent" >/dev/null; then
+      say "the user $agent exists."
+    else
+      "$sudo_bin" useradd -m -s /bin/bash "$agent"
+      say "made the user $agent."
+    fi
+    if "${ID_BIN:-id}" -nG "$USER" | tr ' ' '\n' | grep -qx "$agent"; then
+      say "you are in the group $agent."
+    else
+      "$sudo_bin" usermod -aG "$agent" "$USER"
+      say "added you to the group $agent: log out and in to read its files."
+    fi
+    "$sudo_bin" chmod 750 "$agent_home"
+    mode=$(stat -c %a "$HOME" 2>/dev/null || stat -f %Lp "$HOME")
+    if [ "${mode: -1}" != 0 ]; then
+      chmod o-rwx "$HOME"
+      say "removed the rights of others on $HOME (it was $mode)."
+    fi
+    install_to_agent 644 "$repo/claude/CLAUDE.md" "$agent_home/.claude/CLAUDE.md"
+    install_to_agent 755 "$multica" "$agent_home/.local/bin/multica"
+    install_to_agent 755 "$repo/multica/agent-init" "$agent_home/.local/bin/multica-agent-init"
+    # shellcheck disable=SC2016 # $HOME is the home of the agent: its shell expands it.
+    as_agent bash -c 'test -x "$HOME/.local/bin/claude" || curl -fsSL https://claude.ai/install.sh | bash'
+    as_agent multica config set server_url http://localhost:8080
+    as_agent multica config set app_url http://localhost:3200
+    "$sudo_bin" install -D -o root -g root -m 644 "$repo/multica/multica-daemon.service" \
+      /etc/systemd/system/multica-daemon.service
+    "$sudo_bin" systemctl daemon-reload
+    say "done. Next: run \"sudo -iu $agent\", then \"multica-agent-init\"."
+    ;;
+  daemon)
+    "$sudo_bin" systemctl enable --now multica-daemon.service
+    say "the service multica-daemon runs. Read its log with \"journalctl -u multica-daemon\"."
+    ;;
+  share)
+    if [ $# -ne 2 ]; then
+      usage
+      exit 2
+    fi
+    if ! path=$(repo_top "$2"); then
+      say "$2 is not a git repo."
+      exit 1
+    fi
+    name=$(repo_name "$path")
+    git_dir=$(repo_git_dir "$path")
+    if ! [[ "$name" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+      say "the name \"$name\" of $path does not fit in a git URL: give the top folder of the repo."
+      exit 1
+    fi
+    if ! git -C "$path" rev-parse --verify -q HEAD >/dev/null; then
+      say "$path has no commit: make a first commit, then run it again."
+      exit 1
+    fi
+    url="git://localhost/$name"
+    if [ -L "$links/$name" ]; then
+      old=$(readlink "$links/$name")
+      if [ "$old" != "$git_dir" ]; then
+        say "the name $name is in use by $old: unshare it first, or rename one of the folders."
+        exit 1
+      fi
+    elif [ -e "$links/$name" ]; then
+      say "$links/$name is not a link: remove it first."
+      exit 1
+    else
+      mkdir -p "$links"
+      ln -s "$git_dir" "$links/$name"
+    fi
+    install -D -m 644 "$repo/multica/$git_unit" \
+      "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/$git_unit"
+    user_systemctl daemon-reload
+    user_systemctl enable "$git_unit"
+    user_systemctl restart "$git_unit"
+    if ! multica repo add "$url" >/dev/null; then
+      say "Multica refused $url: check that the server runs, then run it again."
+      exit 1
+    fi
+    say "shared $path as $url. Read the log of the service with \"journalctl --user -u multica-git\"."
+    ;;
+  unshare)
+    if [ $# -ne 2 ]; then
+      usage
+      exit 2
+    fi
+    # A shared name comes first: "unshare alpha" in a repo with a folder alpha.
+    if [[ "$2" != */* ]] && [ -L "$links/$2" ]; then
+      name=$2
+    elif [ -d "$2" ] && path=$(repo_top "$2"); then
+      name=$(repo_name "$path")
+    else
+      name=$(repo_name "$2")
+    fi
+    if [ ! -L "$links/$name" ]; then
+      say "$name is not shared."
+      exit 1
+    fi
+    rm "$links/$name"
+    url="git://localhost/$name"
+    multica repo remove "$url" >/dev/null || say "Multica did not remove $url: check \"multica repo list\"."
+    if [ -n "$(shared_links)" ]; then
+      user_systemctl restart "$git_unit"
+    else
+      user_systemctl disable --now "$git_unit"
+    fi
+    say "$name is not shared now."
+    ;;
+  serve)
+    shared=()
+    while IFS= read -r l; do shared+=("$l"); done < <(shared_links)
+    if [ ${#shared[@]} -eq 0 ]; then
+      say "no shared repo: run \"multica-agent share <repo folder>\" first."
+      exit 1
+    fi
+    exec "${GIT_BIN:-git}" daemon --strict-paths --base-path="$links" --export-all --reuseaddr \
+      --listen=127.0.0.1 --port="${MULTICA_GIT_PORT:-9418}" "${shared[@]}"
+    ;;
+  *)
+    usage
+    exit 2
+    ;;
+esac

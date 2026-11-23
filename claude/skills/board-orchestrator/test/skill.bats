@@ -205,3 +205,15 @@ parts() { printf '%s\n' "$SKILL_DIR/SKILL.md" "$SKILL_DIR/start.md" "$SKILL_DIR/
   grep -qF 'Exit with a report: run `dispatch.sh close <address>`. Write nothing.' <<<"$flat"
   grep -qF 'dispatch.sh triage-apply BOARD <path> --check' <<<"$flat"
 }
+
+@test "skill refuses a worker on a card with a multica field" {
+  grep -q 'is with a Multica agent' "$SKILL_DIR/SKILL.md"
+  grep -q 'board-scan.sh multica BOARD' "$SKILL_DIR/start.md"
+  grep -q 'dispatch.sh multica-done BOARD ID' "$SKILL_DIR/start.md"
+}
+
+@test "skill finds the card of a Multica item before it edits it" {
+  find=$(grep -n 'Find the card with `board-scan.sh card BOARD' "$SKILL_DIR/start.md" | cut -d: -f1)
+  apply=$(grep -n 'Apply the edit with the normal rules' "$SKILL_DIR/start.md" | cut -d: -f1)
+  [ -n "$find" ] && [ -n "$apply" ] && [ "$find" -lt "$apply" ]
+}

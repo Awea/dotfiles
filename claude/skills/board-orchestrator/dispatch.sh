@@ -2,7 +2,8 @@
 # Tool of the board orchestrator: run a worker claude as a terminal of the orchestrator (a
 # window in Renux), talk to the workers (remind, answer, tell),
 # and the board commands that need no terminal (report, run-add, note-add, log,
-# inbox-clear, send, queue, queue-clear, policy, policy-set, triage-check, triage-apply).
+# inbox-clear, multica-done, send, queue, queue-clear, policy, policy-set, triage-check,
+# triage-apply).
 set -euo pipefail
 here="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 # shellcheck source=lib.sh source-path=SCRIPTDIR
@@ -1109,6 +1110,28 @@ NOTE
     rm -- "$vault/$rel"
     printf 'inbox-clear: %s\n' "$rel"
     ;;
+  multica-done)
+    # Mark one open item of the Multica changes file of BOARD done (multica-perso export
+    # writes the file). The other lines stay as they are.
+    board="${2:-}" id="${3:-}"
+    if [ -z "$board" ] || [[ "$board" == */* ]] || [[ "$board" == .* ]] || ! [[ "$id" =~ ^mc-[0-9a-f]{8}$ ]]; then
+      printf 'usage: dispatch.sh multica-done BOARD mc-<8 hex>\n' >&2
+      exit 2
+    fi
+    if ! vault=$(vault_path); then
+      printf 'dispatch: no vault path: set OBSIDIAN_VAULT_PATH.\n' >&2
+      exit 1
+    fi
+    file="$vault/_multica/$board.changes.md"
+    if [ ! -f "$file" ] || ! grep -q "^- \[ \] $id " "$file"; then
+      printf 'dispatch: no open Multica item %s for %s.\n' "$id" "$board" >&2
+      exit 1
+    fi
+    tmp=$(mktemp "$vault/_multica/.$board.changes.md.XXXXXX")
+    awk -v id="$id" 'index($0, "- [ ] " id " ") == 1 { $0 = "- [x] " substr($0, 7) } { print }' "$file" >"$tmp"
+    mv "$tmp" "$file"
+    printf 'multica-done: %s\n' "$id"
+    ;;
   send)
     to="${2:-}" instruction="${3:-}" file="${4:-}"
     if [ -z "$to" ] || [ -z "$file" ] || { [ "$instruction" != start ] && [ "$instruction" != save ]; }; then
@@ -1665,7 +1688,7 @@ NOTE
     exit "$rc"
     ;;
   *)
-    printf 'usage: dispatch.sh start|workers|resumable|resume|resume-clear|close|last|remind|answer|tell|notice|deliver|policy|policy-set|report|run-add|note-add|log|inbox-clear|send|queue|queue-clear ...\n' >&2
+    printf 'usage: dispatch.sh start|workers|resumable|resume|resume-clear|close|last|remind|answer|tell|notice|deliver|policy|policy-set|report|run-add|note-add|log|inbox-clear|multica-done|send|queue|queue-clear ...\n' >&2
     exit 2
     ;;
 esac

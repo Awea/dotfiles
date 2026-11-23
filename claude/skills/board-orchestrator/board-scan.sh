@@ -22,6 +22,14 @@
 #       names a card by its exact text. The orchestrator uses it to check one card just before an edit, and for
 #       the text of a prompt. The summary line gives the board layout at that time,
 #       after the edits of the user.
+#       A card line has "multica": KEY when it is in ⏳ Waiting On with "in Multica KEY" on
+#       its context, or when an open with-agent item of the Multica changes file has its
+#       title: the card is with a Multica agent.
+#   board-scan.sh multica BOARD
+#       Print one JSON object per line for each open item of <vault>/_multica/BOARD.changes.md
+#       (written by multica-perso export): {id, kind, key, title, edit}. Then print one
+#       line {"multica": N}. A done item, a hand note or a broken line is not printed. No
+#       file: only {"multica": 0}.
 #   board-scan.sh prompt TASK
 #       Print the text of the first fenced code block under ## Prompt of the task note
 #       TASK (relative to the vault, for example Tasks/X.md), without the fence lines.
@@ -46,6 +54,20 @@ if ! vault=$(vault_path); then
   printf 'board-scan: no vault path: set OBSIDIAN_VAULT_PATH.\n' >&2
   exit 2
 fi
+
+# Print one JSON line {id, kind, key, title, edit} for each open item of the Multica
+# changes file of board $1. The title can hold " → ": the edit starts with a known word.
+multica_items() {
+  local file="$vault/_multica/$1.changes.md" line
+  local re='^- \[ \] (mc-[0-9a-f]{8}) (with-agent|result|new-card|status) ([A-Z][A-Z0-9]*-[0-9]+): (.*) → ((move to|context: in Multica|new card in) .*)$'
+  [ -f "$file" ] || return 0
+  while IFS= read -r line || [ -n "$line" ]; do
+    [[ "$line" =~ $re ]] || continue
+    jq -cn --arg id "${BASH_REMATCH[1]}" --arg kind "${BASH_REMATCH[2]}" --arg key "${BASH_REMATCH[3]}" \
+      --arg title "${BASH_REMATCH[4]}" --arg edit "${BASH_REMATCH[5]}" \
+      '{id: $id, kind: $kind, key: $key, title: $title, edit: $edit}'
+  done <"$file"
+}
 
 # Print the text of the first fenced code block under ## Prompt of file $1, before the
 # next ## heading. Exit 1 when there is no such block.
@@ -82,6 +104,8 @@ case "${1:-}" in
     context_max=200
     summary=()
     declare -A policies=() readonly_counts=() project_repos=()
+    # The cards that an open with-agent item names: {title: key}.
+    multica_map=$(multica_items "$board" | jq -sc 'map(select(.kind == "with-agent") | {(.title): .key}) | add // {}')
     # One record for each card: column, line number, title line, context line.
     while IFS=$'\x1f' read -r -d $'\x1e' column line title_line context_line blank_flags other other_heads; do
       if [ "$column" = $'\x1d' ]; then
@@ -124,7 +148,7 @@ case "${1:-}" in
       jq -cn --arg column "$column" --argjson line "$line" --arg tl "$title_line" --arg cl "$context_line" \
         --arg today "$today" --arg task "$task" --argjson task_exists "$task_exists" --arg mode "$mode" \
         --arg recurrence "$recurrence" --argjson prompt "$prompt" --arg project "$project" --arg repo "$repo" \
-        --arg policy "$policy" --arg readonly "$readonly" --arg match "$match" --arg subcmd "$subcmd" --argjson max "$context_max" '
+        --arg policy "$policy" --arg readonly "$readonly" --arg match "$match" --arg subcmd "$subcmd" --argjson mc "$multica_map" --argjson max "$context_max" '
         def n: if . == "" then null else . end;
         def after($re): ([match($re).captures[0].string] | first // null)
           | if . == null then null else sub("^\\s+"; "") | sub("\\s+$"; "") end;
@@ -149,6 +173,10 @@ case "${1:-}" in
         | .due = (.date == null or .date <= $today)
         | if $task_exists then .mode = ($mode | n) | .recurrence = ($recurrence | n) | .prompt = $prompt else . end
         | .project = ($project | n) | .repo = ($repo | n)
+        # A card made from a Multica issue also has "in Multica KEY": only a Waiting On
+        # card is with an agent.
+        | .multica = (((if $column == "⏳ Waiting On" then ($cl | capture("in Multica (?<k>[A-Z][A-Z0-9]*-[0-9]+)").k) else null end)
+            // $mc[.title // ""]) // null)
         | if $repo != "" then .policy = $policy | .readonly = ($readonly | tonumber) else . end
         | select($match == "" or ((.title // "") | ascii_downcase | contains($match | ascii_downcase)))
         # The full scan goes into the orchestrator context: keep only the fields that
@@ -202,6 +230,16 @@ case "${1:-}" in
         projects: ([range(0; $p | length; 4) | {key: $p[.], value: (if $p[. + 1] == "" then {repo: null}
           else {repo: $p[. + 1], policy: $p[. + 2], readonly: ($p[. + 3] | tonumber)} end)}]
           | sort_by(.key) | from_entries)}' --args ${projects[@]+"${projects[@]}"}
+    ;;
+  multica)
+    board="${2:-}"
+    if [ -z "$board" ] || [[ "$board" == */* ]]; then
+      printf 'usage: board-scan.sh multica BOARD\n' >&2
+      exit 2
+    fi
+    items=$(multica_items "$board")
+    [ -z "$items" ] || printf '%s\n' "$items"
+    jq -cn --argjson n "$(grep -c . <<<"$items" || true)" '{multica: $n}'
     ;;
   prompt)
     task="${2:-}"

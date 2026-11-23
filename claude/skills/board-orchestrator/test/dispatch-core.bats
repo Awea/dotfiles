@@ -892,3 +892,37 @@ run_vault() {
   [ "$status" -eq 2 ]
   [ -f "$OBSIDIAN_VAULT_PATH/_inbox/.syncthing.x.md.tmp" ]
 }
+
+# Make the temp vault of a multica-done test: one open item and one done item.
+multica_vault() {
+  export OBSIDIAN_VAULT_PATH="$BATS_TEST_TMPDIR/vault"
+  mkdir -p "$OBSIDIAN_VAULT_PATH/_multica"
+  CHANGES="$OBSIDIAN_VAULT_PATH/_multica/perso.changes.md"
+  printf '%s\n' '# Multica changes' '' \
+    '- [ ] mc-0123abcd with-agent PER-1: X → move to ⏳ Waiting On, context: in Multica PER-1' \
+    '- [x] mc-11111111 status PER-2: Y → move to 🔨 In Progress' 'notes by hand' >"$CHANGES"
+}
+
+@test "multica-done marks one open item done" {
+  multica_vault
+  run --separate-stderr bash "$SKILL_DIR/dispatch.sh" multica-done perso mc-0123abcd
+  [ "$status" -eq 0 ]
+  [ "$output" = 'multica-done: mc-0123abcd' ]
+  grep -qxF -- '- [x] mc-0123abcd with-agent PER-1: X → move to ⏳ Waiting On, context: in Multica PER-1' "$CHANGES"
+  grep -qxF 'notes by hand' "$CHANGES"
+  [ "$(grep -c '' "$CHANGES")" -eq 5 ]
+}
+
+@test "multica-done refuses a bad id, a bad board and a done item" {
+  multica_vault
+  cp "$CHANGES" "$BATS_TEST_TMPDIR/before"
+  run --separate-stderr bash "$SKILL_DIR/dispatch.sh" multica-done perso mc-11111111
+  [ "$status" -eq 1 ]
+  run --separate-stderr bash "$SKILL_DIR/dispatch.sh" multica-done perso 'mc-0123abc.'
+  [ "$status" -eq 2 ]
+  run --separate-stderr bash "$SKILL_DIR/dispatch.sh" multica-done ../perso mc-0123abcd
+  [ "$status" -eq 2 ]
+  run --separate-stderr bash "$SKILL_DIR/dispatch.sh" multica-done other mc-0123abcd
+  [ "$status" -eq 1 ]
+  cmp "$CHANGES" "$BATS_TEST_TMPDIR/before"
+}

@@ -1,0 +1,371 @@
+#!/usr/bin/env bash
+
+# Sync a vault board with the local Multica of the perso trial.
+#
+#   Usage: multica-perso import [BOARD]
+#          multica-perso export [BOARD]
+#          multica-perso status [BOARD]
+#
+# BOARD is perso by default. The vault stays the source of truth.
+#
+# import  Copy the open cards of the board to Multica issues. One project per card project,
+#         with its GitHub repo. The issue metadata vault_card (<project>/<title>) links the
+#         issue to its card, and a Multica key on the context line ("in Multica PER-3")
+#         comes first. An issue that an agent has, or had, belongs to Multica (vault_owner
+#         multica): import never changes it again. An issue that the user moved in Multica
+#         (its status is not vault_status) stays as it is, the export reports it. Import
+#         writes nothing to the vault. It prints one line per card or issue: made, updated,
+#         kept, skipped or cancelled.
+#
+# export  Write the Multica state to <vault>/_multica/BOARD.md in the board format (the
+#         safety net: its cards can go back to the board as they are), and the changes to
+#         <vault>/_multica/BOARD.changes.md, one line per change:
+#           - [ ] mc-<8 hex> with-agent|result|new-card|status <KEY>: <title> → <edit>
+#         The board-orchestrator shows the open lines and marks them done. Export closes
+#         a line when its change no longer holds, and keeps the other lines as they are.
+#         It never writes Boards/ or _inbox/.
+#
+# status  Print the server state (the running containers of the Compose project multica,
+#         started by the server-playbooks role multica), the count of issues by status
+#         when the server runs, and the count of open change lines.
+#
+# MULTICA_BIN is the multica command (default multica). DOCKER_BIN is the docker command
+# (default docker). OBSIDIAN_VAULT_PATH is the vault.
+# Exit 1: a multica call or the vault read failed. Exit 2: a usage error.
+
+set -euo pipefail
+
+here="$(cd "$(dirname "$(readlink -f "$0")")" && pwd -P)"
+# shellcheck source=multica/lib.sh source-path=SCRIPTDIR/..
+source "$here/../multica/lib.sh"
+
+say() { printf 'multica-perso: %s\n' "$*" >&2; }
+
+# The issue description of a card: its context, then its column, "Recurring" and its
+# date. The mirror of the export reads the last two back.
+card_description() {
+  jq -r '.context + "\n\nVault card: " + .column + (if .recurring then "\nRecurring" else "" end)
+    + (if .date then "\nDate: " + .date else "" end)' <<<"$1"
+}
+
+# set_meta ISSUE JSON KEY VALUE: set the metadata KEY when it differs. Prints 1 on a change.
+set_meta() {
+  local id=$1 issue=$2 key=$3 value=$4
+  if [ "$(jq -r --arg k "$key" '.metadata[$k] // ""' <<<"$issue")" != "$value" ]; then
+    mp_cli issue metadata set "$id" --key "$key" --value "$value" --type string >/dev/null || return 1
+    echo 1
+  fi
+}
+
+# agent_had ISSUE_JSON: exit 0 when an agent has the issue or ran on it.
+agent_had() {
+  local issue=$1 runs
+  [ "$(jq -r '.assignee_type // ""' <<<"$issue")" != agent ] || return 0
+  runs=$(mp_cli issue runs "$(jq -r .id <<<"$issue")" --output json) || exit 1
+  [ "$(jq 'if type == "array" then length else (.runs // []) | length end' <<<"$runs")" -gt 0 ]
+}
+
+import_board() {
+  local board=$1 cards issues projects
+  cards=$(mp_vault_cards "$board" | jq -s .) || exit 1
+  issues=$(mp_issues | jq -s .) || exit 1
+  projects=$(mp_projects | jq -s .) || exit 1
+
+  # The Multica project of each card project, made when it is missing.
+  local -A project_id=()
+  local p id repo url
+  while IFS= read -r p; do
+    id=$(jq -r --arg p "$p" 'map(select(.title == $p)) | .[0].id // ""' <<<"$projects")
+    if [ -z "$id" ]; then
+      id=$(mp_cli project create --title "$p" --output json | jq -r .id) || exit 1
+    fi
+    project_id[$p]=$id
+    repo=$(jq -r --arg p "$p" 'map(select(.project == $p)) | .[0].repo // ""' <<<"$cards")
+    url=""
+    if [ -n "$repo" ]; then
+      url=$(git -C "$repo" remote get-url origin 2>/dev/null |
+        sed -e 's#^git@github\.com:#https://github.com/#' -e 's#\.git$##' -e '\#^https://github\.com/#!d' || true)
+    fi
+    if [ -n "$url" ]; then
+      resources=$(mp_cli project resource list "$id" --output json) || exit 1
+      if [ "$(jq --arg u "$url" '[.[]? | select((.resource_ref.url // .url) == $u)] | length' <<<"$resources")" -eq 0 ]; then
+        mp_cli project resource add "$id" --url "$url" --output json >/dev/null || exit 1
+      fi
+    fi
+  done < <(jq -r '.[].project // empty' <<<"$cards" | awk '!seen[$0]++')
+
+  local -A first_line=() matched=()
+  local card title vkey line key issue iid ikey pid status priority desc changed
+  while IFS= read -r card; do
+    title=$(jq -r .title <<<"$card")
+    line=$(jq -r .line <<<"$card")
+    p=$(jq -r '.project // "-"' <<<"$card")
+    vkey="$p/$title"
+    if [ -n "${first_line[$vkey]:-}" ]; then
+      printf 'skipped %s (same key as line %s)\n' "$title" "${first_line[$vkey]}"
+      continue
+    fi
+    first_line[$vkey]=$line
+    key=$(jq -r '.key // ""' <<<"$card")
+    pid=${project_id[$p]:-}
+    status=$(mp_status_of "$(jq -r .column <<<"$card")")
+    priority=$(mp_priority_of "$(jq -r '.priority // ""' <<<"$card")")
+    desc=$(card_description "$card")
+    # Match: the key of the card, else the vault_card metadata, else an issue with no
+    # vault_card, the same title and the same project (a made issue whose metadata
+    # call failed).
+    # A key match counts only when the issue is not the issue of another card. An issue
+    # matches one card only.
+    issue=$(jq -c --arg key "$key" --arg v "$vkey" --arg t "$title" --arg pid "$pid" \
+      --arg seen "${!matched[*]}" '
+      ($seen | split(" ")) as $seen
+      | map(select(.id as $id | $seen | index($id) | not))
+      | (map(select($key != "" and .identifier == $key
+         and (.metadata.vault_card == null or .metadata.vault_card == $v
+           or .metadata.vault_owner == "multica"))) +
+       map(select(.metadata.vault_card == $v)) +
+       map(select(.metadata.vault_card == null and .title == $t
+         and (.project_id // "") == $pid)))[0] // empty' <<<"$issues")
+    if [ -z "$issue" ]; then
+      args=(--title "$title" --status "$status" --priority "$priority")
+      [ -z "$pid" ] || args+=(--project "$pid")
+      issue=$(printf '%s' "$desc" | mp_cli issue create "${args[@]}" --description-stdin --output json) || exit 1
+      iid=$(jq -r .id <<<"$issue")
+      matched[$iid]=1
+      set_meta "$iid" '{}' vault_card "$vkey" >/dev/null || exit 1
+      set_meta "$iid" '{}' vault_owner vault >/dev/null || exit 1
+      set_meta "$iid" '{}' vault_status "$status" >/dev/null || exit 1
+      printf 'made %s %s\n' "$(jq -r .identifier <<<"$issue")" "$title"
+      continue
+    fi
+    iid=$(jq -r .id <<<"$issue")
+    ikey=$(jq -r .identifier <<<"$issue")
+    matched[$iid]=1
+    if [ "$(jq -r '.metadata.vault_owner // ""' <<<"$issue")" = multica ] || agent_had "$issue"; then
+      set_meta "$iid" "$issue" vault_owner multica >/dev/null || exit 1
+      printf 'skipped %s %s (owned by Multica)\n' "$ikey" "$title"
+      continue
+    fi
+    # Moved in Multica: the status is not the one that import set, and not the status
+    # of the card. When the card has that status (the orchestrator applied the move, or
+    # a run failed before the metadata), import takes the issue back. A cancelled issue
+    # whose card is back reopens.
+    if [ "$(jq -r --arg s "$status" '(.metadata.vault_status // "") != "" and .status != .metadata.vault_status
+        and .status != $s and .status != "cancelled"' <<<"$issue")" = true ]; then
+      printf 'skipped %s %s (moved in Multica)\n' "$ikey" "$title"
+      continue
+    fi
+    args=()
+    [ "$(jq -r .title <<<"$issue")" = "$title" ] || args+=(--title "$title")
+    [ "$(jq -r .status <<<"$issue")" = "$status" ] || args+=(--status "$status")
+    [ "$(jq -r .priority <<<"$issue")" = "$priority" ] || args+=(--priority "$priority")
+    [ "$(jq -r '.project_id // ""' <<<"$issue")" = "$pid" ] || args+=(--project "$pid")
+    changed=""
+    # An issue made in Multica keeps the description that the user typed there.
+    if [ "$(jq -r '.metadata.vault_card == null and (.description // "") != ""' <<<"$issue")" = true ]; then
+      changed+=$(set_meta "$iid" "$issue" vault_desc keep) || exit 1
+      issue=$(jq -c '.metadata.vault_desc = "keep"' <<<"$issue")
+    fi
+    if [ "$(jq -r '.metadata.vault_desc // ""' <<<"$issue")" != keep ] &&
+      [ "$(jq -r '.description // ""' <<<"$issue")" != "$desc" ]; then
+      printf '%s' "$desc" | mp_cli issue update "$iid" "${args[@]}" --description-stdin --no-start --output json >/dev/null || exit 1
+      changed=1
+    elif [ ${#args[@]} -gt 0 ]; then
+      mp_cli issue update "$iid" "${args[@]}" --no-start --output json >/dev/null || exit 1
+      changed=1
+    fi
+    changed+=$(set_meta "$iid" "$issue" vault_card "$vkey") || exit 1
+    changed+=$(set_meta "$iid" "$issue" vault_owner vault) || exit 1
+    changed+=$(set_meta "$iid" "$issue" vault_status "$status") || exit 1
+    if [ -n "$changed" ]; then
+      printf 'updated %s %s\n' "$ikey" "$title"
+    else
+      printf 'kept %s %s\n' "$ikey" "$title"
+    fi
+  done < <(jq -c '.[]' <<<"$cards")
+
+  # The vault-owned issues whose card is gone: cancel them, unless an agent had them.
+  while IFS= read -r issue; do
+    iid=$(jq -r .id <<<"$issue")
+    [ -z "${matched[$iid]:-}" ] || continue
+    ikey=$(jq -r .identifier <<<"$issue")
+    title=$(jq -r .title <<<"$issue")
+    if agent_had "$issue"; then
+      set_meta "$iid" "$issue" vault_owner multica >/dev/null || exit 1
+      continue
+    fi
+    mp_cli issue comment add "$iid" --content "Gone from the vault." >/dev/null || exit 1
+    mp_cli issue status "$iid" cancelled --no-start >/dev/null || exit 1
+    set_meta "$iid" "$issue" vault_status cancelled >/dev/null || exit 1
+    printf 'cancelled %s %s\n' "$ikey" "$title"
+  done < <(jq -c '.[] | select(.metadata.vault_card != null and .metadata.vault_owner != "multica"
+    and .status != "done" and .status != "cancelled")' <<<"$issues")
+}
+
+# The jq maps of the export, the same as mp_column_of and mp_emoji_of.
+# shellcheck disable=SC2016 # A jq program, not a shell text.
+jq_defs='
+  def col: (. // "") as $k | {"backlog": "📥 Backlog", "todo": "📋 This Week",
+    "in_progress": "🔨 In Progress", "blocked": "⏳ Waiting On", "in_review": "⏳ Waiting On",
+    "done": "✅ Done"}[$k] // "";
+  def emoji: (. // "") as $k | {"urgent": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}[$k] // "";
+  def agent: .metadata.vault_owner == "multica" or .assignee_type == "agent";
+'
+
+# write_file PATH: write stdin to PATH through a temp file in the same folder, so that
+# Obsidian and Syncthing never read a half file.
+write_file() {
+  local tmp
+  tmp=$(mktemp "$(dirname "$1")/.$(basename "$1").XXXXXX")
+  cat >"$tmp"
+  mv "$tmp" "$1"
+}
+
+export_board() {
+  local board=$1 vault cards issues projects results dir mirror changes
+  vault=$(mp_vault) || { say "no vault path: set OBSIDIAN_VAULT_PATH."; exit 1; }
+  cards=$(mp_vault_cards "$board" | jq -s .) || exit 1
+  issues=$(mp_issues | jq -s .) || exit 1
+  projects=$(mp_projects | jq -s .) || exit 1
+  dir="$vault/_multica"
+  mirror="$dir/$board.md"
+  changes="$dir/$board.changes.md"
+  mkdir -p "$dir"
+
+  # The first line of the newest RESULT comment of each agent issue, at most 120 characters.
+  results='{}'
+  local id comments first
+  while IFS= read -r id; do
+    comments=$(mp_cli issue comment list "$id" --output json) || exit 1
+    first=$(jq -r 'if type == "array" then . else (.comments // []) end
+      | map(select((.content // "") | startswith("RESULT:"))) | sort_by(.created_at) | last
+      | if . == null then "" else .content | split("\n")[0] | .[:120] end' <<<"$comments")
+    [ -z "$first" ] || results=$(jq -c --arg id "$id" --arg r "$first" '.[$id] = $r' <<<"$results")
+  done < <(jq -r "$jq_defs"' .[] | select(.status != "cancelled" and agent) | .id' <<<"$issues")
+
+  # The mirror: the whole Multica state in the board format. A failed jq keeps the old
+  # mirror: it is the safety net.
+  local text
+  text=$(jq -r "$jq_defs"'
+    def card: ((.description // "") | split("\n")) as $d
+      | (if .status == "done" then "- [x] " else "- [ ] " end)
+      + (.priority | emoji | if . == "" then "" else . + " " end)
+      + (if $d | index("Recurring") then "🔁 " else "" end)
+      + "**" + .title + "**"
+      + ([$d[] | select(startswith("Date: ")) | " @{" + .[6:] + "}"] | first // "") + "\n\t"
+      + ($d[0] | if . == "" then "" else . + " · " end)
+      + .identifier + "\n";
+    . as $issues
+    | "---\nkanban-plugin: board\n---\n"
+      + (["📥 Backlog", "📋 This Week", "🔨 In Progress", "⏳ Waiting On", "✅ Done"]
+        | map(. as $c | "\n## " + $c + "\n\n"
+          + ([$issues[] | select(.status | col == $c)] | sort_by(.number // 0) | map(card) | join("")))
+        | join(""))' <<<"$issues") || { say "the mirror failed: $mirror stays as it was."; exit 1; }
+  printf '%s\n' "$text" | write_file "$mirror"
+  printf 'mirror: %s cards\n' "$(jq '[.[] | select(.status != "cancelled")] | length' <<<"$issues")"
+
+  # The change items that hold now: {kind, key, title, edit}.
+  local items
+  items=$(jq -c --argjson cards "$cards" --argjson projects "$projects" --argjson res "$results" "$jq_defs"'
+    .[] | select(.status != "cancelled") | . as $i
+    # The card of the issue: by its key (as import matches it), else by vault_card.
+    | ([$cards[] | select(.key == $i.identifier and ($i.metadata.vault_card == null
+         or $i.metadata.vault_card == ((.project // "-") + "/" + .title)
+         or $i.metadata.vault_owner == "multica"))]
+       + [$cards[] | select($i.metadata.vault_card != null
+           and ((.project // "-") + "/" + .title) == $i.metadata.vault_card)])[0] as $card
+    | ($card.title // $i.title) as $title
+    | (if $i.metadata.vault_card == null and $card == null then
+        {kind: "new-card", key: $i.identifier, title: $i.title,
+         edit: ("new card in " + ($i.status | col) + ", priority "
+           + ($i.priority | emoji | if . == "" then "none" else . end) + ", project "
+           + ([$projects[] | select(.id == $i.project_id) | .title][0] // "none")
+           + ", context: in Multica " + $i.identifier)}
+       else empty end),
+      (if ($i | agent) and $card != null
+          and (($card.column == "⏳ Waiting On" and $card.key == $i.identifier) | not) then
+        {kind: "with-agent", key: $i.identifier, title: $title,
+         edit: ("move to ⏳ Waiting On, context: in Multica " + $i.identifier)}
+       else empty end),
+      (($res[$i.id] // null) as $r
+       | if ($i | agent) and $r != null and $card != null
+          and ($i.status == "done" or ($card.context | contains("in Multica " + $i.identifier + ": " + $r) | not)) then
+        {kind: "result", key: $i.identifier, title: $title,
+         edit: ("context: in Multica " + $i.identifier + ": " + $r
+           + (if $i.status == "done" then ", move to ✅ Done" else "" end))}
+       else empty end),
+      (if ($i | agent | not) and $card != null and ($i.metadata.vault_status // "") != ""
+          and $i.status != $i.metadata.vault_status and ($i.status | col) != ""
+          and ($i.status | col) != $card.column then
+        {kind: "status", key: $i.identifier, title: $title, edit: ("move to " + ($i.status | col))}
+       else empty end)' <<<"$issues")
+
+  # The item lines, with their id: the start of the git hash of kind|key|edit.
+  local lines="" item kind key title edit hash
+  while IFS= read -r item; do
+    [ -n "$item" ] || continue
+    kind=$(jq -r .kind <<<"$item") key=$(jq -r .key <<<"$item")
+    title=$(jq -r .title <<<"$item") edit=$(jq -r .edit <<<"$item")
+    hash=$(printf '%s' "$kind|$key|$edit" | git hash-object --stdin | cut -c1-8)
+    lines+="mc-$hash $kind $key: $title → $edit"$'\n'
+  done <<<"$items"
+
+  # Close the open items that no longer hold, and add the new ones. Other lines stay.
+  local old="" now=$'\n'"$lines" new=0 closed=0 line out="" lid
+  [ ! -f "$changes" ] || old=$(cat "$changes")
+  if [ -z "$old" ]; then
+    old="# Multica changes of the board $board"$'\n\n'"multica-perso export writes one line per change. The orchestrator shows the open ones and marks them done."$'\n'
+  fi
+  while IFS= read -r line; do
+    if [[ "$line" =~ ^-\ \[\ \]\ (mc-[0-9a-f]{8})\ (with-agent|result|new-card|status)\  ]]; then
+      lid=${BASH_REMATCH[1]}
+      if [[ "$now" != *$'\n'"$lid "* ]]; then
+        line="- [x] ${line#- \[ \] }"
+        closed=$((closed + 1))
+      fi
+    fi
+    out+="$line"$'\n'
+  done <<<"$old"
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    lid=${line%% *}
+    if ! grep -qE "^- \[[ x]\] $lid " <<<"$old"; then
+      out+="- [ ] $line"$'\n'
+      new=$((new + 1))
+    fi
+  done <<<"$lines"
+  printf '%s' "$out" | write_file "$changes"
+  printf 'changes: %s new, %s closed\n' "$new" "$closed"
+}
+
+status_board() {
+  local board=$1 vault running changes=0
+  # The server runs from the server-playbooks role multica, as the Compose project multica.
+  running=$("${DOCKER_BIN:-docker}" ps -q --filter label=com.docker.compose.project=multica \
+    --filter status=running 2>/dev/null | grep -c . || true)
+  if [ "$running" -gt 0 ]; then
+    printf 'server: up (%s containers)\n' "$running"
+    mp_issues | jq -rs '
+      def n($s): map(select(.status == $s)) | length;
+      "issues: backlog \(n("backlog")), todo \(n("todo")), in_progress \(n("in_progress")), in_review \(n("in_review")), blocked \(n("blocked")), done \(n("done"))"' ||
+      printf 'issues: unknown, the multica CLI failed\n'
+  else
+    printf 'server: down\n'
+  fi
+  if vault=$(mp_vault) && [ -f "$vault/_multica/$board.changes.md" ]; then
+    changes=$(grep -cE '^- \[ \] mc-[0-9a-f]{8} ' "$vault/_multica/$board.changes.md" || true)
+  fi
+  printf 'changes: %s open\n' "$changes"
+}
+
+cmd="${1:-}"
+board="${2:-perso}"
+case "$cmd" in
+  import) import_board "$board" ;;
+  export) export_board "$board" ;;
+  status) status_board "$board" ;;
+  *)
+    say "usage: multica-perso import|export|status [BOARD]"
+    exit 2
+    ;;
+esac

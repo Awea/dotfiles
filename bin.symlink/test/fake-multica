@@ -1,0 +1,154 @@
+#!/usr/bin/env bash
+# A fake multica CLI for the multica-perso tests. It keeps its state as JSON files in
+# $FAKE_MULTICA_DIR: issues.json (an array), projects.json (an array), comments.json and
+# runs.json (objects keyed by issue id), and n (the last issue number). It logs each argv
+# to $FAKE_MULTICA_DIR/calls.log. When $FAKE_MULTICA_DIR/fail_after holds N, each call
+# after the first N calls fails with exit 1.
+# Only the commands and flags that multica-perso uses exist. Identifiers are PER-<n>.
+# shellcheck disable=SC2016 # The single quotes hold jq filters.
+set -euo pipefail
+
+d="${FAKE_MULTICA_DIR:?}"
+mkdir -p "$d"
+for f in issues projects; do [ -f "$d/$f.json" ] || echo '[]' >"$d/$f.json"; done
+for f in comments runs; do [ -f "$d/$f.json" ] || echo '{}' >"$d/$f.json"; done
+[ -f "$d/n" ] || echo 0 >"$d/n"
+touch "$d/calls.log"
+
+if [ -f "$d/fail_after" ] && [ "$(grep -c '' "$d/calls.log")" -ge "$(cat "$d/fail_after")" ]; then
+  printf 'multica: connection refused\n' >&2
+  exit 1
+fi
+printf '%s\n' "$*" >>"$d/calls.log"
+
+now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+
+# flag NAME ARGS...: the value after --NAME, or empty.
+flag() {
+  local name="--$1" prev=""
+  shift
+  for a in "$@"; do
+    [ "$prev" != "$name" ] || { printf '%s' "$a"; return 0; }
+    prev=$a
+  done
+}
+has() { local f="--$1"; shift; for a in "$@"; do [ "$a" != "$f" ] || return 0; done; return 1; }
+
+# The id of an issue named by its id or its identifier.
+issue_id() {
+  jq -er --arg r "$1" '.[] | select(.id == $r or .identifier == $r) | .id' "$d/issues.json" ||
+    { printf 'multica: issue %s not found\n' "$1" >&2; exit 1; }
+}
+
+save() { local tmp; tmp=$(mktemp "$d/tmp.XXXXXX"); cat >"$tmp"; mv "$tmp" "$d/$1.json"; }
+
+# set_issue ID JQ_FILTER ARGS...: apply the filter to the issue and set updated_at.
+set_issue() {
+  local id=$1 filter=$2
+  shift 2
+  jq --arg id "$id" --arg now "$(now)" "$@" \
+    "map(if .id == \$id then ($filter) | .updated_at = \$now else . end)" "$d/issues.json" | save issues
+}
+
+case "${1:-} ${2:-}" in
+  "issue list")
+    limit=$(flag limit "$@") offset=$(flag offset "$@")
+    # FAKE_MULTICA_LIST_SHAPE: array (a bare array), bad (no issues key), empty (an empty
+    # page that says has_more), else the object of the real CLI.
+    case "${FAKE_MULTICA_LIST_SHAPE:-}" in
+      array) jq --argjson l "${limit:-50}" --argjson o "${offset:-0}" '.[$o:$o + $l]' "$d/issues.json" ;;
+      bad) echo '{"data": []}' ;;
+      empty) echo '{"issues": [], "has_more": true}' ;;
+      *) jq --argjson l "${limit:-50}" --argjson o "${offset:-0}" \
+        '{issues: .[$o:$o + $l], has_more: (length > $o + $l)}' "$d/issues.json" ;;
+    esac
+    ;;
+  "issue get")
+    id=$(issue_id "$3")
+    jq --arg id "$id" '.[] | select(.id == $id)' "$d/issues.json"
+    ;;
+  "issue create")
+    n=$(($(cat "$d/n") + 1))
+    echo "$n" >"$d/n"
+    desc=""
+    if has description-stdin "$@"; then desc=$(cat); fi
+    status=$(flag status "$@") priority=$(flag priority "$@")
+    jq --arg id "id-$n" --arg key "PER-$n" --argjson n "$n" --arg title "$(flag title "$@")" \
+      --arg desc "$desc" --arg status "${status:-backlog}" --arg priority "${priority:-none}" \
+      --arg project "$(flag project "$@")" --arg now "$(now)" \
+      '. + [{id: $id, identifier: $key, number: $n, title: $title, description: $desc,
+        status: $status, priority: $priority, assignee_type: null, assignee_id: null,
+        project_id: (if $project == "" then null else $project end), metadata: {},
+        created_at: $now, updated_at: $now}]' "$d/issues.json" | save issues
+    jq --arg id "id-$n" '.[] | select(.id == $id)' "$d/issues.json"
+    ;;
+  "issue update")
+    id=$(issue_id "$3")
+    args=("${@:4}")
+    filter="."
+    for f in title status priority project; do
+      if has "$f" "${args[@]}"; then
+        key=$f
+        [ "$f" != project ] || key=project_id
+        filter="$filter | .$key = \$$f"
+      fi
+    done
+    desc=""
+    if has description-stdin "${args[@]}"; then desc=$(cat); filter="$filter | .description = \$desc"; fi
+    set_issue "$id" "$filter" --arg title "$(flag title "${args[@]}")" --arg status "$(flag status "${args[@]}")" \
+      --arg priority "$(flag priority "${args[@]}")" --arg project "$(flag project "${args[@]}")" --arg desc "$desc"
+    jq --arg id "$id" '.[] | select(.id == $id)' "$d/issues.json"
+    ;;
+  "issue status")
+    id=$(issue_id "$3")
+    set_issue "$id" '.status = $s' --arg s "$4"
+    ;;
+  "issue runs")
+    id=$(issue_id "$3")
+    jq --arg id "$id" '.[$id] // []' "$d/runs.json"
+    ;;
+  "issue metadata")
+    id=$(issue_id "$4")
+    case "$3" in
+      set) set_issue "$id" '.metadata[$k] = $v' --arg k "$(flag key "$@")" --arg v "$(flag value "$@")" ;;
+      list) jq --arg id "$id" '.[] | select(.id == $id) | .metadata' "$d/issues.json" ;;
+      *) exit 2 ;;
+    esac
+    ;;
+  "issue comment")
+    id=$(issue_id "$4")
+    case "$3" in
+      list) jq --arg id "$id" '.[$id] // []' "$d/comments.json" ;;
+      add)
+        jq --arg id "$id" --arg c "$(flag content "$@")" --arg now "$(now)" \
+          '.[$id] = ((.[$id] // []) + [{content: $c, author_type: "member", created_at: $now}])' \
+          "$d/comments.json" | save comments
+        ;;
+      *) exit 2 ;;
+    esac
+    ;;
+  "project list")
+    cat "$d/projects.json"
+    ;;
+  "project create")
+    id="proj-$(($(jq length "$d/projects.json") + 1))"
+    jq --arg id "$id" --arg t "$(flag title "$@")" '. + [{id: $id, title: $t, resources: []}]' \
+      "$d/projects.json" | save projects
+    jq --arg id "$id" '.[] | select(.id == $id)' "$d/projects.json"
+    ;;
+  "project resource")
+    case "$3" in
+      add)
+        jq --arg id "$4" --arg u "$(flag url "$@")" \
+          'map(if .id == $id then .resources += [{resource_type: "github_repo", resource_ref: {url: $u}}] else . end)' \
+          "$d/projects.json" | save projects
+        ;;
+      list) jq --arg id "$4" '.[] | select(.id == $id) | .resources // []' "$d/projects.json" ;;
+      *) exit 2 ;;
+    esac
+    ;;
+  *)
+    printf 'fake-multica: unknown command: %s\n' "$*" >&2
+    exit 2
+    ;;
+esac

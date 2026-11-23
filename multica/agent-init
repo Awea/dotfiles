@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+
+# The setup inside the multica-agent session (multica-agent setup copies this script to
+# ~/.local/bin/multica-agent-init of the agent user).
+#
+#   Usage: multica-agent-init [--reset] [OWNER:REPO...]
+#
+# Run it as multica-agent. Each step does nothing when it is already done:
+#   1. Checks the Claude login.
+#   2. Logs in to the local Multica (it prints a link: open it in your browser) and
+#      switches to the workspace perso.
+#   3. Asks for one GitHub token per owner, with hidden input, and maps the owner to it
+#      with a git url.<...>.insteadOf line. An empty token skips the owner. It removes an
+#      entry that still has the <token> placeholder.
+#   4. Checks each token with git ls-remote on a private repo of its owner.
+# --reset removes the tokens of the owners first, so that it asks for new ones.
+# OWNER:REPO gives the owners and the repo of the check. Default, as of 2026-11-20:
+# Awea:game-guesser wearemd:server-playbooks (the private perso repos).
+# Exit 0: all steps are done. Exit 1: a step waits for you. Exit 2: another user.
+# MULTICA_BIN, ID_BIN and LS_REMOTE_BIN are for the tests.
+
+set -euo pipefail
+
+say() { printf 'multica-agent-init: %s\n' "$*"; }
+
+if [ "$("${ID_BIN:-id}" -un)" != multica-agent ]; then
+  say "run it as multica-agent: sudo -iu multica-agent."
+  exit 2
+fi
+
+# "command": a plain "multica" here would call this function again, with no end.
+multica() {
+  if [ -n "${MULTICA_BIN:-}" ]; then "$MULTICA_BIN" "$@"; else command multica "$@"; fi
+}
+ls_remote() {
+  if [ -n "${LS_REMOTE_BIN:-}" ]; then "$LS_REMOTE_BIN" "$@"; else git ls-remote "$@"; fi
+}
+
+todo=0
+reset=""
+if [ "${1:-}" = --reset ]; then
+  reset=1
+  shift
+fi
+if [ $# -eq 0 ]; then set -- Awea:game-guesser wearemd:server-playbooks; fi
+
+# 1. Claude.
+if [ -f "$HOME/.claude/.credentials.json" ]; then
+  say "Claude: logged in."
+else
+  say "Claude: not logged in: run claude, answer Yes to the trust question, and log in."
+  todo=1
+fi
+
+# 2. Multica.
+# "auth status" exits 0 even with no login: a workspace list needs the login.
+if multica workspace list --output json >/dev/null 2>&1; then
+  say "Multica: logged in."
+else
+  say "Multica: open the link below in your browser."
+  multica login
+fi
+multica workspace switch perso >/dev/null
+say "Multica: workspace perso."
+
+# 3 and 4. The GitHub tokens.
+while IFS= read -r section; do
+  [ -n "$section" ] || continue
+  git config --global --remove-section "$section"
+  say "removed the entry with the <token> placeholder."
+done < <(git config --global --get-regexp '^url\..*<token>' 2>/dev/null | sed 's/\.insteadof .*//' || true)
+
+for pair in "$@"; do
+  owner=${pair%%:*} repo=${pair#*:}
+  if [ -n "$reset" ]; then
+    while IFS= read -r section; do
+      [ -n "$section" ] || continue
+      git config --global --remove-section "$section"
+    done < <(git config --global --get-regexp "^url\..*@github\.com/$owner/\.insteadof\$" 2>/dev/null |
+      sed 's/\.insteadof .*//' || true)
+    say "$owner: removed the old token."
+  fi
+  if ! git config --global --get-regexp "^url\..*@github\.com/$owner/\.insteadof\$" >/dev/null 2>&1; then
+    printf 'multica-agent-init: GitHub token for %s, read-only (hidden, empty to skip): ' "$owner"
+    token=""
+    IFS= read -rs token || true
+    printf '\n'
+    if [ -z "$token" ]; then
+      say "$owner: no token, the agent cannot clone its private repos."
+      todo=1
+      continue
+    fi
+    git config --global "url.https://x-access-token:$token@github.com/$owner/.insteadOf" "https://github.com/$owner/"
+  fi
+  if ls_remote "https://github.com/$owner/$repo" HEAD 2>/dev/null | grep -q .; then
+    say "$owner: the token reads $repo."
+  else
+    say "$owner: the token cannot read $repo. Check its repos and its Contents: read right."
+    todo=1
+  fi
+done
+
+if [ "$todo" -eq 0 ]; then
+  say "done. Next, as yourself: multica-agent daemon."
+fi
+exit "$todo"
