@@ -10,9 +10,12 @@
 # WHEN_FREE_HOLD seconds (default 30) after the start, or until the command stops: the
 # load average needs some seconds to show the new job.
 #
+# When ~/.bin/mem-top --check warns (a high swap use or a low available RAM), the script
+# shows the warning once and does not wait for it: the swap does not go down by itself.
+#
 # WHEN_FREE=off runs the command at once. WHEN_FREE_POLL sets the seconds between two
-# checks (default 5). WHEN_FREE_PROBE is a command that prints "LOAD CORES MEM_MB": the
-# tests use it.
+# checks (default 5). WHEN_FREE_PROBE is a command that prints "LOAD CORES MEM_MB", and
+# WHEN_FREE_MEM_CHECK a command that prints a warning and exits 1: the tests use them.
 
 set -euo pipefail
 
@@ -116,6 +119,12 @@ trap 'exit 143' TERM
 take_lock() {
   local id shown=""
   while ! mkdir "$lock" 2>/dev/null; do
+    # The state folder went away (a test run removed its tmp folder): make it again, else
+    # mkdir fails for ever.
+    if [ ! -d "$dir" ]; then
+      mkdir -p "$dir" 2>/dev/null || nap
+      continue
+    fi
     id=$(cat "$lock/pid" 2>/dev/null || true)
     if { [ -n "$id" ] && ! alive "$id"; } || { [ -z "$id" ] && [ "$(age "$lock")" -gt 10 ]; }; then
       break_stale "$id" || nap
@@ -156,6 +165,20 @@ wait_free() {
   done
 }
 
+# mem_warn: show the warning of the memory check, if any.
+mem_warn() {
+  local warn
+  if [ -n "${WHEN_FREE_MEM_CHECK:-}" ]; then
+    warn=$("$WHEN_FREE_MEM_CHECK" 2>/dev/null) && return 0
+  elif [ -x "$HOME/.bin/mem-top" ]; then
+    warn=$("$HOME/.bin/mem-top" --check 2>/dev/null) && return 0
+  else
+    return 0
+  fi
+  [ -z "$warn" ] || say "$warn Run mem-top to see what holds it."
+}
+
+mem_warn
 take_lock
 wait_free
 
@@ -166,6 +189,8 @@ owner=""
 trap - EXIT INT TERM
 (
   sleep "$hold"
-  until break_stale "$me"; do sleep 1; done
+  # Stop when the lock no longer holds this run: another run broke it, or the state
+  # folder is gone.
+  until [ "$(cat "$lock/pid" 2>/dev/null || true)" != "$me" ] || break_stale "$me"; do sleep 1; done
 ) </dev/null >/dev/null 2>&1 3>&- &
 exec "$@"

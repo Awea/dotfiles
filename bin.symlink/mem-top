@@ -1,0 +1,167 @@
+#!/usr/bin/env bash
+# Show what holds the RAM and the swap, and the dev servers of the worktrees with no worker.
+#
+#   Usage: mem-top [-n N]     the RAM and swap line, the top N programs (default 10) by RSS
+#                             plus swap, grouped by name, and the dev servers with no worker
+#          mem-top --orphans  one line "ROOT<tab>PID<tab>MB<tab>NAME" for each dev server
+#                             with no worker
+#          mem-top --check    exit 1 with one warning line when the swap or the RAM is low
+#
+# A dev server with no worker is a process with no terminal in a card worktree
+# (MEM_TOP_WORKTREES, default ~/.workspace/.worktrees) when no process of that worktree has
+# a terminal and no claude runs in a worktree of the same card name, in any repo. A process
+# with a terminal (a worker, a shell, a make worktree-setup) keeps the worktree in use.
+#
+# --check warns when the swap use is at least MEM_TOP_SWAP_PCT % (default 80) or the
+# available RAM is under MEM_TOP_MIN_MB (default 2048). A host with no swap checks only
+# the RAM.
+#
+# Linux reads ps and /proc. macOS reads ps, lsof, sysctl and vm_stat: it has no swap for
+# each process. The tests set MEM_TOP_PS, a command that prints
+# "PID<tab>TTY<tab>RSS_KB<tab>SWAP_KB<tab>CWD<tab>NAME", and MEM_TOP_MEM, a command that
+# prints "TOTAL_MB AVAIL_MB SWAP_TOTAL_MB SWAP_USED_MB".
+set -euo pipefail
+
+say() { printf 'mem-top: %s\n' "$*" >&2; }
+
+top_n=10 mode=report
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -n)
+      [[ "${2:-}" =~ ^[0-9]+$ ]] || { say "usage: mem-top [-n N] | --orphans | --check"; exit 2; }
+      top_n=$2
+      shift 2
+      ;;
+    --orphans) mode=orphans; shift ;;
+    --check) mode=check; shift ;;
+    *) say "usage: mem-top [-n N] | --orphans | --check"; exit 2 ;;
+  esac
+done
+worktrees=${MEM_TOP_WORKTREES:-$HOME/.workspace/.worktrees}
+# The process folders are real paths: ~/.workspace can be a link.
+worktrees=$(cd -- "$worktrees" 2>/dev/null && pwd -P) || worktrees=${MEM_TOP_WORKTREES:-$HOME/.workspace/.worktrees}
+swap_pct=${MEM_TOP_SWAP_PCT:-80}
+min_mb=${MEM_TOP_MIN_MB:-2048}
+
+# mem_numbers: print "TOTAL_MB AVAIL_MB SWAP_TOTAL_MB SWAP_USED_MB".
+mem_numbers() {
+  if [ -n "${MEM_TOP_MEM:-}" ]; then
+    "$MEM_TOP_MEM"
+  elif [ -r /proc/meminfo ]; then
+    awk '/^MemTotal:/ { t = $2 } /^MemAvailable:/ { a = $2 } /^SwapTotal:/ { st = $2 }
+      /^SwapFree:/ { sf = $2 }
+      END { printf "%d %d %d %d\n", t / 1024, a / 1024, st / 1024, (st - sf) / 1024 }' /proc/meminfo
+  else
+    # macOS: free, inactive and speculative pages are the RAM that a new job can get.
+    local total avail swap
+    total=$(($(sysctl -n hw.memsize) / 1048576))
+    avail=$(vm_stat | awk '/page size of/ { size = $8 }
+      /^Pages (free|inactive|speculative):/ { sub(/\.$/, "", $NF); pages += $NF }
+      END { printf "%d", pages * size / 1048576 }')
+    # "total = 2048.00M  used = 1024.00M  free = 1024.00M  (encrypted)"
+    swap=$(sysctl -n vm.swapusage | awk '{ printf "%d %d", $3, $6 }')
+    printf '%s %s %s\n' "$total" "$avail" "$swap"
+  fi
+}
+
+# ps_table: print "PID<tab>TTY<tab>RSS_KB<tab>SWAP_KB<tab>CWD<tab>NAME" for each process.
+# TTY is "?" or "??" for a process with no terminal. CWD is empty when it is not readable.
+ps_table() {
+  if [ -n "${MEM_TOP_PS:-}" ]; then
+    "$MEM_TOP_PS"
+    return
+  fi
+  local swap cwd
+  if [ -d /proc/self ]; then
+    # cat goes on after a process that ended since the glob: awk would stop there.
+    swap=$(cat /proc/[0-9]*/status 2>/dev/null | awk '/^Pid:/ { p = $2 } /^VmSwap:/ { print p "\t" $2 }' || true)
+    cwd=$(find /proc -mindepth 2 -maxdepth 2 -name cwd -printf '%h\t%l\n' 2>/dev/null |
+      sed 's|^/proc/||' || true)
+  else
+    swap=""
+    cwd=$(lsof -nP -a -d cwd -Fpn 2>/dev/null |
+      awk '/^p/ { p = substr($0, 2) } /^n/ { print p "\t" substr($0, 2) }' || true)
+  fi
+  # ps prints the name last: it can have spaces. macOS gives the full path of the program.
+  LC_ALL=C ps -axo pid=,tty=,rss=,comm= |
+    MT_SWAP=$swap MT_CWD=$cwd awk 'BEGIN {
+        OFS = "\t"
+        n = split(ENVIRON["MT_SWAP"], s, "\n"); for (i = 1; i <= n; i++) { split(s[i], f, "\t"); sw[f[1]] = f[2] }
+        n = split(ENVIRON["MT_CWD"], c, "\n"); for (i = 1; i <= n; i++) { k = index(c[i], "\t"); if (k) cw[substr(c[i], 1, k - 1)] = substr(c[i], k + 1) }
+      }
+      {
+        pid = $1; tty = $2; rss = $3
+        name = $0; sub(/^[ \t]*[^ \t]+[ \t]+[^ \t]+[ \t]+[^ \t]+[ \t]+/, "", name)
+        if (name ~ /^\//) sub(/.*\//, "", name)
+        print pid, tty, rss, (pid in sw ? sw[pid] : 0), cw[pid], name
+      }'
+}
+
+# orphans TABLE: print "ROOT<tab>PID<tab>MB<tab>NAME" for each dev server with no worker.
+orphans() {
+  local table=$1 roots="" dir root
+  # The root of each folder in the worktrees folder: git knows it, also from a git-ignored
+  # subfolder such as a database folder.
+  while IFS= read -r dir; do
+    [ -n "$dir" ] || continue
+    root=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null) || continue
+    case "$root" in "$worktrees"/*) ;; *) continue ;; esac
+    roots="$roots$dir"$'\t'"$root"$'\n'
+  done < <(awk -F '\t' -v w="$worktrees/" 'index($5, w) == 1 && $5 !~ / \(deleted\)$/ { print $5 }' <<<"$table" | sort -u)
+  [ -n "$roots" ] || return 0
+  MT_ROOTS=$roots awk -F '\t' 'BEGIN {
+      OFS = "\t"
+      n = split(ENVIRON["MT_ROOTS"], r, "\n"); for (i = 1; i <= n; i++) { k = index(r[i], "\t"); if (k) root[substr(r[i], 1, k - 1)] = substr(r[i], k + 1) }
+    }
+    ($5 in root) {
+      rt = root[$5]; card = rt; sub(/.*\//, "", card)
+      if ($2 != "?" && $2 != "??" && $2 != "-" && $2 != "") used[rt] = 1
+      if ($6 == "claude") live[card] = 1
+      if ($2 == "?" || $2 == "??" || $2 == "-" || $2 == "") {
+        rows[++m] = rt; pid[m] = $1; mb[m] = int(($3 + $4) / 1024); nm[m] = $6
+      }
+    }
+    END {
+      for (i = 1; i <= m; i++) {
+        card = rows[i]; sub(/.*\//, "", card)
+        if (!(rows[i] in used) && !(card in live)) print rows[i], pid[i], mb[i], nm[i]
+      }
+    }' <<<"$table"
+}
+
+read -r total avail swap_total swap_used < <(mem_numbers)
+
+if [ "$mode" = check ]; then
+  LC_ALL=C awk -v t="$total" -v a="$avail" -v st="$swap_total" -v su="$swap_used" \
+    -v sp="$swap_pct" -v mm="$min_mb" 'BEGIN {
+      pct = st > 0 ? int(su * 100 / st + 0.5) : 0
+      if ((st > 0 && pct >= sp) || a < mm) {
+        printf "RAM: swap %.1f/%.1f GiB (%d %%), %.1f GiB available.\n", su / 1024, st / 1024, pct, a / 1024
+        exit 1
+      }
+    }'
+  exit
+fi
+
+table=$(ps_table)
+if [ "$mode" = orphans ]; then
+  orphans "$table"
+  exit 0
+fi
+
+LC_ALL=C awk -v t="$total" -v a="$avail" -v st="$swap_total" -v su="$swap_used" 'BEGIN {
+  printf "RAM: %.1f/%.1f GiB used, %.1f GiB available. Swap: %.1f/%.1f GiB (%d %%).\n",
+    (t - a) / 1024, t / 1024, a / 1024, su / 1024, st / 1024, (st > 0 ? int(su * 100 / st + 0.5) : 0) }'
+printf '%8s %8s %8s %5s  %s\n' TOTAL_MB RSS_MB SWAP_MB PROCS NAME
+awk -F '\t' '{ rss[$6] += $3; sw[$6] += $4; n[$6]++ }
+  END { for (k in n) printf "%d\t%d\t%d\t%d\t%s\n", (rss[k] + sw[k]) / 1024, rss[k] / 1024, sw[k] / 1024, n[k], k }' <<<"$table" |
+  sort -t "$(printf '\t')" -k1,1nr |
+  awk -F '\t' -v n="$top_n" 'NR <= n { printf "%8d %8d %8d %5d  %s\n", $1, $2, $3, $4, $5 }'
+list=$(orphans "$table")
+if [ -z "$list" ]; then
+  printf 'Dev servers with no worker: none.\n'
+else
+  printf 'Dev servers with no worker:\n'
+  awk -F '\t' -v w="$worktrees/" '{ r = $1; if (index(r, w) == 1) r = substr(r, length(w) + 1)
+    printf "  %s: %s (pid %s, %s MB)\n", r, $4, $2, $3 }' <<<"$list"
+fi

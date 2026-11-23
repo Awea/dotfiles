@@ -11,7 +11,20 @@ setup() {
   chmod +x "$BATS_TEST_TMPDIR/probe.sh"
   export WHEN_FREE_PROBE="$BATS_TEST_TMPDIR/probe.sh"
   export WHEN_FREE_POLL=0.2 WHEN_FREE_HOLD=0 WHEN_FREE_LOAD=0.7 WHEN_FREE_MEM_MB=4096
+  # The memory check of the host could warn: a quiet fake replaces it.
+  printf '#!/usr/bin/env bash\n[ -f %q ] || exit 0\ncat %q\nexit 1\n' "$BATS_TEST_TMPDIR/warn" "$BATS_TEST_TMPDIR/warn" \
+    >"$BATS_TEST_TMPDIR/memcheck.sh"
+  chmod +x "$BATS_TEST_TMPDIR/memcheck.sh"
+  export WHEN_FREE_MEM_CHECK="$BATS_TEST_TMPDIR/memcheck.sh"
   probe 1.0 20 16000
+}
+
+# A test that fails or stops leaves its background when-free: stop them, so that none
+# polls for ever after the run.
+teardown() {
+  local pids
+  pids=$(jobs -p)
+  [ -z "$pids" ] || kill $pids 2>/dev/null || true
 }
 
 probe() { printf '%s %s %s\n' "$1" "$2" "$3" >"$PROBE_FILE"; }
@@ -158,4 +171,35 @@ wait_grep() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"cannot read the load"* ]]
   [[ "$output" == *ran* ]]
+}
+
+@test "shows the memory warning once and runs the command at once" {
+  printf 'RAM: swap 16.6/19.5 GiB (85 %%), 7.8 GiB available.\n' >"$BATS_TEST_TMPDIR/warn"
+  run "$WF" echo ran
+  [ "$status" -eq 0 ]
+  [ "${lines[0]}" = "when-free: RAM: swap 16.6/19.5 GiB (85 %), 7.8 GiB available. Run mem-top to see what holds it." ]
+  [ "${lines[1]}" = ran ]
+}
+
+@test "takes the lock and runs when its state folder is gone during the wait" {
+  sleep 30 &
+  holder=$!
+  mkdir -p "$LOCK"
+  printf '%s|%s\n' "$holder" "$(LC_ALL=C ps -o lstart= -p "$holder")" >"$LOCK/pid"
+  "$WF" touch "$BATS_TEST_TMPDIR/ran" 2>"$BATS_TEST_TMPDIR/err" &
+  pid=$!
+  wait_grep "waits for another start" "$BATS_TEST_TMPDIR/err"
+  rm -rf "$XDG_STATE_HOME"
+  wait_for "$BATS_TEST_TMPDIR/ran"
+  wait "$pid"
+  kill "$holder"
+}
+
+@test "the helper of the hold ends when its state folder is gone" {
+  export WHEN_FREE_HOLD=1
+  mark="hold-$$-$RANDOM"
+  "$WF" true "$mark"
+  rm -rf "$XDG_STATE_HOME"
+  sleep 3
+  ! pgrep -f "when-free true $mark" >/dev/null
 }
